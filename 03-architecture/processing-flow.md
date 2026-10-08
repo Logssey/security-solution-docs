@@ -27,4 +27,4 @@
 
 담당자가 외부 시스템에서 조치한 뒤에는 재검증 대기를 표시한다. 유효성과 지원되는 사용 메타데이터는 기본 6시간 주기로 다시 확인하며, 수집원 전체를 같은 주기로 다시 읽는다는 뜻은 아니다. 재검증 요청이나 대응 버튼은 외부 키 변경 API를 호출하지 않는다.
 
-화면에 표시할 독립 상태와 집계 규칙은 [기능 설계](../02-functional-design/workflow-and-states.md), 검증 계약은 [ADR-S002](adr/ADR-S002.md)를 따른다.
+화면에 표시할 독립 상태와 집계 규칙은 [기능 설계](../02-functional-design/workflow-and-states.md), 수집원과 유형별 검증 계약은 [수집원과 검증기 계약](source-and-validator-contract.md)을 따른다.

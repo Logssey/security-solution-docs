@@ -155,4 +155,4 @@ FR-07의 주체, 권한, 자원, 사용 시각은 공급자와 키 유형에 따
 | 탐지, 검증, 대응 데이터 | 발견 위치, 마스킹된 근거, 동일성 식별값, 검증 시도, 결과, 심각도 근거, 담당자, 체크리스트, 감사 이력 | 무단 조회, 변경 방지, 시각, 버전, 변경자 추적, 결과의 무결성과 복구 가능성 확보 |
 | 검증용 원문 및 부산물 | 재검증에 쓰일 수 있는 원문, 탐지 도구 출력, 임시 파일, 큐, 오류 로그, 백업 | 보관 여부와 관계없이 접근을 제한하고 화면, 일반 로그, AI 입력으로 전달하지 않음. 보관 시 암호화, 접근 감사, 삭제 기준 적용 |
 
-키 유형별 비밀과 식별자 구분은 [키 종류와 수집 범위](../05-research/key-types-and-collection-scope.md)에 상세화한다. 수집 권한, 보존 기간, 원문 접근 방식의 구현 선택은 이 PRD의 보호 요건을 충족해야 한다. [아키텍처](../03-architecture/README.md), [구현 차이](../04-integration/current-implementation-and-gaps.md), [검증 계획](../06-planning/open-decisions-and-validation.md)은 해당 요건을 구체화하고 검증하는 문서다.
+키 유형별 비밀과 식별자 구분은 [키 종류와 수집 범위](../05-research/key-types-and-collection-scope.md)에 상세화한다. 수집 권한, 보존 기간, 원문 접근 방식의 구현 선택은 이 PRD의 보호 요건을 충족해야 한다. [아키텍처](../03-architecture/README.md), [구현 차이](../04-integration/current-implementation-and-gaps.md)는 해당 요건을 구체화하고 검증하는 문서다.

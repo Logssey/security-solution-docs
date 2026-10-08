@@ -16,15 +16,15 @@
 
 | ID | 결정 | 상태 |
 |---|---|---|
-| [ADR-S001](ADR-S001.md) | 룰 기반 탐지와 지원 범위 | 탐지 방식 Accepted, 엔진 구성 Proposed |
-| [ADR-S002](ADR-S002.md) | 유형별 유효성 검증과 6시간 재검사 | 검사 계약 Accepted, 재시도 수치 Proposed |
-| [ADR-S003](ADR-S003.md) | 독립 상태 축과 조치 단계 | 상태와 배타적 집계 Accepted, 물리 모델 Proposed |
+| [ADR-S001](ADR-S001.md) | 룰 기반 탐지와 지원 범위 | Gitleaks 초기 탐지 엔진 Accepted |
+| [ADR-S002](ADR-S002.md) | 유형별 유효성 검증과 6시간 재검사 | Java 검증 워커와 영속 작업 대기열 Accepted |
+| [ADR-S003](ADR-S003.md) | 독립 상태 축과 조치 단계 | 대응 단위와 배타적 집계 Accepted |
 | [ADR-S004](ADR-S004.md) | 수동 대응과 외부 키 변경 경계 | Accepted |
-| [ADR-S005](ADR-S005.md) | 검증용 원문 보관 | Proposed, 보관 방식 결정 대기 |
-| [ADR-S006](ADR-S006.md) | 소스별 수집 경계와 K8s | 수집 범위 Accepted, 배포 방식 Proposed |
-| [ADR-S007](ADR-S007.md) | 등급 기반 위험 판단 | 네 등급과 미평가 Accepted, 산정 규칙 Proposed |
-| [ADR-S008](ADR-S008.md) | 대시보드와 논리 데이터 경계 | 논리 경계 Accepted, 물리 배치 Proposed |
+| [ADR-S005](ADR-S005.md) | 검증용 원문 보관 | 원문 영속 미보관 Accepted |
+| [ADR-S006](ADR-S006.md) | 소스별 수집 경계와 K8s | Java 수집 어댑터와 배치 조건 Accepted |
+| [ADR-S007](ADR-S007.md) | 등급 기반 위험 판단 | 네 등급, 미평가와 초기 산정 정책 Accepted |
+| [ADR-S008](ADR-S008.md) | 대시보드와 논리 데이터 경계 | Java API, 워커 분리와 PostgreSQL 경계 Accepted |
 
 ## 후속 검토
 
-원문 보관 방식, K8s 수집기 배포 위치, 대응 단위와 대표 상태, 등급 산정 규칙, API 필드 및 물리 저장소 배치를 구체화해야 한다. 각 항목의 선택 기준은 해당 ADR과 [검증 계획](../../06-planning/open-decisions-and-validation.md)에 기록한다.
+실제 연결 범위와 권한, 공급자별 허용 엔드포인트와 호출 한도, 워커가 접근할 수 있는 K8s 네트워크, 실행 파일 버전은 배포 환경과 시험으로 확인한다. 선택 기준은 해당 ADR에 기록한다. 확정된 계약은 [데이터](../data-contract.md), [API](../api-contract.md), [보안 실행 정책](../security-and-runtime.md)을 따른다.
