@@ -1,0 +1,50 @@
+﻿[
+    {
+        "Original":  "제목 없는 다이어그램.drawio (3).png",
+        "RelativePath":  "assets/architecture/secret-detection-pipeline.png",
+        "SHA256":  "B6BD995442F604AEE92FC685FC269DA9B2AC7B65AC3900436E4F3A984142C533",
+        "Bytes":  120847
+    },
+    {
+        "Original":  "제목 없는 다이어그램.drawio (16).png",
+        "RelativePath":  "assets/architecture/overall-secret-solution-architecture.png",
+        "SHA256":  "866BD8EB27D43B966AF913E6BB6EB36F04BCF806F4678339C2C9A6E4789C2836",
+        "Bytes":  132280
+    },
+    {
+        "Original":  "제목 없는 다이어그램.drawio (17).png",
+        "RelativePath":  "assets/architecture/secret-processing-flow.png",
+        "SHA256":  "1079A1AB35993EB4E3A5ABED63CEF036BE1276A52666A561C644C93EF9BB8158",
+        "Bytes":  179538
+    },
+    {
+        "Original":  "image (71).png",
+        "RelativePath":  "assets/dashboard/01-attack-path-and-response.png",
+        "SHA256":  "9A89402C35D3A68982E5FA985AFF18FEAFE746D11285B4F77CE7C79162A62FEC",
+        "Bytes":  519827
+    },
+    {
+        "Original":  "image (72).png",
+        "RelativePath":  "assets/dashboard/02-detection-to-review-summary.png",
+        "SHA256":  "F73449AE2201B1FF0A974A38B399042C8B3BD5A35FBBB51A8816E495EE332E13",
+        "Bytes":  96714
+    },
+    {
+        "Original":  "image (73).png",
+        "RelativePath":  "assets/dashboard/03-remediation-status-reference.png",
+        "SHA256":  "094B212722BF7435D9AEB3CCB8FF644C94D7646F39956671CC78C2699E7B6344",
+        "Bytes":  58531
+    },
+    {
+        "Original":  "image (74).png",
+        "RelativePath":  "assets/dashboard/04-severity-validity-matrix.png",
+        "SHA256":  "F3A48DEC25808EFCCEAA787F55EE1B8D1C6D06556C2A62DD7315BE001EB53C37",
+        "Bytes":  53096
+    },
+    {
+        "Original":  "image (75).png",
+        "RelativePath":  "assets/dashboard/05-unassigned-findings.png",
+        "SHA256":  "0BE95C7EA09280D36FE2705F53B018E0A0990A6978E89244C49B64769331B7A1",
+        "Bytes":  72431
+    }
+]
