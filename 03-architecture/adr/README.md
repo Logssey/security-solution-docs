@@ -22,7 +22,7 @@
 | [ADR-S004](ADR-S004.md) | 수동 대응과 외부 키 변경 경계 | Accepted |
 | [ADR-S005](ADR-S005.md) | 검증용 원문 보관 | 원문 영속 미보관 Accepted |
 | [ADR-S006](ADR-S006.md) | 소스별 수집 경계와 K8s | Java 수집 어댑터와 배치 조건 Accepted |
-| [ADR-S007](ADR-S007.md) | 등급 기반 위험 판단 | 네 등급, 미평가와 초기 산정 정책 Accepted |
+| [ADR-S007](ADR-S007.md) | 등급 기반 위험 판단 | 네 등급, 미평가와 순서가 정해진 판정 규칙 Accepted |
 | [ADR-S008](ADR-S008.md) | 대시보드와 논리 데이터 경계 | Java API, 워커 분리와 PostgreSQL 경계 Accepted |
 
 ## 후속 검토

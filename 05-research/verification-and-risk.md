@@ -60,8 +60,8 @@ GitHub Secret scanning의 지원 패턴과 validity 기능도 모든 임의 비�
 
 | 등급 | 예시 조건 | 함께 필요한 근거 |
 |---|---|---|
-| CRITICAL | 유효한 키의 공개 노출과 광범위한 운영 관리자 권한이 확인되거나, 중대한 악용 근거가 확인됨 | 노출 범위, 권한, 대상, 시점, 악용 사실 |
-| HIGH | 유효한 키의 비정상 노출과 중요 운영 자원 접근 가능성이 충분한 근거로 확인됨 | 제한된 범위라도 중요 데이터, 서비스 영향 |
+| CRITICAL | 공개 노출과 운영 관리자 권한이 확인되거나, 중대한 악용 근거가 확인됨 | 노출 범위, 권한, 대상, 시점, 악용 사실 |
+| HIGH | 비정상 노출과 중요 운영 자원 접근 가능성이 충분한 근거로 확인됨 | 제한된 범위라도 중요 데이터, 서비스 영향 |
 | MEDIUM | 비정상 노출이 있으나 영향이 제한된 권한, 자원으로 확인됨 | 실제 제한 범위와 노출 조건 |
 | LOW | 낮은 영향의 제한된 자원, 환경, 권한으로 확인됨 | 낮은 영향이라는 긍정적 근거. 단순 ‘정보 없음’ 제외 |
 | 미평가 | 판정에 필요한 증거 부족 | 부족한 정보와 수동 검토 사유. 다섯 번째 심각도 등급이 아님 |
@@ -73,3 +73,17 @@ NIST SP 800-61r3의 사고 영향, 우선순위 관점과 OWASP의 비밀 수명
 ## 6. 실제 검증으로 남은 일
 
 테스트 전용 자격 증명으로 정상, 무효, 구성요소 누락, 권한 제한, 호출 제한을 비교한다. 키 값은 보고서에 남기지 않고 검증기 버전, 상태, 이유, 시각만 기록한다. 실제 운영 키를 발급, 폐기하는 실험은 이번 문서 작업에 포함되지 않는다.
+
+## 7. 상용 제품의 공개된 우선순위 판단 방식
+
+다음 내용은 공개 문서에 명시된 기능을 비교한 것이다. 내부 모델의 가중치나 기본 규칙의 전체 조건은 공개 자료만으로 재현할 수 없다.
+
+| 제품 | 공개 문서에서 확인한 방식 | 이 설계에 반영한 점 |
+|---|---|---|
+| GitGuardian Internal Monitoring | 유효성, 공개 노출, 탐지 위치와 원천 맥락을 조사한다. 심각도는 사용자 지정 가능한 규칙을 위에서 아래로 평가해 처음 일치한 규칙을 적용하고, 여러 발견 위치에는 가장 높은 심각도를 사용한다. 별도 ML 위험 점수는 0에서 100까지이며 비밀 유형, 유효성, 탐지 맥락, 노출 패턴 등을 입력으로 쓴다. | 등급과 점수를 구별하고 규칙 순서, 위치별 평가, 근거와 수동 변경을 명시했다. 독자적인 수치 점수는 도입하지 않는다. |
+| GitHub Secret Scanning | 알림에 토큰 유효성, 공개 유출 여부, 여러 저장소 발견 여부, 지원되는 토큰 메타데이터와 발견 위치를 제공한다. 유효성 검사 결과로 대응 우선순위를 판단하도록 안내한다. 공개된 Secret Scanning 문서는 모든 비밀에 적용되는 공통 4등급 위험 산식을 제시하지 않는다. | 유효성과 노출 맥락을 별도로 수집하고, 인증 성공을 권한 또는 최종 위험 등급의 증거로 간주하지 않는다. |
+| TruffleHog Enterprise Analyze | 검증된 키라도 실제 위험 판단에는 연결된 자원의 소유자, 접근 가능한 데이터 범위, 권한을 조사한다. 공개된 설명은 AWS 테스트 버킷만 접근하는 키와 운영 저장소에 접근하는 GitHub 키의 영향이 다르다는 사례를 든다. | 공급자별 권한과 대상 조회가 없으면 영향 범위를 임의로 채우지 않는다. |
+
+근거: [GitGuardian 사고 우선순위와 심각도 규칙](https://docs.gitguardian.com/internal-monitoring/remediate/prioritize-incidents), [GitGuardian 위험 점수 입력](https://docs.gitguardian.com/secrets-detection/secrets-detection-engine/machine_learning), [GitHub Secret Scanning 알림 평가](https://docs.github.com/en/code-security/tutorials/remediate-leaked-secrets/evaluating-alerts), [GitHub Secret Scanning API 필드](https://docs.github.com/en/rest/secret-scanning/secret-scanning), [TruffleHog Analyze의 영향 분석 설명](https://trufflesecurity.com/blog/why-trufflehog-analyze-is-a-game-changer-for-security-teams).
+
+제품에 적용할 결정적 규칙은 [심각도 판정 정책](../02-functional-design/severity-policy.md)의 `severity-v2`를 따른다. 공급자별 권한과 자산 중요도를 읽지 못하는 경우 미평가로 둔다는 제한도 그 정책의 일부다.
