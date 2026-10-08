@@ -16,3 +16,16 @@ PNG 8장을 용도에 맞는 이름으로 보관한다. 원본 픽셀과 내용�
 **image 73의 6단계는 최종 기준이 아니다.** PRD에 따라 신규 및 분석 / 조치 중 / 재검증 대기 / 해결 4단계와 별도 예외 표시를 사용한다. 이미지 72의 4개 진행 지표 및 심각도 4등급과 구별한다.
 
 대시보드 이미지의 버튼, 등급, 수치, 규정 태그는 참고이며 구현 완료, 표준 준수, 실제 침해를 나타내지 않는다. 화면별 해석은 [화면 설계](../02-functional-design/dashboard-flow.md), 전체 구성의 해석은 [전체 시스템 구성](../03-architecture/system-overview.md)을 따른다.
+
+## 시크릿 보안 목표 와이어프레임
+
+아래 SVG는 대시보드의 공통 레이아웃과 디자인 토큰에 맞춰 새로 작성한 목표 화면이다. 수치와 시각은 배치 검토용 예시다. 화면별 동작과 현재 구현 상태는 [대시보드 화면 설계](../02-functional-design/dashboard-flow.md)를 따른다.
+
+| 파일 | 화면 |
+|---|---|
+| [secret-overview-wireframe.svg](dashboard/secret-overview-wireframe.svg) | 통합 현황의 시크릿 요약 |
+| [secret-security-wireframe.svg](dashboard/secret-security-wireframe.svg) | 시크릿 현황과 대응 목록 |
+| [secret-detail-wireframe.svg](dashboard/secret-detail-wireframe.svg) | 대응 건 상세 패널 |
+| [secret-assignment-wireframe.svg](dashboard/secret-assignment-wireframe.svg) | 담당 팀과 개인 지정 |
+| [secret-action-record-wireframe.svg](dashboard/secret-action-record-wireframe.svg) | 외부 조치 기록 |
+| [secret-exception-wireframe.svg](dashboard/secret-exception-wireframe.svg) | 위험 수용 예외 |
