@@ -2,7 +2,7 @@
 
 - 상태: **Accepted — Java API와 워커 분리, PostgreSQL 데이터 경계**
 - 결정일: 2026-10-09
-- 기준: [PRD v0.3](../../01-requirements/PRD.md), FR-04부터 FR-15, NFR-03, NFR-05, SEC-02, SEC-05
+- 기준: [PRD v0.4](../../01-requirements/PRD.md), FR-04부터 FR-15, NFR-03, NFR-05, SEC-02, SEC-05
 
 ## 이슈
 

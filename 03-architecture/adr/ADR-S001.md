@@ -2,7 +2,7 @@
 
 - 상태: **Accepted — Gitleaks를 초기 탐지 엔진으로 사용**
 - 결정일: 2026-10-09
-- 기준: [PRD v0.3](../../01-requirements/PRD.md), FR-01부터 FR-04, NFR-04
+- 기준: [PRD v0.4](../../01-requirements/PRD.md), FR-01부터 FR-04, NFR-04
 
 ## 이슈
 

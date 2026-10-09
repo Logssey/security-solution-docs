@@ -2,7 +2,7 @@
 
 - 상태: **Accepted — 4등급, 미평가와 순서가 정해진 판정 규칙**
 - 결정일: 2026-10-09
-- 기준: [PRD v0.3](../../01-requirements/PRD.md), FR-07, FR-10, FR-11, NFR-05
+- 기준: [PRD v0.4](../../01-requirements/PRD.md), FR-07, FR-10, FR-11, NFR-05
 
 ## 이슈
 

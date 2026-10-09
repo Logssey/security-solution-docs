@@ -17,7 +17,7 @@
 | ID | 결정 | 상태 |
 |---|---|---|
 | [ADR-S001](ADR-S001.md) | 룰 기반 탐지와 지원 범위 | Gitleaks 초기 탐지 엔진 Accepted |
-| [ADR-S002](ADR-S002.md) | 유형별 유효성 검증과 6시간 재검사 | Java 검증 워커와 영속 작업 대기열 Accepted |
+| [ADR-S002](ADR-S002.md) | 6시간 수집, 탐지와 유형별 유효성 재검사 | Java 수집 및 검증 워커와 영속 작업 대기열 Accepted |
 | [ADR-S003](ADR-S003.md) | 독립 상태 축과 조치 단계 | 대응 단위와 배타적 집계 Accepted |
 | [ADR-S004](ADR-S004.md) | 수동 대응과 외부 키 변경 경계 | Accepted |
 | [ADR-S005](ADR-S005.md) | 검증용 원문 보관 | 원문 영속 미보관 Accepted |

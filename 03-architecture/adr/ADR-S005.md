@@ -2,7 +2,7 @@
 
 - 상태: **Accepted — 발견한 원문은 영속 보관하지 않음**
 - 결정일: 2026-10-09
-- 기준: [PRD v0.3](../../01-requirements/PRD.md), NFR-08, SEC-01부터 SEC-03
+- 기준: [PRD v0.4](../../01-requirements/PRD.md), NFR-08, SEC-01부터 SEC-03
 
 ## 이슈
 

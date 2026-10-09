@@ -2,7 +2,7 @@
 
 - 상태: **Accepted — 수동 대응 지원, 외부 키 변경 실행 제외**
 - 결정일: 2026-10-09
-- 기준: [PRD v0.3](../../01-requirements/PRD.md), FR-12부터 FR-17, SEC-05, SEC-08
+- 기준: [PRD v0.4](../../01-requirements/PRD.md), FR-12부터 FR-17, SEC-05, SEC-08
 
 ## 이슈
 
