@@ -6,7 +6,7 @@
 
 프론트는 React, TypeScript, Vite, 백엔드는 Java 21, Spring Boot, DB는 PostgreSQL, Flyway를 사용한다. 이 확인은 별도 대시보드 코드와 설계 문서를 대상으로 한 정적 확인이며, 해당 저장소는 이 문서 묶음에 포함되지 않는다. 감시 대상 Re:Used의 거래 기능은 본 솔루션 기능과 구분한다.
 
-새 Secret 기능도 이 기술 기반을 따른다. [ADR-S001](../03-architecture/adr/ADR-S001.md)은 Gitleaks CLI를 탐지 엔진으로, [ADR-S008](../03-architecture/adr/ADR-S008.md)은 Java API와 분리된 Java 워커를 실행 구조로 정한다. Python 서비스는 추가하지 않는다.
+새 Secret 기능도 이 기술 기반을 따른다. [ADR-S001](../03-architecture/adr/ADR-S001.md)은 Gitleaks와 TruffleHog의 단독 또는 병행 운영을 비교 대상으로 두며, [ADR-S008](../03-architecture/adr/ADR-S008.md)은 Java API와 분리된 Java 워커를 실행 구조로 정한다. Python 서비스는 추가하지 않는다.
 
 ## 2. 확인된 구현과 추가 작업
 
