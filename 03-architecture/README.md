@@ -10,6 +10,7 @@ PRD의 수집, 검증, 평가, 대응 요구사항을 구성요소와 처리 경
 | [처리 흐름](processing-flow.md) | 수집부터 판정, 대응, 재검증과 감사 이력까지의 분기 |
 | [수집원과 검증기 계약](source-and-validator-contract.md) | 네 연결의 수집 범위와 유형별 검증, 실패 처리 |
 | [데이터 계약](data-contract.md) | 키, 발견 위치, 검증, 대응 기록의 관계와 집계 기준 |
+| [데이터베이스 스키마](database-schema.md) | 기존 대시보드 DB와의 경계, Secret 테이블, 제약, 인덱스와 마이그레이션 기준 |
 | [API 계약](api-contract.md) | 대시보드 조회, 변경, 오류와 권한 경계 |
 | [보안과 실행 정책](security-and-runtime.md) | 수집 권한, 검증 작업, 원문 보호와 운영 기록 |
 | [ADR 목록](adr/README.md) | 기술 결정의 상태, 근거, 대안과 남은 선택 |
