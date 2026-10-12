@@ -36,7 +36,7 @@
 | 2등급 | 이미지 버킷, Loki 버킷(chunks·ruler) |
 | 3등급 | 공개 정적 리소스 |
 
-등급표는 결과 DB의 `data_asset` 테이블에서 관리.
+등급표는 대시보드 PostgreSQL의 `iac_data_assets` 테이블에서 관리 (ERD).
 
 ## ② plan 전 검사 규칙
 
@@ -73,7 +73,7 @@
 |---|---|---|---|---|---|
 | `rule.sg_open_world` | Conftest (plan JSON) | 인그레스 `0.0.0.0/0`·`::/0`, 포트 무관 | 경고 | MEDIUM | 설계 |
 | `rule.iam_full_access` | Conftest (plan JSON) | `*FullAccess` 관리형 정책 연결, `Action: "*"` | 경고 | HIGH | 설계 |
-| `rule.kics` | KICS | KICS 결과를 그대로 가져옴. KICS 쿼리 ID는 `finding.params`에 | KICS CRITICAL·HIGH → 경고, 나머지 → 정보 | KICS 값 그대로 (INFO → LOW) | 설계 |
+| `rule.kics` | KICS | KICS 결과를 그대로 가져옴. KICS 쿼리 ID는 `iac_findings.params`에 | KICS CRITICAL·HIGH → 경고, 나머지 → 정보 | KICS 값 그대로 (INFO → LOW) | 설계 |
 
 설정 오류만으로는 차단하지 않음. 차단은 ①에서 경로가 생길 때.
 
