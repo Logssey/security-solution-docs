@@ -90,7 +90,7 @@
 | SR-5 | plan JSON은 민감 표시된 값을 지운 뒤 전송, 분석 후 삭제. 결과만 저장 |
 | SR-6 | 스캐너는 노드 역할이 아닌 전용 읽기 역할 사용. State 버킷 읽기는 명시적 허용 목록으로만 |
 | SR-7 | 도구 이미지·Action은 버전 고정, 업데이트는 리뷰 후 반영 (2026년 3월 Trivy Action 사건) |
-| SR-8 | GitHub App은 최소 권한(checks 쓰기, pull requests 쓰기, contents 읽기). 수정 PR 생성용 컨텐츠 쓰기는 별도 App으로 분리. App 개인 키는 Secrets Manager에 보관 |
+| SR-8 | GitHub App은 최소 권한(checks 쓰기, pull requests 쓰기, contents 읽기, actions 쓰기(재검사용)). 수정 PR 생성용 컨텐츠 쓰기는 별도 App으로 분리. App 개인 키는 Secrets Manager에 보관 |
 | SR-9 | 대시보드·API는 인증된 팀원만, CI 호출은 GitHub OIDC 토큰 검증. CI용 엔드포인트만 외부 노출(요청 크기·횟수 제한), Neo4j와 결과 DB는 클러스터 내부에만 |
 | SR-10 | 예외 승인, 재검사, 수정 PR 생성은 누가 언제 했는지 기록 |
 
