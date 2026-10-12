@@ -22,7 +22,7 @@
 | CloudFront·시크릿 노드 | `AWSCloudFrontDistribution`(S3 오리진만 연결), `AWSSecretsManagerSecret` 있음 | CloudFront→NLB만 보강, 시크릿 노드는 그대로 사용 (ERD) |
 | plan JSON 민감값 | `terraform show -json`은 민감값을 평문으로 출력 | 제거 후 전송 설계 유지 (ADR-06) |
 | lock 검증 | `init -lockfile=readonly`는 lock 파일을 바꾸지 않고 체크섬만 검증 | 설계 유지 |
-| 도구 버전 | Conftest 최신 v0.68.x (10/8 검증은 v0.56.0) | 구축 때 재검증 후 고정 (규칙 명세) |
+| 도구 버전 | Conftest 최신 v0.71.1 (10/8 검증은 v0.56.0) | 구축 때 재검증 후 고정 (규칙 명세) |
 | 스캐너 자격 증명 | 비 EKS 클러스터의 IRSA 방식은 서비스 계정 발급자 문서(OIDC discovery·JWKS)를 공개 주소에 올려야 함 | ADR-07에 전제 조건과 대안 명시 |
 | 전체 흐름 그림 (이전 문서) | 규칙 점검 칸이 Checkov·Trivy로 남아 ADR-09와 어긋남 | KICS·Conftest 보완으로 수정 |
 
