@@ -2,7 +2,9 @@
 
 ## 공통 규칙
 
-**모든 API는 `/api/v1/iac` 아래. 호출 주체(대시보드, CI, 내부 작업)마다 인증 방식이 다름.** 아래 경로는 기본 경로를 뺀 형태.
+**모든 API는 dashboard-backend의 `/api/v1/iac` 아래. 호출 주체(대시보드, CI, 내부 작업)마다 인증 방식이 다름.** 아래 경로는 기본 경로를 뺀 형태.
+
+- 별도 서비스가 아니라 대시보드 백엔드에 `iac` 모듈로 들어감 (ADR-11). 분석 워커는 API를 거치지 않고 PostgreSQL 대기열(`iac_jobs`)과 결과 테이블을 직접 씀
 
 - 형식·이름·오류는 [대시보드 API 공통 규약](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)을 따름 (ADR-D008)
 
@@ -12,7 +14,7 @@
 | CI (GitHub Actions) | GitHub OIDC 토큰. `aud = logssey-iac`, `repository`·`event_name`·`sub` 클레임을 허용 목록과 대조 | 자기 PR의 실행만 생성·조회 |
 | 내부 작업 (CronJob) | k8s 서비스 계정 토큰 (TokenReview 검증) | 작업 결과 기록만 |
 
-- 형식: JSON, 시각은 ISO 8601 UTC, ID는 UUID
+- 형식: JSON, 시각은 ISO 8601 UTC, ID는 숫자(DB의 `BIGINT`)
 - 필드 이름은 camelCase, 값 목록(enum)은 대문자 (`BLOCK`, `CRITICAL`). 규칙 ID(`path.tier1.added` 등)는 값 목록이 아니라 식별자라 그대로 씀
 - 목록은 `?cursor=&limit=` (기본 20, 최대 100)
 - 대시보드 공통 쿼리 `environment`(`ALL`·`PROD`·`DEV`)를 받음. 현재 IaC 검사 대상은 운영 환경 하나
@@ -39,7 +41,7 @@
 | 메서드 | 경로 | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
 | POST | `/runs` | 실행 등록 + ② 결과 기록 | `repo`, `prNumber`, `headSha`, `gate: {status, findings[]}` | 201 `{runId}`. ② 차단이면 여기서 검사 3개·코멘트까지 등록 |
-| PUT | `/runs/{runId}/plan` | plan JSON 업로드 (민감값 제거, gzip, 20MB 이하) | plan JSON | 202 `{status: "ANALYZING"}` |
+| PUT | `/runs/{runId}/plan` | plan JSON 업로드 (민감값 제거, gzip, 20MB 이하). `iac_plan_payloads`에 임시 저장하고 `iac_jobs`에 `ANALYZE_RUN` 등록 | plan JSON | 202 `{status: "ANALYZING"}` |
 | GET | `/runs/{runId}` | 실행 상태와 판정 | 없음 | `{status, verdict, highestSeverity, checks[]}` |
 
 - `status` 순서: `QUEUED` → `GATE_FAILED` 또는 `PLANNING` → `ANALYZING` → `DONE` 또는 `ERROR`
@@ -64,7 +66,7 @@
 | PATCH | `/findings/{id}` | 드리프트·조치 담당·상태 변경 (`assignee`, `status`) | S-01 F·G | MVP |
 | GET | `/remediations/suggested` | 제안 조치 목록 | S-01 G | MVP |
 | GET | `/jobs` | 검사별 주기, 마지막 실행, 상태 | S-01 H | MVP |
-| POST | `/jobs/{job}/trigger` | 지금 점검 (해당 CronJob을 Job으로 즉시 실행). 주기 변경은 API 없음, gitops에서 | S-01 A | MVP |
+| POST | `/jobs/{job}/trigger` | 지금 점검. 수집(`COLLECT_GRAPH`)은 CronJob을 Job으로 즉시 실행(백엔드에 해당 CronJob의 Job 생성 권한만 부여), 나머지는 `iac_jobs`에 `MANUAL`로 등록. 주기 변경은 API 없음, gitops에서 | S-01 A | MVP |
 | POST | `/remediations` | 수정 PR 생성 (`action`, `pathId`) → `{prUrl}` | S-01 C·G | 다음 (FR-D2) |
 | POST | `/exceptions` | 예외 요청 (`ruleId`, `target`, `reason`, `expiresAt`) | S-02 | 다음 (FR-D3) |
 | PATCH | `/exceptions/{id}` | 예외 승인·반려 | 관리 | 다음 (FR-D3) |
@@ -77,8 +79,10 @@
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| POST | `/jobs/{job}/runs` | 작업 시작 기록. `job` = `cartography`, `enrich`, `drift`, `state` |
-| POST | `/jobs/runs/{jobRunId}/results` | 작업 결과 기록 (드리프트 목록, State 요약, 수집 통계). 끝나면 열린 경로 재계산 |
+| POST | `/jobs/collect-graph/runs` | 매일 작업(Cartography)이 수집 시작·종료와 통계를 기록. 종료되면 `ENRICH_GRAPH`, `CHECK_DRIFT`, `CHECK_STATE`를 `iac_jobs`에 등록 |
+
+- 보강·드리프트·State 점검 결과는 워커가 결과 테이블에 직접 적재하고, 끝나면 열린 경로를 다시 계산
+- `job` 경로 값은 `iac_jobs.kind`의 소문자·하이픈 형태 (`collect-graph`, `enrich-graph`, `check-drift`, `check-state`)
 
 `GET /prs/58` 응답 예시 (S-02 패널에 그대로 사용):
 
