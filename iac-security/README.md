@@ -4,14 +4,27 @@
 
 | 문서 | 담는 내용 |
 |---|---|
-| PRD | 목적, 해결할 문제, 범위, 기능·비기능·보안 요구사항, 사용 시나리오 |
-| 아키텍처 | 구성 요소, 전체 구성도, PR·매일 데이터 흐름 |
-| ADR | 아키텍처 결정 10건과 근거 |
-| 규칙 명세 | 강도·데이터 등급, ②①③·설정 오류 규칙 전체, 운영 규칙 |
-| 화면 설계 | IaC 보안 탭, PR 상세 패널, PR 코멘트 |
-| API 명세 | CI용·대시보드용·내부 작업용 API |
-| ERD | 결과 DB 테이블과 관계, 그래프 스키마 |
+| [PRD](01-requirements/PRD.md) | 목적, 해결할 문제, 범위, 기능·비기능·보안 요구사항, 사용 시나리오 |
+| [아키텍처](03-architecture/system-overview.md) | 구성 요소, 전체 구성도, PR·매일 데이터 흐름 |
+| [ADR](03-architecture/adr.md) | 아키텍처 결정 11건과 근거 |
+| [규칙 명세](02-functional-design/rule-spec.md) | 강도·심각도·데이터 등급, ②①③·설정 오류 규칙 전체, 운영 규칙 |
+| [화면 설계](02-functional-design/dashboard-flow.md) | 심각도 표시, IaC 보안 탭, PR 상세 패널, PR 코멘트 |
+| [API 명세](03-architecture/api-contract.md) | CI용·대시보드용·내부 작업용 API |
+| [ERD](03-architecture/database-schema.md) | `iac_` 테이블과 관계, DDL 초안, 그래프 스키마 |
 
+권장 열람 순서: PRD → 규칙 명세 → 아키텍처 → ADR → 화면 설계 → API 명세 → ERD
+
+## 구현 위치
+
+**별도 서비스를 만들지 않고 기존 대시보드에 붙임.** Secret과 같은 구조 (ADR-11, Secret ADR-S008).
+
+| 구성 | 위치 |
+|---|---|
+| API | [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `iac` 모듈, `/api/v1/iac`. 대시보드 세션 인증을 그대로 씀 |
+| 분석 | API와 분리된 Java 워커. PostgreSQL 대기열 `iac_jobs`에서 작업을 가져감 |
+| 결과 DB | 대시보드 PostgreSQL에 `iac_` 테이블 추가 (Flyway 후속 마이그레이션). `dashboard_users`·`assets`와 FK 연결 |
+| 자산 그래프 | 별도 Neo4j (Cartography) |
+| 외부 도구 | Cartography, KICS, Conftest, Terraform (실행 파일) |
 
 ## 검토 결과 (10/12)
 
