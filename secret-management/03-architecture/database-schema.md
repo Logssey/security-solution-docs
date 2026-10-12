@@ -2,7 +2,9 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL에 추가할 물리 스키마의 구현 기준이다. 확인한 버전은 [dashboard-backend](https://github.com/Logssey/dashboard-backend) `5d2d1b1`, [dashboard-design-docs](https://github.com/Logssey/dashboard-design-docs) `3bac546`이다. 현재 백엔드의 `V1__create_tables.sql`에는 `dashboard_users`, `assets`, `detection_events`만 있다. 이 문서의 테이블은 아직 백엔드에 생성되지 않았다. 백엔드에는 기존 V1을 수정하지 않고 후속 Flyway 마이그레이션으로 추가한다. 대시보드 설계 저장소의 `04-data/credentials-draft.md`는 팀 확인 전 초안이므로, 해당 초안과 충돌하는 내용은 승인된 Secret PRD와 ADR을 따른다.
+이 문서는 PostgreSQL에 추가할 물리 스키마의 구현 기준이다. 확인한 버전은 [dashboard-backend](https://github.com/Logssey/dashboard-backend) `5d2d1b1`, [dashboard-design-docs](https://github.com/Logssey/dashboard-design-docs) `3bac546`이며 2026-10-12 같은 코드 기준을 정적으로 재확인했다. 현재 백엔드의 `V1__create_tables.sql`에는 `dashboard_users`, `assets`, `detection_events`만 있다. 이 문서의 테이블은 아직 백엔드에 생성되지 않았다. 백엔드에는 기존 V1을 수정하지 않고 후속 Flyway 마이그레이션으로 추가한다. 대시보드 설계 저장소의 `04-data/credentials-draft.md`는 대체된 과거 초안으로 현재 구현 기준에서 제외한다. Secret 상세 모델은 현재 PRD와 ADR 및 이 스키마를 따른다.
+
+로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
 ## 1. 기존 스키마와 경계
 

@@ -6,11 +6,13 @@
 
 ## 1. 공통 계약
 
-모든 조회와 변경은 기존 세션 인증 경계를 통과한다. 변경 요청은 CSRF 검증과 서버 권한 검사를 적용한다. 공급자 연결 자격 증명과 발견된 키 원문은 요청, 응답, 오류, 로그에 넣지 않는다. 응답 필드는 camelCase, enum은 대문자, 시각은 UTC ISO 8601 형식을 사용한다.
+모든 조회와 변경은 기존 세션 인증 경계를 통과한다. 변경 요청은 POST·PATCH·PUT·DELETE 모두 CSRF 검증과 서버 권한 검사를 적용한다. 공급자 연결 자격 증명과 발견된 키 원문은 요청, 응답, 오류, 로그에 넣지 않는다. 응답 필드는 camelCase, 상태·분류 enum은 대문자, 시각은 UTC ISO 8601 형식을 사용한다. `scope`의 `currentCases`·`inventory`·`history`, `unit`의 `ResponseCase`·`CredentialSet`은 계약 식별 문자열이며 아래 표기를 유지한다. 공통 기준은 [대시보드 API 명세](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)를 따른다.
 
 조회는 `source`, `provider`, `environment`, `credentialType`, `validity`, `severity`, `actionStatus`, `exception`, `assignee`, 기간 필터 중 해당 경로에 맞는 값을 받는다. 응답은 적용된 `filters`, `scope`, `unit`, `asOf`, `snapshotId`, `total`, `partialCoverage`를 반환한다. 요약, 매트릭스와 기본 대응 목록은 `scope=currentCases`, `unit=ResponseCase`이고 각 키의 최신 건만 센다. 인벤토리는 `scope=inventory`, `unit=CredentialSet`이다. 이력 목록은 `scope=history`, `unit=ResponseCase`로 과거 건을 각각 센다. 화면은 첫 조회의 `snapshotId`를 매트릭스와 목록에 전달한다. 같은 스냅샷과 필터의 카드, 매트릭스, 목록 건수는 일치해야 한다. 만료된 스냅샷은 409와 새 조회 안내를 반환한다. 페이지네이션은 안정된 정렬 키와 다음 커서를 사용한다.
 
-오류 형식은 `code`, `message`, `requestId`, `retryable`, `details`다. `details`에는 키 원문이나 원천 콘텐츠를 넣지 않는다. 입력 오류는 400, 세션 없음은 401, 권한 없음은 403, 대상 없음은 404, 버전 충돌은 409, 호출 제한은 429, 서버 장애는 5xx로 구분한다. 공급자 검사 결과의 401, 403, 404 등은 대시보드 HTTP 오류와 별도로 ValidationAttempt의 사유로 기록한다.
+오류의 필수 필드는 공통 규약과 같은 `code`, `message`다. `requestId`, `retryable`, `details`는 선택 확장 필드이며 기존 클라이언트는 없어도 처리한다. `requestId`는 원문을 포함하지 않는 추적값, `retryable`은 재시도 가능 여부이며 `details`에는 키 원문, 원천 콘텐츠나 임의 내부 식별자를 넣지 않는다. 입력 오류는 400 `INVALID_INPUT`, 세션 없음은 401 `UNAUTHENTICATED`, 권한 없음은 403 `FORBIDDEN`, 대상 없음은 404 `NOT_FOUND`, 메서드 오류는 405 `METHOD_NOT_ALLOWED`, 버전 충돌과 스냅샷 만료는 409 `CONFLICT`, 대시보드 요청 제한은 429 `RATE_LIMITED`, 서버 장애는 5xx로 구분한다. 409의 상세 사유는 안전한 확장 정보로 구분한다. 공급자 검사 결과의 401, 403, 404 등은 대시보드 HTTP 오류와 별도로 ValidationAttempt의 사유로 기록한다.
+
+`source`는 발견 위치의 수집 플랫폼, `provider`는 키 발급자 필터다. 예를 들어 Notion에서 발견한 AWS 키는 `source=NOTION`, `provider=AWS`다. 환경은 `ALL`, `PROD`, `DEV`, `UNKNOWN`이며 `ALL`은 UNKNOWN을 포함한다. 기존 Overview는 UNKNOWN을 지원하지 않으므로 화면 전환 전 그 경로에 UNKNOWN을 전달하지 않는다.
 
 ## 2. 조회
 
@@ -64,4 +66,14 @@
 
 보안 담당자는 검토, 심각도 근거 확인, 예외 승인을 수행한다. 인프라 및 개발 담당자는 할당된 대응 건의 외부 조치 기록, 체크리스트와 재검증 요청을 수행한다. 운영 관리자는 연결 범위와 실행 상태를 관리한다. 담당자 지정과 해결은 보안 담당자 또는 명시적으로 위임된 역할에 한정한다. 서버는 대상 범위까지 검사하며 화면 숨김만으로 권한을 구현하지 않는다.
 
+계정 인증은 기존 `dashboard_users`와 세션을 사용한다. `ADMIN`이라는 값만으로 Secret의 `SECURITY`, `REMEDIATOR`, `OPERATIONS` 권한을 자동 부여하지 않고 `secret_role_grants`와 연결 범위를 확인한다. 초기 관리자에게 필요한 역할을 부여하는 절차, 추가 담당자 계정의 생성·비활성화, 최초 역할 부여의 초기화 방식과 감사는 다중 사용자 연동 전에 구현 계획으로 확정한다. 현재 자동 등록 관리자 1개와 이름 문자열만으로 여러 개인 담당자가 준비됐다고 표시하지 않는다. 공개 회원가입이나 새로운 로그인 방식은 이 문서에서 도입하지 않는다.
+
 기존 `/overview` 응답의 숫자 점수는 새 Secret 요약의 근거가 아니다. 기존 클라이언트 호환을 위해 기존 필드를 즉시 재해석하지 않고 새 Secret 응답을 연결한 뒤 화면을 단계적으로 전환한다. 100점 표시 제거 시 해당 필드의 사용처와 계약 테스트를 확인하고 버전 변경 또는 사용 중단을 기록한다. 실제 전환 대상 코드와 순서는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)에 둔다.
+
+### 통합 현황의 전환 경계
+
+- 첫 연동은 `/api/v1/secrets`를 독립적으로 구현하고 기존 Overview v1의 필드 의미를 유지한다. 새 Secret 요약 카드에는 해당 범위와 단위를 표시한다.
+- 새 통합 조회는 일반 탐지의 `detection_events` 한 행과 Secret의 현재 ResponseCase 한 행을 각각 위험 항목으로 합성한다. 항목의 영역, 원본 ID와 집계 단위를 명시하고 서로 다른 ID를 혼용하지 않는다. Secret 대응 건을 `detection_events`에 다시 적재하여 두 번 세지 않는다.
+- 통합 심각도 분포는 포함된 위험 항목의 확인 등급과 미평가를 구분한다. Secret 부분은 현재 대응 건 필터·기준시점·스냅샷을 유지하며 고유 키·위치·Finding 수를 위험 항목 수에 합산하지 않는다. 기존 위험 추이의 날짜별 발생 이벤트는 현재 대응 건 수와 별도 지표다.
+- 새 통합 응답은 별도 버전으로 제공한다. 정확한 URL, 필드, 일반 탐지의 포함·제외 조건과 두 출처의 기준시점 고정 방식은 통합 API 구현 전에 정의한다. 기존 API 필드를 새 의미로 바꾸거나 구현 완료로 표시하지 않는다.
+- 새 화면과 통합 계약을 검증한 뒤 100점 카드를 등급 분포로 교체하고 구 클라이언트 지원 종료를 기록한다. 확장 전에는 기존 샘플 화면 표시를 유지한다.
