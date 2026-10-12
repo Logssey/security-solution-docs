@@ -6,14 +6,15 @@
 |---|---|---|---|
 | [ADR-01](#adr-01) | 판정과 문구를 무엇으로 만드나 | 규칙과 템플릿. AI 미사용 | 결정 |
 | [ADR-02](#adr-02) | ②를 언제, 무엇으로 검사하나 | plan 전에 `.tf`·lock 텍스트를 Conftest(직접 쓴 Rego)로 검사 | 결정 |
-| [ADR-03](#adr-03) | 자산 그래프를 어떻게 만드나 | Cartography(AWS + Kubernetes 모듈) + Neo4j. 기본 모델에 없는 관계만 보강 스크립트로 추가 | 결정 |
+| [ADR-03](#adr-03) | 자산 그래프를 어떻게 만드나 | Cartography(AWS + Kubernetes 모듈) + Neo4j. 기본 모델에 없는 관계만 워커의 보강 단계에서 추가 | 결정 |
 | [ADR-04](#adr-04) | 실효 권한을 어떻게 계산하나 | Cartography 권한 매핑(사용자 정의 매핑 파일)으로 1차 계산, 1등급은 IAM 시뮬레이터로 확정 | 결정 (구축 초반 검증) |
-| [ADR-05](#adr-05) | 분석을 어디서 돌리나 | ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 워커 | 결정 |
+| [ADR-05](#adr-05) | 분석을 어디서 돌리나 | ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 | 결정 |
 | [ADR-06](#adr-06) | plan JSON의 민감값 처리 | 러너에서 민감 표시(`*_sensitive`)된 값을 지운 뒤 전송, 분석 후 삭제 | 결정 |
 | [ADR-07](#adr-07) | 매일 작업의 AWS 자격 증명 | 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음 | 결정 (구축 초반 시범 적용) |
 | [ADR-08](#adr-08) | PR 봇의 신원 | GitHub App (이름, 최소 권한, 검사 결과 API) | 결정 |
 | [ADR-09](#adr-09) | 규칙 도구 선택 | KICS 주력 + Conftest 보완 규칙. Checkov·Trivy는 선택 | 결정 대기 |
-| [ADR-10](#adr-10) | 그래프·결과 저장소 | 그래프는 전용 Neo4j, 결과는 RDS의 별도 DB | 결정 대기 |
+| [ADR-10](#adr-10) | 그래프·결과 저장소 | 그래프는 전용 Neo4j, 결과는 대시보드 PostgreSQL의 `iac_` 테이블 | 결정 |
+| [ADR-11](#adr-11) | 어디에, 무슨 언어로 구현하나 | dashboard-backend(Spring Boot)에 `iac` 모듈로 통합, 분석은 별도 Java 워커 | 결정 |
 
 **상태 값**
 
@@ -45,7 +46,7 @@
 
 **자산 그래프를 어떻게 만드나** · 상태: 결정
 
-- **결정**: Cartography(AWS + Kubernetes 모듈) + Neo4j. 기본 모델에 없는 관계만 보강 스크립트로 추가
+- **결정**: Cartography(AWS + Kubernetes 모듈) + Neo4j. 기본 모델에 없는 관계만 워커의 보강 단계에서 추가
 - **근거**: 10/7 Cartography가 의도된 취약점 7개를 모두 관계 데이터로 수집. 공식 스키마에 `KubernetesPod -RUNS_ON-> KubernetesNode -IS_INSTANCE-> AWSEC2Instance`, `AWSLoadBalancerV2 -EXPOSE-> AWSEC2Instance`, `AWSCloudFrontDistribution`, `AWSSecretsManagerSecret`이 있음
 - **보강 대상**: CloudFront→NLB(S3 오리진만 연결), IMDS 자격 증명, `providerID`가 없는 노드의 EC2 연결
 - **버린 대안**: 상용 CNAPP(비용), Terraform 코드만으로 그래프 구성(코드 밖 자산 누락), 파드 연결을 kubectl로 직접 수집(중복 구현)
@@ -63,7 +64,7 @@
 
 **분석을 어디서 돌리나** · 상태: 결정
 
-- **결정**: ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 워커
+- **결정**: ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 (ADR-11)
 - **근거**: PR 코드는 매번 버려지는 VM에서만 돌고, Neo4j는 사설망에 둠
 - **버린 대안**: 클러스터 안 셀프 호스티드 러너 (악성 PR이 클러스터에서 실행됨)
 
@@ -108,11 +109,36 @@
 
 ### ADR-10
 
-**그래프·결과 저장소** · 상태: 결정 대기
+**그래프·결과 저장소** · 상태: 결정
 
-- **결정**: 그래프는 전용 Neo4j, 결과는 RDS의 별도 DB
-- **근거**: 그래프 탐색은 Neo4j, 이력·상태 관리는 관계형 DB가 맞음. 기존 RDS를 쓰면 운영 부담이 작음
-- **버린 대안**: 모두 Neo4j에 저장, 별도 RDS 인스턴스
+- **결정**: 그래프는 전용 Neo4j, 결과는 대시보드 PostgreSQL에 `iac_` 테이블로 추가 (Flyway 후속 마이그레이션)
+- **근거**
+    - 그래프 탐색은 Neo4j, 이력·상태 관리는 관계형 DB가 맞음
+    - 대시보드 DB에 두면 담당자·감사 행위자를 `dashboard_users`, 자산을 `assets`에 FK로 연결할 수 있음
+    - Secret도 같은 DB에 `secret_` 테이블로 추가함 (ADR-S008)
+- **버린 대안**
+    - 모두 Neo4j에 저장 (이력·상태 관리와 제약 걸기가 어려움)
+    - 기존 RDS(Re:Used 서비스 DB)의 별도 DB `logssey_iac` (이전 초안). 서비스 DB를 장악한 공격자가 탐지 기록까지 지울 수 있고(ADR-D005), 대시보드 사용자·자산과 FK로 연결할 수 없음
+- **남은 결정**: 운영 DB 서버 위치는 ADR-D005를 따름
+
+### ADR-11
+
+**어디에, 무슨 언어로 구현하나** · 상태: 결정
+
+- **결정**
+    - API: dashboard-backend(Java 21, Spring Boot)에 `iac` 모듈로 통합. 경로는 `/api/v1/iac`
+    - 분석: API와 분리된 Java 워커가 `iac_jobs` 대기열에서 작업을 가져가 ①③을 계산. Neo4j Java 드라이버, AWS SDK for Java(IAM 시뮬레이터) 사용
+    - 외부 도구: Cartography·KICS·Conftest·Terraform은 실행 파일로 두고 다시 구현하지 않음
+- **근거**
+    - 대시보드는 Spring Boot 앱 하나(dashboard-backend)이고, 로그인 세션·사용자·자산을 이미 가지고 있음
+    - Secret이 같은 구조(Spring API + 별도 Java 워커 + 같은 PostgreSQL)를 이미 정함 (ADR-S008). 언어와 배포 단위를 맞추면 운영할 것이 줄어듦
+    - 통합 현황의 심각도 집계를 한 API 안에서 합성할 수 있음
+- **버린 대안**
+    - 별도 IaC API 서비스 (이전 초안). 인증, 사용자, 통합 현황 합성을 서비스 간 호출로 따로 만들어야 함
+    - Python 워커. Cartography와 같은 언어라 편하지만 ADR-S008의 "Python을 제품 실행 언어로 도입하지 않음"과 어긋남
+- **영향**
+    - CI 요청이 dashboard-backend로 들어옴. CI 경로만 CloudFront → 공개 NLB로 열고, OIDC 토큰 검증과 요청 크기·횟수 제한을 둠 (SR-9)
+    - API와 워커는 DB 계정과 권한을 나눔 (ERD의 DB 계정 표)
 
 | 항목 | 내용 |
 |---|---|
