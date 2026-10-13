@@ -1,0 +1,350 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif" font-size="13" fill="#101828">
+<title>SCR-02 Finding 목록 와이어프레임</title>
+<rect x="0" y="0" width="1440" height="900" fill="#F9FAFB"/>
+<rect x="0" y="56" width="220" height="844" fill="#FFFFFF"/>
+<line x1="220.5" y1="56" x2="220.5" y2="900" stroke="#D0D5DD"/>
+<g transform="translate(25 83) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="1"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="1"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="1"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="1"/></g>
+<text x="56" y="97" font-size="14" fill="#344054">요약</text>
+<rect x="0" y="112" width="220" height="40" fill="#2F6FAE" fill-opacity="0.1"/>
+<rect x="0" y="112" width="3" height="40" fill="#2F6FAE"/>
+<g transform="translate(25 123) scale(1.5)" fill="none" stroke="#2F6FAE" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.5L10.9 10.3H1.1Z"/><path d="M6 4.9V7.1"/><circle cx="6" cy="8.8" r="0.75" fill="#2F6FAE" stroke="none"/></g>
+<text x="56" y="137" font-size="14" font-weight="700">Finding</text>
+<rect x="182" y="122" width="24" height="20" rx="10" fill="#EAECF0"/>
+<text x="194" y="136.3" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">0</text>
+<g transform="translate(25 163) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="1.4" y="1.8" width="9.2" height="3.6" rx="1"/><rect x="1.4" y="6.6" width="9.2" height="3.6" rx="1"/><circle cx="3.5" cy="3.6" r="0.65" fill="#475467" stroke="none"/><circle cx="3.5" cy="8.4" r="0.65" fill="#475467" stroke="none"/></g>
+<text x="56" y="177" font-size="14" fill="#344054">워크로드</text>
+<g transform="translate(25 203) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4.7"/><circle cx="6" cy="6" r="2.3"/><circle cx="6" cy="6" r="0.8" fill="#475467" stroke="none"/></g>
+<text x="56" y="217" font-size="14" fill="#344054">스캔</text>
+<g transform="translate(25 243) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 2.6Q4 1.7 6 3.2Q8 1.7 10.5 2.6V10.1Q8 9.2 6 10.6Q4 9.2 1.5 10.1Z"/><path d="M6 3.2V10.6"/></g>
+<text x="56" y="257" font-size="14" fill="#344054">규칙</text>
+<line x1="12" y1="840.5" x2="208" y2="840.5" stroke="#EAECF0"/>
+<g transform="translate(20 860) scale(1.33)" fill="none" stroke="#475467" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="5"/><path d="M6 5.4V8.8"/><circle cx="6" cy="3.6" r="0.75" fill="#475467" stroke="none"/></g>
+<text x="44" y="873" fill="#475467">배지·용어 안내</text>
+<rect x="0" y="0" width="1440" height="56" fill="#FFFFFF"/>
+<line x1="0" y1="56.5" x2="1440" y2="56.5" stroke="#D0D5DD"/>
+<rect x="24" y="16" width="24" height="24" rx="6" fill="#344054"/>
+<path d="M31.5 21.5V33.5H41" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="56" y="34.5" font-size="18" font-weight="700">Logssey</text>
+<line x1="148.5" y1="16" x2="148.5" y2="40" stroke="#D0D5DD"/>
+<text x="164" y="26" font-size="16" font-weight="700">Reach</text>
+<text x="164" y="44" font-size="12" fill="#475467">도달 가능성 분석</text>
+<rect x="320.5" y="10.5" width="359" height="35" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="330" y="32.3" font-size="12"><tspan font-weight="700">reused-api</tspan><tspan fill="#475467"> · 이미지 </tspan><tspan fill="#475467" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a6ffffef…</tspan></text>
+<rect x="583.8" y="18" width="61.6" height="20" rx="10" fill="#F2F4F7"/>
+<g transform="translate(588.8 23.5) scale(0.75)" fill="none" stroke="#344054" stroke-width="1.87" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="620.6" y="32.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<g transform="translate(656 22) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="1338.02" y="17.5" width="77.48" height="21" rx="11" fill="#FFFFFF" stroke="#344054"/>
+<text x="1376.76" y="32.3" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">reviewer</text>
+<rect x="1268.66" y="17.5" width="62.36" height="21" rx="11" fill="#FFFFFF" stroke="#344054"/>
+<text x="1299.84" y="32.3" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">viewer</text>
+<text x="1260.16" y="32.7" text-anchor="end">보안 담당자</text>
+<g transform="translate(1157.26 18) scale(1.67)" fill="none" stroke="#475467" stroke-width="0.84" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="5"/><path d="M4.3 4.6A1.75 1.75 0 1 1 6.9 6.1C6.3 6.4 6 6.7 6 7.4"/><circle cx="6" cy="9" r="0.7" fill="#475467" stroke="none"/></g>
+<line x1="1145.76" y1="18" x2="1145.76" y2="38" stroke="#D0D5DD"/>
+<text x="1135.26" y="32.3" font-size="12" text-anchor="end"><tspan fill="#475467">마지막 스캔 </tspan>2026-10-10 23:44</text>
+<text x="244" y="107.2" font-size="20" font-weight="700">Finding</text>
+<text x="344.2" y="106.5" font-size="16" font-weight="700">23건</text>
+<text x="394.36" y="104.3" font-size="12"><tspan fill="#667085">대상 </tspan><tspan font-weight="700">reused-api</tspan><tspan fill="#475467"> · 이미지 </tspan><tspan fill="#475467" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a6ffffef…</tspan></text>
+<rect x="244.5" y="136.5" width="199" height="31" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="250" y="141" width="77.6" height="22" rx="11" fill="#475467"/>
+<g transform="translate(256 147) scale(0.83)" fill="none" stroke="#FFFFFF" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.5L10.9 10.3H1.1Z"/><path d="M6 4.9V7.1"/><circle cx="6" cy="8.8" r="0.75" fill="#FFFFFF" stroke="none"/></g>
+<text x="295.8" y="156.32" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">도달 가능</text>
+<text x="432" y="157" font-size="14" font-weight="700" text-anchor="end">0</text>
+<rect x="452.5" y="136.5" width="199" height="31" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="458" y="141" width="62" height="22" rx="11" fill="#D0D5DD"/>
+<g transform="translate(464 147) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M3.8 4.3A2.25 2.25 0 1 1 7.3 6.2C6.4 6.7 6 7.1 6 7.9"/><circle cx="6" cy="10.1" r="0.8" fill="#101828" stroke="none"/></g>
+<text x="496" y="156.32" font-size="12" font-weight="700" text-anchor="middle">미확인</text>
+<text x="640" y="157" font-size="14" font-weight="700" text-anchor="end">0</text>
+<rect x="660.5" y="136.5" width="199" height="31" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="666" y="141" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(672 147) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="711.8" y="156.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<text x="848" y="157" font-size="14" font-weight="700" text-anchor="end">14</text>
+<rect x="868.5" y="136.5" width="199" height="31" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="874.5" y="141.5" width="104.2" height="21" rx="11" fill="#F9FAFB" stroke="#667085" stroke-dasharray="3 2"/>
+<g transform="translate(880 147) scale(0.83)" fill="none" stroke="#475467" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6H9.4"/></g>
+<text x="933.6" y="156.32" font-size="12" font-weight="700" fill="#475467" text-anchor="middle">분석 대상 아님</text>
+<text x="1056" y="157" font-size="14" font-weight="700" text-anchor="end">9</text>
+<rect x="244.5" y="184.5" width="139" height="39" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="256" y="208.68"><tspan fill="#475467">상태: </tspan>전체</text>
+<g transform="translate(360 198) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="392.5" y="184.5" width="139" height="39" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="404" y="208.68"><tspan fill="#475467">심각도: </tspan>전체</text>
+<g transform="translate(508 198) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="540.5" y="184.5" width="139" height="39" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="552" y="208.68"><tspan fill="#475467">검토 상태: </tspan>전체</text>
+<g transform="translate(656 198) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="688.5" y="184.5" width="139" height="39" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="700" y="208.68"><tspan fill="#475467">배포 상태: </tspan>전체</text>
+<g transform="translate(804 198) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="836.5" y="184.5" width="139" height="39" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="848" y="208.68"><tspan fill="#475467">패키지: </tspan>전체</text>
+<g transform="translate(952 198) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="984" y="196" width="28" height="16" rx="8" fill="#D0D5DD"/>
+<circle cx="992" cy="204" r="6" fill="#FFFFFF"/>
+<text x="1018" y="208.7">새 Finding만</text>
+<rect x="1102.5" y="184.5" width="199" height="39" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<g transform="translate(1114 197) scale(1.17)" fill="none" stroke="#667085" stroke-width="1.11" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.1" cy="5.1" r="3.7"/><path d="M7.9 7.9L10.7 10.7"/></g>
+<text x="1136" y="208.68" fill="#667085">CVE 검색 (예: 89407)</text>
+<text x="1314" y="208.7" font-weight="500" fill="#667085">필터 초기화</text>
+<text x="244" y="257" fill="#475467">23건 중 23건 표시</text>
+<rect x="516.06" y="238.5" width="529.44" height="27" rx="6" fill="#FFFFFF" stroke="#2F6FAE" stroke-dasharray="4 3"/>
+<text x="525.56" y="256.3" font-size="12" fill="#2F6FAE">켜면 생기는 묶음 머리 행:</text>
+<g transform="translate(675.16 246) scale(1)" fill="none" stroke="#101828" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<text x="693.16" y="256.3" font-size="12"><tspan font-weight="700">CVE-2026-89407</tspan><tspan fill="#475467"> · 사본 2개 · 도달 불가 1 · 분석 대상 아님 1</tspan></text>
+<rect x="1080" y="243" width="32" height="18" rx="9" fill="#D0D5DD"/>
+<circle cx="1089" cy="252" r="7" fill="#FFFFFF"/>
+<text x="1120" y="256.7">CVE로 묶기</text>
+<rect x="1216.5" y="236.5" width="199" height="31" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="1228" y="256.68"><tspan fill="#475467">정렬: </tspan>기본 정렬</text>
+<g transform="translate(1392 246) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="244.5" y="280.5" width="1171" height="559" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="245" y="281" width="1170" height="39" fill="#F9FAFB"/>
+<line x1="244" y1="320.5" x2="1416" y2="320.5" stroke="#D0D5DD"/>
+<text x="256" y="304.5" font-size="12" font-weight="700" fill="#475467">심각도</text>
+<text x="352" y="304.5" font-size="12" font-weight="700" fill="#475467">CVE</text>
+<text x="500" y="304.5" font-size="12" font-weight="700" fill="#475467">패키지·버전</text>
+<text x="760" y="304.5" font-size="12" font-weight="700" fill="#475467">상태</text>
+<text x="888" y="304.5" font-size="12" font-weight="700" fill="#475467">방식</text>
+<text x="992" y="304.5" font-size="12" font-weight="700" fill="#475467">검토</text>
+<text x="1080" y="304.5" font-size="12" font-weight="700" fill="#475467">배포</text>
+<text x="1184" y="304.5" font-size="12" font-weight="700" fill="#475467">근거 요약</text>
+<rect x="256.5" y="335.5" width="74.48" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="335" width="4" height="22" fill="#101828"/>
+<text x="295.24" y="350.32" font-size="12" font-weight="700" text-anchor="middle">CRITICAL</text>
+<text x="352" y="350.7">CVE-2025-14813</text>
+<text x="500" y="341"><tspan font-weight="700">bcprov-jdk18on</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">org.bouncycas…</tspan></text>
+<text x="500" y="360">1.81<tspan fill="#667085"> → </tspan>1.81.1</text>
+<rect x="760" y="335" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 341) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="350.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="335.5" width="88.6" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 341) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.4" cy="6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="2.6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="9.4" r="1.4" fill="#344054" stroke="none"/><path d="M2.4 6H5.4L9.6 2.6M5.4 6L9.6 9.4"/></g>
+<text x="935.8" y="350.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">호출 그래프</text>
+<rect x="990.5" y="335.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 341) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="350.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="335" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 341) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="350.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="341" font-size="12" fill="#475467">GOST CTR 취약 메서드에 닿지 않는다.</text>
+<text x="1184" y="359" font-size="12" fill="#475467">bcprov는 Argon2 경로로만 쓰인다</text>
+<line x1="245" y1="372.5" x2="1415" y2="372.5" stroke="#EAECF0"/>
+<rect x="256.5" y="387.5" width="74.48" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="387" width="4" height="22" fill="#101828"/>
+<text x="295.24" y="402.32" font-size="12" font-weight="700" text-anchor="middle">CRITICAL</text>
+<text x="352" y="402.7">CVE-2026-8763</text>
+<text x="500" y="393"><tspan font-weight="700">bcprov-jdk18on</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">org.bouncycas…</tspan></text>
+<text x="500" y="412">1.81<tspan fill="#667085"> → </tspan>1.85</text>
+<rect x="760" y="387" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 393) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="402.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="387.5" width="88.6" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 393) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.4" cy="6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="2.6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="9.4" r="1.4" fill="#344054" stroke="none"/><path d="M2.4 6H5.4L9.6 2.6M5.4 6L9.6 9.4"/></g>
+<text x="935.8" y="402.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">호출 그래프</text>
+<rect x="990.5" y="387.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 393) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="402.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="387" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 393) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="402.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="393" font-size="12" fill="#475467">Name Constraints 검증 메서드에 닿지</text>
+<text x="1184" y="411" font-size="12" fill="#475467">않는다. BC…</text>
+<line x1="245" y1="424.5" x2="1415" y2="424.5" stroke="#EAECF0"/>
+<rect x="256.5" y="439.5" width="74.48" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="439" width="4" height="22" fill="#101828"/>
+<text x="295.24" y="454.32" font-size="12" font-weight="700" text-anchor="middle">CRITICAL</text>
+<text x="352" y="454.7">CVE-2026-65182</text>
+<text x="500" y="445"><tspan font-weight="700">tomcat-embed-core</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">org.apache…</tspan></text>
+<text x="500" y="464">11.0.24<tspan fill="#667085"> → </tspan>11.0.25</text>
+<rect x="760" y="439" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 445) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="454.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="439.5" width="49" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 445) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.2" cy="3" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="6" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="9" r="0.95" fill="#344054" stroke="none"/><path d="M4.8 3H10.6M4.8 6H10.6M4.8 9H10.6"/></g>
+<text x="916" y="454.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">규칙</text>
+<rect x="990.5" y="439.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 445) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="454.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="439" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 445) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="454.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="445" font-size="12" fill="#475467">컨테이너 보안</text>
+<text x="1184" y="463" font-size="12" fill="#475467">제약(security-constraint…</text>
+<line x1="245" y1="476.5" x2="1415" y2="476.5" stroke="#EAECF0"/>
+<rect x="256.5" y="491.5" width="74.48" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="491" width="4" height="22" fill="#101828"/>
+<text x="295.24" y="506.32" font-size="12" font-weight="700" text-anchor="middle">CRITICAL</text>
+<text x="352" y="506.7">CVE-2026-65905</text>
+<text x="500" y="497"><tspan font-weight="700">tomcat-embed-core</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">org.apache…</tspan></text>
+<text x="500" y="516">11.0.24<tspan fill="#667085"> → </tspan>11.0.25</text>
+<rect x="760" y="491" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 497) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="506.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="491.5" width="49" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 497) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.2" cy="3" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="6" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="9" r="0.95" fill="#344054" stroke="none"/><path d="M4.8 3H10.6M4.8 6H10.6M4.8 9H10.6"/></g>
+<text x="916" y="506.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">규칙</text>
+<rect x="990.5" y="491.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 497) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="506.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="491" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 497) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="506.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="497" font-size="12" fill="#475467">DIGEST 인증기 설정 없음</text>
+<line x1="245" y1="528.5" x2="1415" y2="528.5" stroke="#EAECF0"/>
+<rect x="256.5" y="543.5" width="74.48" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="543" width="4" height="22" fill="#101828"/>
+<text x="295.24" y="558.32" font-size="12" font-weight="700" text-anchor="middle">CRITICAL</text>
+<text x="352" y="558.7">CVE-2026-68525</text>
+<text x="500" y="549"><tspan font-weight="700">tomcat-embed-core</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">org.apache…</tspan></text>
+<text x="500" y="568">11.0.24<tspan fill="#667085"> → </tspan>11.0.25</text>
+<rect x="760" y="543" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 549) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="558.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="543.5" width="49" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 549) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.2" cy="3" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="6" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="9" r="0.95" fill="#344054" stroke="none"/><path d="M4.8 3H10.6M4.8 6H10.6M4.8 9H10.6"/></g>
+<text x="916" y="558.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">규칙</text>
+<rect x="990.5" y="543.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 549) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="558.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="543" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 549) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="558.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="549" font-size="12" fill="#475467">FORM 인증(LoginConfig) 설정 없음</text>
+<line x1="245" y1="580.5" x2="1415" y2="580.5" stroke="#EAECF0"/>
+<rect x="256.5" y="595.5" width="44.24" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="595" width="4" height="22" fill="#344054"/>
+<text x="280.12" y="610.32" font-size="12" font-weight="700" text-anchor="middle">HIGH</text>
+<text x="352" y="610.7">CVE-2026-13506</text>
+<text x="500" y="601"><tspan font-weight="700">bcprov-jdk18on</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">org.bouncycas…</tspan></text>
+<text x="500" y="620">1.81<tspan fill="#667085"> → </tspan>1.85</text>
+<rect x="760" y="595" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 601) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="610.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="595.5" width="88.6" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 601) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.4" cy="6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="2.6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="9.4" r="1.4" fill="#344054" stroke="none"/><path d="M2.4 6H5.4L9.6 2.6M5.4 6L9.6 9.4"/></g>
+<text x="935.8" y="610.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">호출 그래프</text>
+<rect x="990.5" y="595.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 601) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/><path d="M6 2.2A3.8 3.8 0 0 0 6 9.8Z" fill="#344054" stroke="none"/></g>
+<text x="1022" y="610.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">잠정</text>
+<rect x="1080" y="595" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 601) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="610.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="601" font-size="12" fill="#475467">ASN.1 지연 파싱 메서드에 닿지 않는다.</text>
+<text x="1184" y="619" font-size="12" fill="#475467">패키지는 Argon2 경로로 닿는다</text>
+<line x1="245" y1="632.5" x2="1415" y2="632.5" stroke="#EAECF0"/>
+<rect x="256.5" y="647.5" width="44.24" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="647" width="4" height="22" fill="#344054"/>
+<text x="280.12" y="662.32" font-size="12" font-weight="700" text-anchor="middle">HIGH</text>
+<text x="352" y="662.7">CVE-2026-68497</text>
+<text x="500" y="653"><tspan font-weight="700">jackson-databind</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">tools.jacks…</tspan></text>
+<text x="500" y="672">3.1.5<tspan fill="#667085"> → </tspan>3.1.6</text>
+<rect x="760" y="647" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 653) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="662.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="647.5" width="49" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 653) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.2" cy="3" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="6" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="9" r="0.95" fill="#344054" stroke="none"/><path d="M4.8 3H10.6M4.8 6H10.6M4.8 9H10.6"/></g>
+<text x="916" y="662.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">규칙</text>
+<rect x="990.5" y="647.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 653) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="662.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="647" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 653) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="662.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="653" font-size="12" fill="#475467">javax.xml.datatype(Duration,</text>
+<text x="1184" y="671" font-size="12" fill="#475467">XMLGregorianCalendar) 사용 없음</text>
+<line x1="245" y1="684.5" x2="1415" y2="684.5" stroke="#EAECF0"/>
+<rect x="256.5" y="699.5" width="44.24" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="699" width="4" height="22" fill="#344054"/>
+<text x="280.12" y="714.32" font-size="12" font-weight="700" text-anchor="middle">HIGH</text>
+<text x="352" y="714.7">CVE-2026-89407</text>
+<text x="500" y="705"><tspan font-weight="700">jackson-core</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">tools.jackson.co…</tspan></text>
+<text x="500" y="724">3.1.5<tspan fill="#667085"> → </tspan>3.1.7</text>
+<rect x="760" y="699" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 705) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="714.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="699.5" width="49" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 705) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.2" cy="3" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="6" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="9" r="0.95" fill="#344054" stroke="none"/><path d="M4.8 3H10.6M4.8 6H10.6M4.8 9H10.6"/></g>
+<text x="916" y="714.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">규칙</text>
+<rect x="990.5" y="699.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 705) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="714.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="699" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 705) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="714.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="705" font-size="12" fill="#475467">역직렬화될 수 있는 타입에 실수형 필드</text>
+<text x="1184" y="723" font-size="12" fill="#475467">없음</text>
+<line x1="245" y1="736.5" x2="1415" y2="736.5" stroke="#EAECF0"/>
+<rect x="256.5" y="751.5" width="44.24" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="751" width="4" height="22" fill="#344054"/>
+<text x="280.12" y="766.32" font-size="12" font-weight="700" text-anchor="middle">HIGH</text>
+<text x="352" y="766.7">CVE-2026-89425</text>
+<text x="500" y="757"><tspan font-weight="700">jackson-core</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">tools.jackson.co…</tspan></text>
+<text x="500" y="776">3.1.5<tspan fill="#667085"> → </tspan>3.1.7</text>
+<rect x="760" y="751" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 757) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="766.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="751.5" width="88.6" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 757) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.4" cy="6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="2.6" r="1.4" fill="#344054" stroke="none"/><circle cx="9.6" cy="9.4" r="1.4" fill="#344054" stroke="none"/><path d="M2.4 6H5.4L9.6 2.6M5.4 6L9.6 9.4"/></g>
+<text x="935.8" y="766.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">호출 그래프</text>
+<rect x="990.5" y="751.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 757) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="766.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="751" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 757) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="766.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="757" font-size="12" fill="#475467">DataInput 파서 메서드에 닿지 않는다.</text>
+<text x="1184" y="775" font-size="12" fill="#475467">DataInput 사용 없음</text>
+<line x1="245" y1="788.5" x2="1415" y2="788.5" stroke="#EAECF0"/>
+<rect x="256.5" y="803.5" width="44.24" height="21" rx="2" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="256" y="803" width="4" height="22" fill="#344054"/>
+<text x="280.12" y="818.32" font-size="12" font-weight="700" text-anchor="middle">HIGH</text>
+<text x="352" y="818.7">CVE-2026-91776</text>
+<text x="500" y="809"><tspan font-weight="700">jackson-databind</tspan><tspan font-size="12" fill="#667085"> · </tspan><tspan font-size="12" fill="#667085">tools.jacks…</tspan></text>
+<text x="500" y="828">3.1.5<tspan fill="#667085"> → </tspan>3.1.7</text>
+<rect x="760" y="803" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(766 809) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="805.8" y="818.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<rect x="884.5" y="803.5" width="49" height="21" rx="4" fill="#F2F4F7" stroke="#D0D5DD"/>
+<g transform="translate(890 809) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.2" cy="3" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="6" r="0.95" fill="#344054" stroke="none"/><circle cx="2.2" cy="9" r="0.95" fill="#344054" stroke="none"/><path d="M4.8 3H10.6M4.8 6H10.6M4.8 9H10.6"/></g>
+<text x="916" y="818.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">규칙</text>
+<rect x="990.5" y="803.5" width="49" height="21" rx="11" fill="#FFFFFF" stroke="#667085"/>
+<g transform="translate(996 809) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1022" y="818.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">확정</text>
+<rect x="1080" y="803" width="65.6" height="22" rx="11" fill="#F2F4F7"/>
+<g transform="translate(1086 809) scale(0.83)" fill="none" stroke="#344054" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="1119.8" y="818.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<text x="1184" y="809" font-size="12" fill="#475467">@JsonTypeInfo, default typing,</text>
+<text x="1184" y="827" font-size="12" fill="#475467">문제 처리기 사용 없음</text>
+<line x1="245" y1="840" x2="1415" y2="840" stroke="#FFFFFF"/>
+<path d="M244.5 826V839.5H1415.5V826" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="244" y1="840.5" x2="1416" y2="840.5" stroke="#667085" stroke-dasharray="5 4"/>
+<g transform="translate(252 862) scale(1)" fill="none" stroke="#667085" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<text x="270" y="872.7" font-weight="700" fill="#475467">⋯ 13행 더</text>
+<rect x="1198.1" y="852.5" width="217.4" height="31" rx="6" fill="#FFFFFF" stroke="#2F6FAE" stroke-dasharray="4 3"/>
+<text x="1207.6" y="872.3" font-size="12" fill="#2F6FAE">다음 행이 있을 때만</text>
+<rect x="1322.9" y="856.5" width="88.6" height="23" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<g transform="translate(1338.4 862) scale(1)" fill="none" stroke="#344054" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<text x="1376.2" y="872.32" font-size="12" font-weight="500" fill="#344054" text-anchor="middle">더 보기</text>
+<text x="1185.6" y="872.7" fill="#475467" text-anchor="end">23건 중 23건</text>
+<circle cx="236" cy="76" r="12" fill="#2F6FAE"/>
+<text x="236" y="80.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">01</text>
+<circle cx="242" cy="134" r="12" fill="#2F6FAE"/>
+<text x="242" y="138.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">02</text>
+<circle cx="242" cy="182" r="12" fill="#2F6FAE"/>
+<text x="242" y="186.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">03</text>
+<circle cx="1100" cy="182" r="12" fill="#2F6FAE"/>
+<text x="1100" y="186.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">04</text>
+<circle cx="1316" cy="182" r="12" fill="#2F6FAE"/>
+<text x="1316" y="186.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">05</text>
+<circle cx="501.56" cy="252" r="12" fill="#2F6FAE"/>
+<text x="501.56" y="256.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">09</text>
+<circle cx="1066" cy="252" r="12" fill="#2F6FAE"/>
+<text x="1066" y="256.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">06</text>
+<circle cx="1202" cy="252" r="12" fill="#2F6FAE"/>
+<text x="1202" y="256.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">07</text>
+<circle cx="242" cy="278" r="12" fill="#2F6FAE"/>
+<text x="242" y="282.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">08</text>
+<circle cx="1089.6" cy="868" r="12" fill="#2F6FAE"/>
+<text x="1089.6" y="872.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">10</text>
+</svg>

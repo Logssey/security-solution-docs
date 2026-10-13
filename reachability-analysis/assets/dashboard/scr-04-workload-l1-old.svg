@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif" font-size="13" fill="#101828">
+<title>SCR-04 워크로드·배포 확인(L1) 와이어프레임</title>
+<rect x="0" y="0" width="1440" height="900" fill="#F9FAFB"/>
+<rect x="0" y="56" width="220" height="844" fill="#FFFFFF"/>
+<line x1="220.5" y1="56" x2="220.5" y2="900" stroke="#D0D5DD"/>
+<g transform="translate(25 83) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="1"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="1"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="1"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="1"/></g>
+<text x="56" y="97" font-size="14" fill="#344054">요약</text>
+<g transform="translate(25 123) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.5L10.9 10.3H1.1Z"/><path d="M6 4.9V7.1"/><circle cx="6" cy="8.8" r="0.75" fill="#475467" stroke="none"/></g>
+<text x="56" y="137" font-size="14" fill="#344054">Finding</text>
+<rect x="182" y="122" width="24" height="20" rx="10" fill="#EAECF0"/>
+<text x="194" y="136.3" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">0</text>
+<rect x="0" y="152" width="220" height="40" fill="#2F6FAE" fill-opacity="0.1"/>
+<rect x="0" y="152" width="3" height="40" fill="#2F6FAE"/>
+<g transform="translate(25 163) scale(1.5)" fill="none" stroke="#2F6FAE" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="1.4" y="1.8" width="9.2" height="3.6" rx="1"/><rect x="1.4" y="6.6" width="9.2" height="3.6" rx="1"/><circle cx="3.5" cy="3.6" r="0.65" fill="#2F6FAE" stroke="none"/><circle cx="3.5" cy="8.4" r="0.65" fill="#2F6FAE" stroke="none"/></g>
+<text x="56" y="177" font-size="14" font-weight="700">워크로드</text>
+<g transform="translate(25 203) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4.7"/><circle cx="6" cy="6" r="2.3"/><circle cx="6" cy="6" r="0.8" fill="#475467" stroke="none"/></g>
+<text x="56" y="217" font-size="14" fill="#344054">스캔</text>
+<g transform="translate(25 243) scale(1.5)" fill="none" stroke="#475467" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 2.6Q4 1.7 6 3.2Q8 1.7 10.5 2.6V10.1Q8 9.2 6 10.6Q4 9.2 1.5 10.1Z"/><path d="M6 3.2V10.6"/></g>
+<text x="56" y="257" font-size="14" fill="#344054">규칙</text>
+<line x1="12" y1="840.5" x2="208" y2="840.5" stroke="#EAECF0"/>
+<g transform="translate(20 860) scale(1.33)" fill="none" stroke="#475467" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="5"/><path d="M6 5.4V8.8"/><circle cx="6" cy="3.6" r="0.75" fill="#475467" stroke="none"/></g>
+<text x="44" y="873" fill="#475467">배지·용어 안내</text>
+<rect x="0" y="0" width="1440" height="56" fill="#FFFFFF"/>
+<line x1="0" y1="56.5" x2="1440" y2="56.5" stroke="#D0D5DD"/>
+<rect x="24" y="16" width="24" height="24" rx="6" fill="#344054"/>
+<path d="M31.5 21.5V33.5H41" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="56" y="34.5" font-size="18" font-weight="700">Logssey</text>
+<line x1="148.5" y1="16" x2="148.5" y2="40" stroke="#D0D5DD"/>
+<text x="164" y="26" font-size="16" font-weight="700">Reach</text>
+<text x="164" y="44" font-size="12" fill="#475467">도달 가능성 분석</text>
+<rect x="320.5" y="10.5" width="359" height="35" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="330" y="32.3" font-size="12"><tspan font-weight="700">reused-api</tspan><tspan fill="#475467"> · 이미지 </tspan><tspan fill="#475467" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a6ffffef…</tspan></text>
+<rect x="583.8" y="18" width="61.6" height="20" rx="10" fill="#F2F4F7"/>
+<g transform="translate(588.8 23.5) scale(0.75)" fill="none" stroke="#344054" stroke-width="1.87" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.4" fill="#344054" stroke="none"/></g>
+<text x="620.6" y="32.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">실행 중</text>
+<g transform="translate(656 22) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="1360.7" y="17.5" width="54.8" height="21" rx="11" fill="#FFFFFF" stroke="#344054"/>
+<text x="1388.1" y="32.3" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">admin</text>
+<rect x="1291.34" y="17.5" width="62.36" height="21" rx="11" fill="#FFFFFF" stroke="#344054"/>
+<text x="1322.52" y="32.3" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">viewer</text>
+<text x="1282.84" y="32.7" text-anchor="end">보안 담당자</text>
+<g transform="translate(1179.94 18) scale(1.67)" fill="none" stroke="#475467" stroke-width="0.84" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="5"/><path d="M4.3 4.6A1.75 1.75 0 1 1 6.9 6.1C6.3 6.4 6 6.7 6 7.4"/><circle cx="6" cy="9" r="0.7" fill="#475467" stroke="none"/></g>
+<line x1="1168.44" y1="18" x2="1168.44" y2="38" stroke="#D0D5DD"/>
+<text x="1157.94" y="32.3" font-size="12" text-anchor="end"><tspan fill="#475467">마지막 스캔 </tspan>2026-10-10 23:44</text>
+<text x="244" y="107.2" font-size="20" font-weight="700">워크로드</text>
+<rect x="340.5" y="82.5" width="199" height="35" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="352" y="104.68"><tspan fill="#475467">네임스페이스: </tspan>reused</text>
+<g transform="translate(516 94) scale(1)" fill="none" stroke="#475467" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6L6 7.6L9 4.6"/></g>
+<rect x="1306.3" y="82.5" width="109.2" height="35" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<g transform="translate(1321.8 94) scale(1)" fill="none" stroke="#344054" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6.2A4 4 0 1 1 8.7 3"/><path d="M9 .9V3.3H6.6"/></g>
+<text x="1369.9" y="105.04" font-size="14" font-weight="500" fill="#344054" text-anchor="middle">새로 고침</text>
+<text x="1293.8" y="104.3" font-size="12" fill="#475467" text-anchor="end">마지막 조회 2026-10-10</text>
+<rect x="244.5" y="136.5" width="1171" height="39" rx="6" fill="#F2F4F7" stroke="#D0D5DD"/>
+<rect x="256" y="146" width="53" height="20" rx="4" fill="#475467"/>
+<g transform="translate(263 150.5) scale(0.92)" fill="none" stroke="#FFFFFF" stroke-width="1.53" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="3.9" r="2.2"/><path d="M1.7 10.8C2.2 7.5 9.8 7.5 10.3 10.8"/></g>
+<text x="290" y="160.32" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">수동</text>
+<text x="319" y="160.7" fill="#475467">운영 파드의 imageID를 kubectl로 조회한 결과다(2026-10-10). 자동 조회는 FR-04 [계획]이다.</text>
+<rect x="244.5" y="192.5" width="379" height="95" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="260" y="220" font-size="14" font-weight="500" fill="#475467">실행 중 워크로드</text>
+<text x="260" y="266" font-size="32" font-weight="700">3</text>
+<text x="290.16" y="265" font-size="12" fill="#475467">파드 6</text>
+<rect x="640.5" y="192.5" width="379" height="95" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="656" y="220" font-size="14" font-weight="500" fill="#475467">스캔 digest와 일치</text>
+<text x="656" y="266" font-size="32" font-weight="700">1</text>
+<text x="686.16" y="265" font-size="12" fill="#475467">reused-api</text>
+<g transform="translate(992 210) scale(1)" fill="none" stroke="#667085" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 3L7.6 6L4.6 9"/></g>
+<rect x="1036.5" y="192.5" width="379" height="95" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="1052" y="220" font-size="14" font-weight="500" fill="#475467">스캔 없음·불일치</text>
+<text x="1052" y="266" font-size="32" font-weight="700">2</text>
+<text x="1082.16" y="265" font-size="12" fill="#475467">스캔 없음 2 · 불일치 0</text>
+<g transform="translate(1388 210) scale(1)" fill="none" stroke="#667085" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 3L7.6 6L4.6 9"/></g>
+<rect x="244.5" y="304.5" width="1171" height="207" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="245" y="305" width="1170" height="39" fill="#F9FAFB"/>
+<line x1="244" y1="344.5" x2="1416" y2="344.5" stroke="#D0D5DD"/>
+<text x="256" y="328.5" font-size="12" font-weight="700" fill="#475467">워크로드</text>
+<text x="436" y="328.5" font-size="12" font-weight="700" fill="#475467">네임스페이스</text>
+<text x="546" y="328.5" font-size="12" font-weight="700" fill="#475467">파드</text>
+<text x="626" y="328.5" font-size="12" font-weight="700" fill="#475467">실행 중 이미지</text>
+<text x="776" y="328.5" font-size="12" font-weight="700" fill="#475467">revision</text>
+<text x="886" y="328.5" font-size="12" font-weight="700" fill="#475467">스캔 일치</text>
+<text x="996" y="328.5" font-size="12" font-weight="700" fill="#475467">연결된 스캔</text>
+<text x="1176" y="328.5" font-size="12" font-weight="700" fill="#475467">Finding 요약</text>
+<text x="258" y="376.7">reused-chat</text>
+<text x="436" y="376.7">reused</text>
+<text x="546" y="376.7">2</text>
+<text x="626" y="376.2" font-size="12" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:4b57e13c…</text>
+<text x="776" y="376.2" fill="#667085">미확인</text>
+<rect x="886.5" y="361.5" width="76.6" height="21" rx="11" fill="#F9FAFB" stroke="#667085" stroke-dasharray="3 2"/>
+<g transform="translate(892 367) scale(0.83)" fill="none" stroke="#475467" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6H9.4"/></g>
+<text x="931.8" y="376.32" font-size="12" font-weight="700" fill="#475467" text-anchor="middle">스캔 없음</text>
+<rect x="1004.5" y="358.5" width="87" height="27" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<g transform="translate(1013.2 366) scale(1)" fill="none" stroke="#344054" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.4V9.6M2.4 6H9.6"/></g>
+<text x="1057" y="376.32" font-size="12" font-weight="500" fill="#344054" text-anchor="middle">스캔 요청</text>
+<text x="1176" y="376.7" fill="#667085">—</text>
+<line x1="245" y1="400.5" x2="1415" y2="400.5" stroke="#EAECF0"/>
+<text x="258" y="432.7">reused-web</text>
+<text x="436" y="432.7">reused</text>
+<text x="546" y="432.7">2</text>
+<text x="626" y="432.2" font-size="12" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a89a79ed…</text>
+<text x="776" y="432.2" fill="#667085">미확인</text>
+<rect x="886.5" y="417.5" width="76.6" height="21" rx="11" fill="#F9FAFB" stroke="#667085" stroke-dasharray="3 2"/>
+<g transform="translate(892 423) scale(0.83)" fill="none" stroke="#475467" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6H9.4"/></g>
+<text x="931.8" y="432.32" font-size="12" font-weight="700" fill="#475467" text-anchor="middle">스캔 없음</text>
+<rect x="1004.5" y="414.5" width="87" height="27" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<g transform="translate(1013.2 422) scale(1)" fill="none" stroke="#344054" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.4V9.6M2.4 6H9.6"/></g>
+<text x="1057" y="432.32" font-size="12" font-weight="500" fill="#344054" text-anchor="middle">스캔 요청</text>
+<text x="1176" y="432.7" fill="#667085">—</text>
+<line x1="245" y1="456.5" x2="1415" y2="456.5" stroke="#EAECF0"/>
+<rect x="245" y="456.5" width="1170" height="55" fill="#2F6FAE" fill-opacity="0.08"/>
+<rect x="245" y="456.5" width="4" height="55" fill="#2F6FAE"/>
+<text x="258" y="488.7" font-weight="700">reused-api</text>
+<text x="436" y="488.7">reused</text>
+<text x="546" y="488.7">2</text>
+<text x="626" y="488.2" font-size="12" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a6ffffef…</text>
+<text x="776" y="488.2" font-size="12" font-family="Consolas,Menlo,'D2Coding',monospace">bb4639b</text>
+<rect x="886" y="473" width="50" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(892 479) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="918" y="488.32" font-size="12" font-weight="700" text-anchor="middle">일치</text>
+<text x="996" y="488.7">2026-10-10</text>
+<rect x="1082" y="473" width="50" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(1088 479) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1114" y="488.32" font-size="12" font-weight="700" text-anchor="middle">성공</text>
+<text x="1176" y="479" font-size="12">도달 가능 0 · 미확인 0</text>
+<text x="1176" y="497" font-size="12">도달 불가 14 · 분석 대상 아님 9</text>
+<text x="244" y="551" font-weight="700" fill="#475467">선택한 워크로드</text>
+<text x="346.9" y="551.5" font-size="16" font-weight="700">reused-api</text>
+<rect x="244.5" y="568.5" width="379" height="307" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="640.5" y="568.5" width="379" height="307" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<rect x="1036.5" y="568.5" width="379" height="307" rx="8" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="260" y="594" font-size="16" font-weight="700">파드와 이미지</text>
+<rect x="260.5" y="610.5" width="347" height="41" rx="4" fill="#F9FAFB" stroke="#EAECF0"/>
+<text x="272" y="627" font-size="12" font-weight="700" font-family="Consolas,Menlo,'D2Coding',monospace">reused-api-…-1</text>
+<text x="272" y="644" font-size="12"><tspan fill="#667085">imageID </tspan><tspan fill="#475467" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a6ffffef…</tspan></text>
+<g transform="translate(584 633) scale(1)" fill="none" stroke="#475467" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.6" height="6.6" rx="1"/><path d="M2 8V2.8Q2 2 2.8 2H8"/></g>
+<rect x="260.5" y="660.5" width="347" height="41" rx="4" fill="#F9FAFB" stroke="#EAECF0"/>
+<text x="272" y="677" font-size="12" font-weight="700" font-family="Consolas,Menlo,'D2Coding',monospace">reused-api-…-2</text>
+<text x="272" y="694" font-size="12"><tspan fill="#667085">imageID </tspan><tspan fill="#475467" font-family="Consolas,Menlo,'D2Coding',monospace">sha256:a6ffffef…</tspan></text>
+<g transform="translate(584 683) scale(1)" fill="none" stroke="#475467" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.6" height="6.6" rx="1"/><path d="M2 8V2.8Q2 2 2.8 2H8"/></g>
+<text x="260" y="732" font-size="12" font-weight="700" fill="#475467">이미지</text>
+<text x="260" y="752" font-size="12" font-family="Consolas,Menlo,'D2Coding',monospace">logssey/reused-api@sha256:a6ffffef…</text>
+<g transform="translate(524.8 741.5) scale(1)" fill="none" stroke="#475467" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.6" height="6.6" rx="1"/><path d="M2 8V2.8Q2 2 2.8 2H8"/></g>
+<text x="260" y="784" font-size="12" font-weight="700" fill="#475467">레지스트리 최신 푸시</text>
+<text x="260" y="804">2026-09-29 16:46</text>
+<text x="260" y="824" font-size="12" fill="#475467">같은 digest, 그 뒤 푸시 없음</text>
+<text x="656" y="594" font-size="16" font-weight="700">커밋 대조</text>
+<rect x="656.5" y="610.5" width="163" height="65" rx="4" fill="#F9FAFB" stroke="#EAECF0"/>
+<text x="668" y="630" font-size="12" fill="#475467">이미지 revision 라벨</text>
+<text x="668" y="652" font-size="15" font-weight="700" font-family="Consolas,Menlo,'D2Coding',monospace">bb4639b</text>
+<text x="668" y="669" font-size="12" fill="#667085">생성 2026-09-29 16:46</text>
+<text x="830" y="648.5" font-size="16" font-weight="700" fill="#475467" text-anchor="middle">↔</text>
+<rect x="840.5" y="610.5" width="163" height="65" rx="4" fill="#F9FAFB" stroke="#EAECF0"/>
+<text x="852" y="630" font-size="12" fill="#475467">분석 커밋</text>
+<text x="852" y="652" font-size="15" font-weight="700" font-family="Consolas,Menlo,'D2Coding',monospace">6583020</text>
+<text x="656" y="704" font-size="12">bb4639b는 6583020의 조상이고, 사이 커밋은 merge</text>
+<text x="656" y="722" font-size="12">2개뿐이다</text>
+<text x="656" y="750" font-size="12">소스 트리 해시가 같다<tspan fill="#475467"> (</tspan><tspan fill="#475467" font-family="Consolas,Menlo,'D2Coding',monospace">e5b4a3af…</tspan><tspan fill="#475467">)</tspan></text>
+<rect x="656" y="762" width="80.6" height="20" rx="4" fill="#F2F4F7"/>
+<g transform="translate(663 766.5) scale(0.92)" fill="none" stroke="#344054" stroke-width="1.53" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="703.8" y="776.32" font-size="12" font-weight="700" fill="#344054" text-anchor="middle">같은 소스</text>
+<text x="1052" y="594" font-size="16" font-weight="700">재스캔 비교와 Finding</text>
+<text x="1052" y="620" font-size="12">2026-10-10 재스캔 23행이 2026-10-07 스캔 23행과</text>
+<text x="1052" y="638" font-size="12">CVE·패키지·설치 버전·심각도·수정 버전 모두 같다.</text>
+<rect x="1052" y="660" width="147.8" height="20" rx="4" fill="#F2F4F7"/>
+<g transform="translate(1059 664.5) scale(0.92)" fill="none" stroke="#344054" stroke-width="1.53" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.4L5 8.8L9.4 3.6"/></g>
+<text x="1133.4" y="674.32" font-size="12" fill="#344054" text-anchor="middle">한쪽에만 있는 행 없음</text>
+<line x1="1052" y1="694.5" x2="1400" y2="694.5" stroke="#EAECF0"/>
+<text x="1052" y="716" font-weight="700">Finding</text>
+<rect x="1052" y="728" width="77.6" height="22" rx="11" fill="#475467"/>
+<g transform="translate(1058 734) scale(0.83)" fill="none" stroke="#FFFFFF" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.5L10.9 10.3H1.1Z"/><path d="M6 4.9V7.1"/><circle cx="6" cy="8.8" r="0.75" fill="#FFFFFF" stroke="none"/></g>
+<text x="1097.8" y="743.32" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">도달 가능</text>
+<text x="1137.6" y="744" font-size="14" font-weight="700">0</text>
+<rect x="1228" y="728" width="62" height="22" rx="11" fill="#D0D5DD"/>
+<g transform="translate(1234 734) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M3.8 4.3A2.25 2.25 0 1 1 7.3 6.2C6.4 6.7 6 7.1 6 7.9"/><circle cx="6" cy="10.1" r="0.8" fill="#101828" stroke="none"/></g>
+<text x="1266" y="743.32" font-size="12" font-weight="700" text-anchor="middle">미확인</text>
+<text x="1298" y="744" font-size="14" font-weight="700">0</text>
+<rect x="1052" y="760" width="77.6" height="22" rx="11" fill="#EAECF0"/>
+<g transform="translate(1058 766) scale(0.83)" fill="none" stroke="#101828" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3.8"/></g>
+<text x="1097.8" y="775.32" font-size="12" font-weight="700" text-anchor="middle">도달 불가</text>
+<text x="1137.6" y="776" font-size="14" font-weight="700">14</text>
+<rect x="1228.5" y="760.5" width="104.2" height="21" rx="11" fill="#F9FAFB" stroke="#667085" stroke-dasharray="3 2"/>
+<g transform="translate(1234 766) scale(0.83)" fill="none" stroke="#475467" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6H9.4"/></g>
+<text x="1287.6" y="775.32" font-size="12" font-weight="700" fill="#475467" text-anchor="middle">분석 대상 아님</text>
+<text x="1341.2" y="776" font-size="14" font-weight="700">9</text>
+<rect x="1292.5" y="828.5" width="107" height="31" rx="6" fill="#FFFFFF" stroke="#D0D5DD"/>
+<text x="1346" y="848.68" font-weight="500" fill="#344054" text-anchor="middle">Finding 보기</text>
+<circle cx="236" cy="76" r="12" fill="#2F6FAE"/>
+<text x="236" y="80.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">01</text>
+<circle cx="242" cy="134" r="12" fill="#2F6FAE"/>
+<text x="242" y="138.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">02</text>
+<circle cx="242" cy="190" r="12" fill="#2F6FAE"/>
+<text x="242" y="194.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">03</text>
+<circle cx="638" cy="190" r="12" fill="#2F6FAE"/>
+<text x="638" y="194.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">04</text>
+<circle cx="1034" cy="190" r="12" fill="#2F6FAE"/>
+<text x="1034" y="194.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">05</text>
+<circle cx="242" cy="302" r="12" fill="#2F6FAE"/>
+<text x="242" y="306.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">06</text>
+<circle cx="990" cy="372" r="12" fill="#2F6FAE"/>
+<text x="990" y="376.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">07</text>
+<circle cx="242" cy="566" r="12" fill="#2F6FAE"/>
+<text x="242" y="570.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">08</text>
+<circle cx="638" cy="566" r="12" fill="#2F6FAE"/>
+<text x="638" y="570.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">09</text>
+<circle cx="1034" cy="566" r="12" fill="#2F6FAE"/>
+<text x="1034" y="570.3" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">10</text>
+</svg>
