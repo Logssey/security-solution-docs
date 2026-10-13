@@ -2,14 +2,14 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `200a675`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개, V6은 AWS IAM 접근키 메타데이터 관측 테이블 1개와 고유 인덱스를 추가했다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
+이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `9f9ad86`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개, V6은 AWS IAM 접근키 메타데이터 관측 테이블 1개와 고유 인덱스를 추가했다. Secrets Manager·SSM·S3의 개수 수집은 V3 실행 범위 테이블을 사용하며 추가 마이그레이션은 없다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
 
 | 마이그레이션 | 현재 구현된 테이블 | 아직 포함하지 않는 범위 |
 |---|---|---|
 | V3 | `secret_connections`, `secret_connection_scopes`, `secret_jobs`, `secret_scan_runs`, `secret_run_scopes` | `REVALIDATE` 작업, 역할·담당자 |
 | V4 | `secret_credential_sets`, `secret_occurrences`, `secret_tool_runs`, `secret_findings` | 평가·대응·사용 근거 |
 | V5 | `secret_validation_attempts` | 공급자별 영향 평가와 수동 재검증 API |
-| V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | 키 원문, 유효성·노출·권한·심각도 평가, 다른 AWS 서비스 수집 |
+| V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | 키 원문, 유효성·노출·권한·심각도 평가, Secrets Manager·SSM·S3의 자원별 개별 기록과 값 읽기 |
 
 로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
@@ -51,10 +51,12 @@ V3–V6에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이�
 | `secret_asset_classifications` | `classification_id BIGINT PK`, `scope_id BIGINT NOT NULL FK`, `resource_ref VARCHAR(500) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `criticality VARCHAR(20) NOT NULL`, `sensitive_data BOOLEAN`, `version BIGINT NOT NULL`, `evidence_ref VARCHAR(500)`, `classified_at TIMESTAMPTZ NOT NULL`, `classified_by_user_id BIGINT FK` | `UQ(scope_id, resource_ref, version)`. 환경은 `PROD`, `DEV`, `UNKNOWN`; 중요도는 `CRITICAL`, `IMPORTANT`, `LIMITED`, `MINIMAL`, `UNKNOWN`. 이름만 보고 분류하지 않는다. 과거 버전을 보존한다. |
 | `secret_jobs` | `job_id BIGINT PK`, `kind VARCHAR(20) NOT NULL`, `connection_id BIGINT NOT NULL FK`, `requested_by_user_id BIGINT FK`, `idempotency_key VARCHAR(120)`, `scheduled_at TIMESTAMPTZ NOT NULL`, `available_at TIMESTAMPTZ NOT NULL`, `attempt_no INTEGER NOT NULL`, `max_attempts INTEGER NOT NULL`, `status VARCHAR(20) NOT NULL`, `lease_owner VARCHAR(120)`, `lease_until TIMESTAMPTZ`, `last_error_code VARCHAR(80)`, `created_at`, `finished_at TIMESTAMPTZ` | V3은 `FULL_SCAN`만 허용한다. `REVALIDATE`와 `credential_set_id`는 후속 마이그레이션 대상이다. 상태는 `PENDING`, `LEASED`, `SUCCEEDED`, `FAILED`, `CANCELLED`. 정기 예약·수동 멱등·연결별 활성 작업 중복은 별도 고유 인덱스로 막는다. |
 | `secret_scan_runs` | `run_id BIGINT PK`, `job_id BIGINT NOT NULL UQ FK`, `connection_id BIGINT NOT NULL FK`, `trigger_type VARCHAR(20) NOT NULL`, `scope_version BIGINT NOT NULL`, `scheduled_at`, `requested_at TIMESTAMPTZ NOT NULL`, `started_at`, `finished_at TIMESTAMPTZ`, `collection_status`, `detection_status`, `validation_status VARCHAR(20) NOT NULL`, `result_status VARCHAR(20) NOT NULL`, `failure_code VARCHAR(80)`, `created_at TIMESTAMPTZ NOT NULL` | V3에서 `scheduled_at`도 `TIMESTAMPTZ NOT NULL`이다. 단계 상태는 `PENDING`, `RUNNING`, `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED`; 전체 결과도 같은 범위다. `trigger_type`은 `SCHEDULED`, `MANUAL`. 수동 재검증은 별도 작업과 검사 시도로 추적하며 전체 범위 스캔으로 꾸미지 않는다. |
-| `secret_run_scopes` | `run_scope_id BIGINT PK`, `run_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `collection_status VARCHAR(20) NOT NULL`, `object_count BIGINT`, `failure_code VARCHAR(80)`, `unsupported_reason VARCHAR(120)`, `started_at`, `finished_at TIMESTAMPTZ` | `UQ(run_id, scope_id)`, `CHECK(object_count >= 0)`. `SUCCEEDED`와 `object_count=0`은 정상 0건, `FAILED`나 `PARTIAL`과 0 또는 NULL은 수집 누락이다. 실행 당시 범위와 버전을 기록한다. |
+| `secret_run_scopes` | `run_scope_id BIGINT PK`, `run_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `collection_status VARCHAR(20) NOT NULL`, `object_count BIGINT`, `failure_code VARCHAR(80)`, `unsupported_reason VARCHAR(120)`, `started_at`, `finished_at TIMESTAMPTZ` | `UQ(run_id, scope_id)`, `CHECK(object_count >= 0)`. `SUCCEEDED`와 `object_count=0`은 정상 0건이다. `PARTIAL`이나 `FAILED`는 남은 개수와 무관하게 수집 누락을 뜻한다. IAM은 관측 접근키 수, Secrets Manager·SSM·S3는 목록 항목 수를 기록한다. 실행 당시 범위와 버전을 기록한다. |
 | `secret_tool_runs` | `tool_run_id BIGINT PK`, `run_scope_id BIGINT NOT NULL FK`, `engine VARCHAR(20) NOT NULL`, `engine_version VARCHAR(100) NOT NULL`, `config_hash VARCHAR(100) NOT NULL`, `status VARCHAR(20) NOT NULL`, `finding_count BIGINT`, `failure_code VARCHAR(80)`, `started_at`, `finished_at TIMESTAMPTZ` | `UQ(run_scope_id, engine)`. MVP 실행 엔진은 `GITLEAKS`다. `TRUFFLEHOG`는 향후 병행 운영을 선택할 때 구분해 기록할 값이며 현재 실행을 뜻하지 않는다. 탐지기의 자체 검증 결과는 제품 유효성으로 쓰지 않는다. |
 
 `secret_jobs`의 워커 선점은 도래한 행을 `FOR UPDATE SKIP LOCKED`로 읽어 같은 트랜잭션에서 `LEASED`, `lease_owner`, `lease_until`로 바꾼다. 만료된 임대는 재시도 한도 내에서 다시 `PENDING`으로 돌린다. 정기 작업의 다음 예정은 이전 예정 시각과 6시간 정책을 기준으로 만들고 수동 작업은 그 시각을 바꾸지 않는다. 공급자별 호출 제한 설정이 없으면 능동 검증 작업을 실행하지 않는다.
+
+AWS의 Secrets Manager·SSM·S3 메타데이터 범위는 `secret_connection_scopes`에 승인 참조와 리전을 기록한다. 목록 결과의 자원 이름·ARN·설명·태그와 페이지 토큰은 영속 저장하지 않고 `secret_run_scopes`에 개수·상태·안전한 실패 코드만 남긴다. API의 `scopeResults`도 내부 실행 범위 ID, 허용된 콘텐츠 유형, 승인 참조에서 추출한 리전, 개수·상태·안전한 누락 코드만 반환한다. 계정 ID와 승인 참조 자체는 반환하지 않는다.
 
 ### 3.2. 키, 위치, 탐지와 근거
 

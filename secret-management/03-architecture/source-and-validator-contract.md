@@ -11,9 +11,18 @@
 | AWS | 승인된 계정과 리소스의 설정, 권한 및 지원되는 사용 메타데이터 | 계정, 리전, 서비스, 리소스 종류별로 활성 범위를 기록한다. 계정 전체 읽기 승인은 모든 콘텐츠의 자동 수집을 뜻하지 않는다. 비밀 저장소 값, 객체 내용과 로그는 해당 범위의 수집기가 연결·활성화되고 실제 실행을 확인하기 전에는 수집 완료로 표시하지 않는다. |
 | K8s | 승인된 클러스터와 네임스페이스의 내부 Secret 객체 | Kubernetes API와 별도 최소 RBAC를 사용한다. projected 토큰, 외부 비밀 저장소, 노드와 etcd의 값은 Secret 객체 수집에 포함됐다고 표시하지 않는다. |
 
-현재 워커는 GitHub App에 승인된 저장소·브랜치·경로의 **현재 커밋 파일**과 승인된 AWS 계정의 **IAM 사용자 접근키 메타데이터**를 수집한다. AWS 지원 범위는 `IAM_ACCESS_KEY_METADATA`, `aws://<계정 ID>/global/iam/access-keys`, `CURRENT_STATE_ONLY`로 제한하며 실행 전에 STS 계정과 명시된 프로필·연결 참조를 확인한다. IAM 사용자 목록, 키 목록·상태·발급 시각·최근 사용 메타데이터를 읽지만 접근키의 Secret 값은 얻지 않는다. 키 ID 원문과 사용자명은 일반 DB·API·로그에 두지 않고 보호키 HMAC 참조와 마스킹 표지만 기록한다. 루트 접근키가 있거나 확인할 수 없으면 사용자 목록만으로 계정 전체를 확인했다고 표시하지 않고 부분 수집으로 남긴다.
+현재 워커는 GitHub App에 승인된 저장소·브랜치·경로의 **현재 커밋 파일**과 승인된 AWS 계정의 **IAM 접근키 및 저장소 목록 메타데이터**를 수집한다. AWS는 실행 전에 명시된 프로필·연결 참조와 STS 계정이 각 승인 범위에 일치하는지 확인한다. 지원되는 현재 상태 범위는 아래 네 종류이며 리전 범위는 연결에 명시된 리전만 실행한다. 워커가 리전을 자동 발견하거나 범위 밖으로 확장하지 않는다.
 
-이 IAM 목록은 `METADATA_ONLY` 인벤토리다. 원문 자격 증명 발견, Gitleaks Finding, STS 유효성 판정, 비정상 노출 또는 영향·심각도 판정으로 승격하지 않는다. 승인된 Git 이력과 Actions, Notion, K8s Secret 및 다른 AWS 서비스의 제품 수집은 아직 연결되지 않았다. Secrets Manager·SSM·S3 목록 조회 권한을 개발 계정에서 확인한 사실과 제품의 수집 지원 상태도 구분한다. 현재 구현·검증 범위는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 둔다.
+| `content_type` | 승인 참조 형식 | 읽는 정보와 호출 |
+|---|---|---|
+| `IAM_ACCESS_KEY_METADATA` | `aws://<계정 ID>/global/iam/access-keys` | IAM 사용자 접근키 목록·상태·발급 시각·최근 사용, 루트 접근키 개수 확인 |
+| `AWS_SECRETS_MANAGER_METADATA` | `aws://<계정 ID>/<리전>/secrets-manager/all` | Secrets Manager `ListSecrets`의 항목 수 |
+| `AWS_SSM_PARAMETER_METADATA` | `aws://<계정 ID>/<리전>/ssm/parameters` | SSM `DescribeParameters`의 항목 수 |
+| `AWS_S3_BUCKET_METADATA` | `aws://<계정 ID>/global/s3/buckets` | S3 `ListBuckets`의 버킷 수. 객체 목록은 읽지 않음 |
+
+모든 AWS 범위는 현재 상태만 읽는다. Secrets Manager·SSM·S3 범위는 `history_limit=CURRENT_STATE_ONLY`가 필수이고 IAM 범위는 그 값 또는 NULL을 허용한다. IAM 접근키 ID 원문과 사용자명은 일반 DB·API·로그에 두지 않고 보호키 HMAC 참조와 마스킹 표지만 기록한다. 루트 접근키가 있거나 확인할 수 없으면 사용자 목록만으로 계정 전체를 확인했다고 표시하지 않고 부분 수집으로 남긴다. 다른 세 목록 수집기는 공급자 응답의 이름·ARN·설명·태그를 메모리에서 개수로만 세고 버린다. 페이지 제한 또는 일부 페이지의 권한 오류는 정상 0건이 아닌 부분 수집으로 기록한다.
+
+IAM 접근키 목록만 `METADATA_ONLY` 인벤토리와 실행별 관측을 만든다. Secrets Manager·SSM·S3 목록은 실행 범위의 항목 수·상태·안전한 사유 코드만 기록하고 `CredentialSet`이나 발견 위치를 만들지 않는다. 어떤 목록도 원문 자격 증명 발견, Gitleaks Finding, STS 유효성 판정, 비정상 노출 또는 영향·심각도 판정으로 승격하지 않는다. Secret 값, 파라미터 값, S3 객체 목록·본문은 읽지 않는다. 승인된 Git 이력과 Actions, Notion, K8s Secret 및 다른 AWS 콘텐츠 수집은 아직 연결되지 않았다. 현재 구현·검증 범위는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 둔다.
 
 모든 연결은 콘텐츠 유형, 원천 객체 ID와 버전, 읽은 범위, 최초와 최근 성공, 부분 실패, 거부, 미지원 위치를 기록한다. 수집 대상이 0건인 정상 성공과 접근 불가로 결과가 0건인 경우를 구분한다. 승인된 원천 이외의 URL을 발견했다는 이유로 새 수집원을 자동 추가하지 않는다.
 
