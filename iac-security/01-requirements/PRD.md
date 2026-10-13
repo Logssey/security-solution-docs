@@ -30,6 +30,15 @@
 | 매일 드리프트·State 점검 | 자동 apply (사람이 승인해야 함) |
 | GitHub 연동: 검사 결과, 코멘트, 병합 차단, 수정 PR 생성 | AI 기반 판정·문구 생성 (재현성, 데이터 유출) |
 | 대시보드 IaC 보안 탭 | 별도 독립 대시보드 (통합 화면의 한 탭으로만) |
+| 코드 밖 변경 탐지 (로컬 apply·콘솔 수정을 드리프트와 State 읽기 주체 증가로) | 관리자·조직 오너 권한 탈취 방지 (신원·권한 관리 영역. 이 솔루션은 탐지만, ADR-12) |
+
+**전제 조건: 사람에게는 AWS 쓰기 권한이 없고, 인프라 변경은 CI apply 역할로만 함 (ADR-12).**
+
+- 팀원은 읽기 전용 권한으로 로컬 plan까지만 가능
+- 이 전제가 없으면 ②①③은 실수와 공급망 공격은 막지만, 쓰기 권한이 있는 사람은 로컬 apply로 우회 가능
+- 관리자·조직 오너는 보호 설정 자체를 바꿀 수 있어 막지 못하고(Secret도 같은 전제), 인원 최소화·MFA·감사 로그로 줄임
+- 현재는 팀원 5명이 IAM 사용자 장기 키를 가지고 CloudTrail이 꺼져 있어 이 전제가 아직 없음(적용은 팀 일정)
+- 실제 사고 배경, 위협별 대응, 한계, 범위 밖 체크리스트는 [위협 모델·범위](threat-model.md)
 
 ## 기능 요구사항
 
@@ -42,7 +51,8 @@
 | FR-G1 | PR의 `.tf`에서 실행 data 소스(`external`·`http`·`dns`), provisioner, `aws_lambda_invocation`을 찾아 차단 | MVP |
 | FR-G2 | 허용 목록(프로바이더 단위) 밖 프로바이더는 차단, 모듈 ref·version과 프로바이더 버전 미고정은 경고 | MVP |
 | FR-G3 | lock·backend·워크플로 파일 변경 감지. backend 변경은 중단, 나머지는 보안 리뷰 필수 | MVP |
-| FR-G4 | `init -lockfile=readonly`로 프로바이더 해시 검증, 원격 모듈은 내려받은 뒤 재검사 | MVP |
+| FR-G4 | `init -lockfile=readonly`로 프로바이더 해시 검증, 원격 모듈은 `terraform get`으로 내려받기만 한 뒤 재검사와 내용 해시 비교(Coder 사건 대응). 원격 모듈이 없는 지금부터 CI·로컬 래퍼에 포함 | MVP |
+| FR-G5 | 로컬 plan 래퍼(`make plan`): CI와 같은 ② 검사(2b 포함) 후, 홈 디렉터리 없는 컨테이너에서 읽기 전용 임시 키로 `plan -lock=false`. 강제가 아니라 기본 경로 ([위협 모델·범위](threat-model.md)) | MVP |
 | FR-P1 | 매일 Cartography 수집(AWS + Kubernetes) 후 부족한 관계(CloudFront→NLB, IMDS 자격 증명, 노드→EC2(`providerID`가 비어 내부 IP 매칭))를 보강 | MVP |
 | FR-P2 | plan JSON을 그래프 복사본에 반영해 머지 전·후 "인터넷 → 데이터" 경로 차이 계산 | MVP |
 | FR-P3 | 새 경로의 끝이 1등급이면 차단, 2등급·네트워크 도달만이면 경고, 경로 감소는 정보 | MVP |

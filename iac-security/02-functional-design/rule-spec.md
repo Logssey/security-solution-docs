@@ -52,7 +52,7 @@
 | `gate.lock_changed` | git diff | `.terraform.lock.hcl` 변경 | 경고 + 보안 리뷰 필수 | MEDIUM | 설계 |
 | `gate.workflow_changed` | git diff + CODEOWNERS | `.github/workflows/` 변경 | 경고 + 보안 리뷰 필수 | HIGH | 설계 |
 | `gate.lock_mismatch` | `terraform init -lockfile=readonly` | 해시·버전이 lock 파일과 다름 | 차단 | HIGH | 설계 (공식 옵션 확인함) |
-| `gate.module_content_changed` | 해시 비교 | 같은 버전인데 내려받은 모듈 내용이 다름 | 경고 | HIGH | 설계 (원격 모듈 도입 시) |
+| `gate.module_content_changed` | 해시 비교 | 같은 버전인데 내려받은 모듈 내용이 다름 | 경고 | HIGH | 설계 (CI·래퍼에 처음부터 포함, 원격 모듈이 생기면 작동) |
 | `gate.plan_failed` | terraform plan | plan 실패·시간 초과 | 차단 (fail-closed) | 없음 (실행 오류) | 설계 |
 
 - 판정 대상은 PR에서 새로 들어온 것만. 기존 코드에 있던 것은 허용 목록으로 관리.
@@ -112,6 +112,9 @@
 - 규칙 변경은 PR로만, 변경 시 `version` 올림
 - 회귀 테스트: 위험 시나리오 S1~S6 탐지 + 실제 레포 오탐 0을 정책 PR마다 실행
 - 예외: `rule_id` + 대상 + 사유 + 승인자 + 만료일. 만료되면 다시 판정에 포함
+- 같은 `policy/`를 CI와 로컬 래퍼(`make plan`)가 함께 씀. CI는 필수 검사로 강제, 로컬은 기본 경로
+- 남의 PR 코드는 로컬에서 plan하지 않고 CI plan 결과로 리뷰
+- 2b(내려받은 모듈 재검사·해시 비교)는 원격 모듈이 없어도 CI·래퍼에 처음부터 둔다. 도입 시점에 빠뜨리지 않기 위함 ([위협 모델·범위](../01-requirements/threat-model.md) TM-1)
 - 도구 버전 고정: Conftest는 10/8에 v0.56.0으로 검증함. 구축 때 최신 버전(10/12 기준 v0.71.1)으로 같은 테스트를 다시 돌리고 고정. KICS·Terraform도 같은 방식. Cartography는 10/13 재수집에 쓴 0.143.0으로 고정
 
 | 항목 | 내용 |
