@@ -15,6 +15,7 @@
 |---|---|---|
 | 인프라 레포 | GitHub | Terraform 코드, CODEOWNERS, 브랜치 보호(필수 검사) |
 | PR 워크플로 | GitHub 호스티드 러너 | ② 관문(Conftest, 변경 감지, init 검증) → plan(plan-ro 역할) → 민감값을 지운 plan JSON 업로드 |
+| 로컬 plan 래퍼 | 개발자 PC, 컨테이너 | `make plan`: CI와 같은 ② 검사(2b 포함) → 홈 디렉터리 없는 컨테이너에서 읽기 전용 임시 키로 plan. 강제가 아니라 기본 경로 (ADR-12, [위협 모델·범위](../01-requirements/threat-model.md)) |
 | logssey GitHub App | GitHub | 검사 결과 3개, 요약 코멘트, 코드 줄 코멘트 등록. 개인 키는 Secrets Manager에 보관 |
 | dashboard-backend `iac` 모듈 | k8s, 기존 대시보드 백엔드 | `/api/v1/iac`. CI 요청 수신(GitHub OIDC 토큰 검증), 대시보드 API(세션 인증), `iac_jobs`에 분석 작업 등록. CI용 경로만 기존 CloudFront → 공개 NLB로 외부 노출 |
 | 분석 워커 (Java) | k8s, API와 별도 Deployment | `iac_jobs`에서 작업을 가져가 ① 경로 비교, ③ State 영향, 그래프 보강, IAM 시뮬레이터 호출. 분석이 끝나면 GitHub App으로 검사 결과·코멘트 등록 |
@@ -55,3 +56,4 @@ PR 분석은 매일 보강한 그래프의 복사본 위에서 돈다.
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
+| 수정일 | 2026-10-13 |
