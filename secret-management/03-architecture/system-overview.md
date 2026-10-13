@@ -4,7 +4,7 @@
 
 ![Secret 관리 솔루션 전체 구성](../assets/architecture/overall-secret-solution-architecture.png)
 
-이 그림은 수집원부터 대시보드까지의 전체 구성과 주요 데이터 이동을 나타낸다. 각 상자는 논리 역할이며 독립 서비스나 물리 저장소의 수를 뜻하지 않는다.
+이 그림과 아래 표는 수집원부터 대시보드까지의 **목표 구성**과 주요 데이터 이동을 나타낸다. 각 상자는 논리 역할이며 독립 서비스나 물리 저장소의 수를 뜻하지 않는다. 현재 구현은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 별도로 구분한다.
 
 실행 경계는 [ADR-S008](adr/ADR-S008.md)에 따라 React, TypeScript 화면, Java 21 Spring Boot API, 분리된 Java 수집 및 검증 워커, PostgreSQL로 구성한다. MVP 후보 탐지는 [ADR-S001](adr/ADR-S001.md)에 따라 워커에서 Gitleaks 8.30.1로 수행한다. 제품 기능을 Python 서비스로 구현하는 구조는 사용하지 않는다.
 
