@@ -2,14 +2,14 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `9f9ad86`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개, V6은 AWS IAM 접근키 메타데이터 관측 테이블 1개와 고유 인덱스를 추가했다. Secrets Manager·SSM·S3의 개수 수집은 V3 실행 범위 테이블을 사용하며 추가 마이그레이션은 없다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
+이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `9ebb4a8`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개, V6은 AWS IAM 접근키 메타데이터 관측 테이블 1개와 고유 인덱스를 추가했다. Secrets Manager·SSM·S3의 개수 수집과 정확한 AWS 단일 값 수집 경로는 기존 V3–V5 테이블을 사용하며 추가 마이그레이션은 없다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
 
 | 마이그레이션 | 현재 구현된 테이블 | 아직 포함하지 않는 범위 |
 |---|---|---|
 | V3 | `secret_connections`, `secret_connection_scopes`, `secret_jobs`, `secret_scan_runs`, `secret_run_scopes` | `REVALIDATE` 작업, 역할·담당자 |
 | V4 | `secret_credential_sets`, `secret_occurrences`, `secret_tool_runs`, `secret_findings` | 평가·대응·사용 근거 |
 | V5 | `secret_validation_attempts` | 공급자별 영향 평가와 수동 재검증 API |
-| V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | 키 원문, 유효성·노출·권한·심각도 평가, Secrets Manager·SSM·S3의 자원별 개별 기록과 값 읽기 |
+| V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | IAM 비밀 키 원문, 유효성·노출·권한·심각도 평가, Secrets Manager·SSM·S3 목록의 자원별 개별 기록 |
 
 로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
@@ -51,12 +51,14 @@ V3–V6에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이�
 | `secret_asset_classifications` | `classification_id BIGINT PK`, `scope_id BIGINT NOT NULL FK`, `resource_ref VARCHAR(500) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `criticality VARCHAR(20) NOT NULL`, `sensitive_data BOOLEAN`, `version BIGINT NOT NULL`, `evidence_ref VARCHAR(500)`, `classified_at TIMESTAMPTZ NOT NULL`, `classified_by_user_id BIGINT FK` | `UQ(scope_id, resource_ref, version)`. 환경은 `PROD`, `DEV`, `UNKNOWN`; 중요도는 `CRITICAL`, `IMPORTANT`, `LIMITED`, `MINIMAL`, `UNKNOWN`. 이름만 보고 분류하지 않는다. 과거 버전을 보존한다. |
 | `secret_jobs` | `job_id BIGINT PK`, `kind VARCHAR(20) NOT NULL`, `connection_id BIGINT NOT NULL FK`, `requested_by_user_id BIGINT FK`, `idempotency_key VARCHAR(120)`, `scheduled_at TIMESTAMPTZ NOT NULL`, `available_at TIMESTAMPTZ NOT NULL`, `attempt_no INTEGER NOT NULL`, `max_attempts INTEGER NOT NULL`, `status VARCHAR(20) NOT NULL`, `lease_owner VARCHAR(120)`, `lease_until TIMESTAMPTZ`, `last_error_code VARCHAR(80)`, `created_at`, `finished_at TIMESTAMPTZ` | V3은 `FULL_SCAN`만 허용한다. `REVALIDATE`와 `credential_set_id`는 후속 마이그레이션 대상이다. 상태는 `PENDING`, `LEASED`, `SUCCEEDED`, `FAILED`, `CANCELLED`. 정기 예약·수동 멱등·연결별 활성 작업 중복은 별도 고유 인덱스로 막는다. |
 | `secret_scan_runs` | `run_id BIGINT PK`, `job_id BIGINT NOT NULL UQ FK`, `connection_id BIGINT NOT NULL FK`, `trigger_type VARCHAR(20) NOT NULL`, `scope_version BIGINT NOT NULL`, `scheduled_at`, `requested_at TIMESTAMPTZ NOT NULL`, `started_at`, `finished_at TIMESTAMPTZ`, `collection_status`, `detection_status`, `validation_status VARCHAR(20) NOT NULL`, `result_status VARCHAR(20) NOT NULL`, `failure_code VARCHAR(80)`, `created_at TIMESTAMPTZ NOT NULL` | V3에서 `scheduled_at`도 `TIMESTAMPTZ NOT NULL`이다. 단계 상태는 `PENDING`, `RUNNING`, `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED`; 전체 결과도 같은 범위다. `trigger_type`은 `SCHEDULED`, `MANUAL`. 수동 재검증은 별도 작업과 검사 시도로 추적하며 전체 범위 스캔으로 꾸미지 않는다. |
-| `secret_run_scopes` | `run_scope_id BIGINT PK`, `run_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `collection_status VARCHAR(20) NOT NULL`, `object_count BIGINT`, `failure_code VARCHAR(80)`, `unsupported_reason VARCHAR(120)`, `started_at`, `finished_at TIMESTAMPTZ` | `UQ(run_id, scope_id)`, `CHECK(object_count >= 0)`. `SUCCEEDED`와 `object_count=0`은 정상 0건이다. `PARTIAL`이나 `FAILED`는 남은 개수와 무관하게 수집 누락을 뜻한다. IAM은 관측 접근키 수, Secrets Manager·SSM·S3는 목록 항목 수를 기록한다. 실행 당시 범위와 버전을 기록한다. |
+| `secret_run_scopes` | `run_scope_id BIGINT PK`, `run_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `collection_status VARCHAR(20) NOT NULL`, `object_count BIGINT`, `failure_code VARCHAR(80)`, `unsupported_reason VARCHAR(120)`, `started_at`, `finished_at TIMESTAMPTZ` | `UQ(run_id, scope_id)`, `CHECK(object_count >= 0)`. `SUCCEEDED`와 `object_count=0`은 정상 0건이다. `PARTIAL`이나 `FAILED`는 남은 개수와 무관하게 수집 누락을 뜻한다. IAM은 관측 접근키 수, Secrets Manager·SSM·S3 메타데이터는 목록 항목 수, 정확한 값 범위는 처리한 단일 본문 수를 기록한다. 실행 당시 범위와 버전을 기록한다. |
 | `secret_tool_runs` | `tool_run_id BIGINT PK`, `run_scope_id BIGINT NOT NULL FK`, `engine VARCHAR(20) NOT NULL`, `engine_version VARCHAR(100) NOT NULL`, `config_hash VARCHAR(100) NOT NULL`, `status VARCHAR(20) NOT NULL`, `finding_count BIGINT`, `failure_code VARCHAR(80)`, `started_at`, `finished_at TIMESTAMPTZ` | `UQ(run_scope_id, engine)`. MVP 실행 엔진은 `GITLEAKS`다. `TRUFFLEHOG`는 향후 병행 운영을 선택할 때 구분해 기록할 값이며 현재 실행을 뜻하지 않는다. 탐지기의 자체 검증 결과는 제품 유효성으로 쓰지 않는다. |
 
 `secret_jobs`의 워커 선점은 도래한 행을 `FOR UPDATE SKIP LOCKED`로 읽어 같은 트랜잭션에서 `LEASED`, `lease_owner`, `lease_until`로 바꾼다. 만료된 임대는 재시도 한도 내에서 다시 `PENDING`으로 돌린다. 정기 작업의 다음 예정은 이전 예정 시각과 6시간 정책을 기준으로 만들고 수동 작업은 그 시각을 바꾸지 않는다. 공급자별 호출 제한 설정이 없으면 능동 검증 작업을 실행하지 않는다.
 
 AWS의 Secrets Manager·SSM·S3 메타데이터 범위는 `secret_connection_scopes`에 승인 참조와 리전을 기록한다. 목록 결과의 자원 이름·ARN·설명·태그와 페이지 토큰은 영속 저장하지 않고 `secret_run_scopes`에 개수·상태·안전한 실패 코드만 남긴다. API의 `scopeResults`도 내부 실행 범위 ID, 허용된 콘텐츠 유형, 승인 참조에서 추출한 리전, 개수·상태·안전한 누락 코드만 반환한다. 계정 ID와 승인 참조 자체는 반환하지 않는다.
+
+정확한 AWS 값 범위는 별도 `content_type`인 `AWS_SECRETS_MANAGER_VALUE`, `AWS_SSM_PARAMETER_VALUE`, `AWS_S3_OBJECT_CONTENT`로 승인하고 `history_limit=CURRENT_VALUE_ONLY`를 사용한다. `approved_ref`에는 한 Secret·Parameter ARN 또는 한 S3 버킷·객체 키가 포함되므로 일반 응답·로그에 노출하지 않고 연결 DB와 백업의 접근을 제한한다. 현행 `VARCHAR(500)` 범위를 넘는 URI는 거부한다. 값 읽기 설정이 꺼진 범위는 안전한 미실행 코드로 기록한다. 켠 범위에서 텍스트 한 건을 읽으면 V4 도구 실행·발견 위치·Finding과 필요한 V5 검증 시도에 안전한 결과를 기록한다. 위치의 `source_object_ref`는 원본 ARN·이름·객체 키 대신 `aws-content-scope:<scope_id>` 별칭이다. DB에는 읽은 본문 원문을 저장하지 않으며 발견 자체로 노출을 확정하지 않는다.
 
 ### 3.2. 키, 위치, 탐지와 근거
 
@@ -156,7 +158,7 @@ V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candid
 
 ## 5. 적재와 상태 변경 규칙
 
-다음은 전체 설계의 적재 순서다. 현재 V3–V6과 GitHub·AWS IAM 워커가 수행하는 부분은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 구분한다.
+다음은 전체 설계의 적재 순서다. 현재 V3–V6과 GitHub·AWS 메타데이터 및 정확한 값 워커가 수행하는 부분은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 구분한다.
 
 1. 연결과 승인 범위를 등록할 때 범위 버전, 수집 가능한 콘텐츠, 분류 근거와 비밀 저장소 참조를 기록한다.
 2. 정기 작업을 예약하고 워커가 선점한 뒤 `secret_scan_runs`를 만든다. 범위별 성공, 실패, 미지원과 엔진별 성공, 실패를 독립적으로 확정한다.
@@ -164,6 +166,7 @@ V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candid
 4. 같은 키와 원천 위치는 기존 `secret_occurrences`를 갱신하고 새 발견은 추가한다. 엔진 결과는 `secret_findings`에 별도 기록한다. 완료된 범위에서만 미발견 위치를 `MISSING`으로 갱신한다. 일부 실패 범위의 기존 위치는 `UNKNOWN`으로 남긴다.
 5. GitHub 처리기는 발견한 AWS 키·후보의 시도를 실행 주기 내 중복 제거하고 V5 `secret_validation_attempts`에 안전한 상태·사유·시각을 저장한다. 기본 비활성 또는 합성 실험 저장소에서는 `UNCHECKED`를 기록하며 STS를 호출하지 않는다. 사용 정보와 영향 근거의 `secret_evidence` 저장은 후속 마이그레이션 대상이다. 최신 시도와 마지막 성공 판정은 다른 조회다.
    AWS IAM 처리기는 별도 분기로 접근키 메타데이터를 `METADATA_ONLY` 인벤토리와 V6 관측 이력에 기록한다. 이 분기에서는 탐지·검증을 수행하지 않고 실행 단계 상태를 `SKIPPED`로 남긴다. 완전한 IAM 목록 수집에서만 이전에 보이던 접근키의 부재를 `MISSING`으로 표시하고 부분 실패 때는 부재를 확정하지 않는다.
+   AWS의 정확한 값 범위는 별도 opt-in이 켜진 경우에만 한 본문을 Gitleaks에 전달해 V4 탐지·정규화 결과를 기록한다. 발견한 완전한 AWS 키의 V5 검증은 독립된 기본 비활성 설정에 따른다. 이 경로의 원천 참조는 내부 범위 ID 별칭이며 결과나 검증 상태로 외부 노출을 확정하지 않는다.
 6. 각 비정상 노출 위치에 `severity-v2` 평가를 추가한다. 자동 판정과 승인된 수동 변경, 사용한 근거를 분리한다. 신규 발견의 만료 또는 폐기가 근거로 확인되면 인벤토리에 보존하고 신규 대응 건은 만들지 않는다.
 7. 대응 대상은 현재 건에 위치를 연결한다. 해결 뒤 재노출이면 기존 건을 이력으로 닫고 새 건을 만든다. 할당, 검토, 작업, 체크리스트, 예외, 해결 변경은 버전 확인과 감사 이벤트를 같은 트랜잭션에 쓴다.
 8. 조회 스냅샷은 모든 단계의 확정 데이터를 기준으로 생성한다. 실패 범위가 있으면 `partialCoverage`와 `missingSources`를 생성 시점에 계산해 스냅샷에 고정한다. 실패를 0건 정상 수집으로 치환하지 않는다.

@@ -22,13 +22,15 @@
 
 위 필드와 관계는 화면과 API가 지켜야 할 논리 계약이다. 물리 테이블, 제약과 인덱스는 [데이터베이스 스키마](database-schema.md)에 정의한다. 기존 `detection_events`는 일반 탐지 이력으로 유지하고 Secret 전용 기록은 별도 테이블로 연결한다. 기존 V1 마이그레이션은 수정하지 않으며 새 버전 마이그레이션으로 확장한다.
 
-Secrets Manager `ListSecrets`, SSM `DescribeParameters`, S3 `ListBuckets` 결과는 현행 구현에서 범위별 개수와 실행 상태만 남긴다. 자원 이름·ARN·설명·태그, 계정 ID와 공급자 오류 본문은 일반 DB·API·로그에 넣지 않는다. 이 목록으로 `CredentialSet`, `Occurrence`, `Finding`, `ValidationAttempt`를 만들거나 비밀 값의 노출로 집계하지 않는다. IAM 접근키 목록의 `METADATA_ONLY` 인벤토리와도 별개다.
+Secrets Manager `ListSecrets`, SSM `DescribeParameters`, S3 `ListBuckets` 결과는 현행 구현에서 범위별 개수와 실행 상태만 남긴다. **목록 응답에서 받은** 자원 이름·ARN·설명·태그와 공급자 오류 본문은 일반 DB·API·로그에 넣지 않는다. 이 목록으로 `CredentialSet`, `Occurrence`, `Finding`, `ValidationAttempt`를 만들거나 비밀 값의 노출로 집계하지 않는다. IAM 접근키 목록의 `METADATA_ONLY` 인벤토리와도 별개다.
+
+별도로 승인한 정확한 단일 AWS 값 범위는 `secret_connection_scopes.approved_ref`에 자원 ARN 또는 버킷·객체 키가 들어갈 수 있다. 이 참조는 비밀 값은 아니지만 민감한 메타데이터이므로 DB와 백업 접근을 제한하고 일반 API·로그에 반환하지 않는다. 값 읽기 설정을 별도로 켠 경우에만 해당 본문을 작업 메모리에서 탐지한다. 발견 위치의 `source_object_ref`는 자원명 대신 안정적인 `aws-content-scope:<scope_id>` 별칭을 사용한다. 본문에서 키 후보를 찾았다는 사실은 그 저장 위치가 외부에 노출됐거나 실제로 유효하다는 증거가 아니며 노출·권한·심각도는 별도로 평가한다.
 
 ## 2. 동일성, 시간과 원문
 
 CredentialSet의 동일성은 발급자, 유형, 구성요소 형식과 보호키 기반 식별값으로 판정한다. 구성요소가 빠졌거나 값을 검증할 수 없으면 같은 접두사, 마스킹 문자열, 위치만으로 병합하지 않는다. IAM 목록에서 받은 접근키 ID는 개발 워커 메모리에서 보호키 HMAC으로 바꿔 `external_key_ref`에 저장하고 화면에는 끝 4자리만 표시한다. 동일한 접근키의 반복 관측은 같은 메타데이터 항목과 실행별 관측 이력으로 묶되, 원문 없이 GitHub 등에서 발견한 자격 증명과 자동 병합하지 않는다. 식별키 교체 시 이전 식별값과 새 식별값의 대응은 접근 제한된 전환 작업에서 처리하고 일반 API에 노출하지 않는다.
 
-일반 영속 저장소에는 발견한 원문을 보관하지 않는다. 검사할 때 승인된 원천에서 필요한 값을 다시 읽고 격리된 검증 작업의 메모리에서만 사용한다. 큐에는 원문 대신 내부 ID와 작업 ID를 넣는다. 재취득 실패는 UNKNOWN 또는 UNCHECKED와 `SOURCE_UNAVAILABLE` 사유로 남긴다. 시도 실패로 마지막 성공 판정이나 사용 메타데이터의 성공 시각을 갱신하지 않는다. 원문 정책의 근거는 [ADR-S005](adr/ADR-S005.md)에 둔다.
+일반 영속 저장소에는 발견한 원문을 보관하지 않는다. 검사할 때 승인된 원천에서 필요한 값을 다시 읽고 격리된 검증 작업의 메모리에서만 사용한다. 정확한 AWS 본문 경로는 탐지·정규화와 선택적 검증을 동기 처리한 뒤 소유 `byte[]`를 지운다. 다만 AWS SDK가 Secrets Manager와 SSM의 문자열을 Java 불변 `String`으로 이미 만들 수 있어 메모리 전체 소거는 보장하지 못한다. 큐에는 원문 대신 내부 ID와 작업 ID를 넣는다. 재취득 실패는 UNKNOWN 또는 UNCHECKED와 `SOURCE_UNAVAILABLE` 사유로 남긴다. 시도 실패로 마지막 성공 판정이나 사용 메타데이터의 성공 시각을 갱신하지 않는다. 원문 정책의 근거는 [ADR-S005](adr/ADR-S005.md)에 둔다.
 
 모든 시각은 UTC로 저장하고 API에서 UTC 시각을 반환한다. `lastAttemptAt`, `lastSuccessfulValidationAt`, `nextDueAt`, `lastCollectionSuccessAt`, `actionPerformedAt`은 각각 다른 사실이다. 조치가 마지막 유효성 판정 뒤에 있으면 `postActionValidationPending`을 표시한다. 예약 기준은 마지막 성공만을 기준으로 밀리지 않도록 직전 예정 시각과 운영 정책을 사용한다.
 

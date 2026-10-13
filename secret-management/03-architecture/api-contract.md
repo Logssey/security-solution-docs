@@ -20,14 +20,14 @@
 |---|---|---|---|
 | MVP | GET | `/api/v1/secrets` | 고유 인벤토리 목록. `page`, `size`, `issuer`, `componentState` 필터와 `items`, `total`, `page`, `size` 응답. `CONFIRMED`·`CANDIDATE`·`METADATA_ONLY`를 구분하고 마스킹 식별자, 미평가 심각도, 최신 검증 결과·사유, 위치 수 표시 |
 | MVP | GET | `/api/v1/secrets/{id}` | 마스킹 식별자, 유형·구성 상태, 최신 검증 결과, 위치별 원천·환경·존재 상태, 최초·최근 발견 시각. IAM 메타데이터 항목은 최신 관측의 `iamMetadata`에 키 상태, 발급·최근 사용·관측 시각과 최근 사용 서비스·리전을 별도 제공 |
-| MVP | GET | `/api/v1/secrets/connections` | 수동 실행용 활성 GitHub 연결과 지원 형식의 IAM·Secrets Manager·SSM·S3 메타데이터 범위가 있는 활성 AWS 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외 |
+| MVP | GET | `/api/v1/secrets/connections` | 수동 실행용 활성 GitHub 연결과 지원 형식의 AWS 메타데이터 또는 단일 자원 값 범위가 있는 활성 AWS 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외. 값 범위가 보여도 워커의 별도 값 읽기 설정이 활성이라는 뜻은 아님 |
 | MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드. `scopeResults`에 범위별 내부 ID·지원 콘텐츠 유형·리전·수집 상태·항목 수·안전한 누락 코드만 포함 |
 | 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
 | 후속 | GET | `/api/v1/secrets/cases` | 기본 현재 대응 건 목록. `scope=history`이면 과거 대응 건 목록. 마스킹한 식별자, 발견 소스와 발급자, 심각도, 유효성, 담당자, 단계, 예외, 시각, 커서 |
 | 후속 | GET | `/api/v1/secrets/cases/{caseId}` | 대응 건, 위치별 근거와 상태, 검사 및 평가 이력, 담당자, 체크리스트, 조치 및 감사 이력 |
 | 후속 | GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
 
-MVP 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 아직 대응 건이나 집계 스냅샷을 제공하지 않으므로 아래의 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
+MVP 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 정확한 AWS 본문에서 키 후보를 탐지해도 그 자원이 외부에 노출됐다는 뜻은 아니며 노출·영향·심각도는 별도 근거로 평가한다. 아직 대응 건이나 집계 스냅샷을 제공하지 않으므로 아래의 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
 
 향후 상세의 발견 위치 링크를 만들 때에는 허용된 경로만 생성하고 대상 사용자의 원천 접근 권한을 다시 확인한다. 현재 MVP는 위치 메타데이터를 반환하며 원천으로 자동 리다이렉트하지 않는다. 마스킹된 문맥도 비신뢰 텍스트로 렌더링한다.
 
@@ -54,7 +54,7 @@ MVP 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED
 
 ### 수동 전체 스캔
 
-정식 수동 전체 스캔은 `POST /api/v1/secrets/runs`로 비동기 등록한다. 요청 본문은 `connectionId`와 선택적 `idempotencyKey`다. 세션·CSRF와 현재 `ADMIN` 권한 검사를 거쳐 승인 범위가 있는 **활성 GitHub 연결** 또는 IAM·Secrets Manager·SSM·S3의 **지원되는 메타데이터 범위만 가진 활성 AWS 연결**을 작업으로 예약한다. 그 밖의 원천과 지원되지 않는 AWS 범위는 409로 거부한다. 응답은 `202 Accepted`, `Location: /api/v1/secrets/runs/{runId}`, `{ "runId": 123, "status": "PENDING" }` 형태다. 같은 사용자와 멱등 키의 재요청은 기존 실행 ID를 반환한다. 화면은 `GET /api/v1/secrets/runs/{runId}`로 상태와 단계별 결과, 범위·객체 수, 재시도 시각, 안전한 실패 코드를 조회한다. AWS 메타데이터 실행의 객체 수는 각 범위에서 관측한 접근키 또는 목록 항목 수의 합계이며 탐지·검증 단계는 `SKIPPED`다. 범위별 결과에는 계정 ID, 승인 참조, 자원 이름·ARN 또는 공급자 오류 메시지를 반환하지 않는다. 실행기가 비활성이면 등록된 작업은 대기하며 AWS 수집에는 별도 활성화 설정이 필요하다. API는 원천 콘텐츠를 읽거나 탐지 도구를 실행하지 않는다. 현재 권한 검사는 임시 `ADMIN` 경계이며 역할·연결 범위 권한은 후속이다.
+정식 수동 전체 스캔은 `POST /api/v1/secrets/runs`로 비동기 등록한다. 요청 본문은 `connectionId`와 선택적 `idempotencyKey`다. 세션·CSRF와 현재 `ADMIN` 권한 검사를 거쳐 승인 범위가 있는 **활성 GitHub 연결** 또는 IAM·Secrets Manager·SSM·S3의 **지원되는 메타데이터 범위나 정확한 단일 자원 값 범위가 있는 활성 AWS 연결**을 작업으로 예약한다. 그 밖의 원천과 지원되지 않는 AWS 범위는 409로 거부한다. 응답은 `202 Accepted`, `Location: /api/v1/secrets/runs/{runId}`, `{ "runId": 123, "status": "PENDING" }` 형태다. 같은 사용자와 멱등 키의 재요청은 기존 실행 ID를 반환한다. 화면은 `GET /api/v1/secrets/runs/{runId}`로 상태와 단계별 결과, 범위·객체 수, 재시도 시각, 안전한 실패 코드를 조회한다. AWS 메타데이터 실행의 객체 수는 각 범위에서 관측한 접근키 또는 목록 항목 수의 합계이며 탐지·검증 단계는 `SKIPPED`다. 값 범위는 `CURRENT_VALUE_ONLY`와 별도 `SECRET_AWS_CONTENT_READ_ENABLED` 설정이 필요하다. 기본 비활성이면 본문 SDK 호출을 하지 않고 범위에 안전한 미실행 코드를 남긴다. 읽기를 켠 범위만 Gitleaks 탐지·정규화 경로로 전달하며 검증은 별도 기본 비활성 설정에 따른다. 범위별 결과에는 계정 ID, 승인 참조, 자원 이름·ARN, 값 또는 공급자 오류 메시지를 반환하지 않는다. 실행기가 비활성이면 등록된 작업은 대기한다. API는 원천 콘텐츠를 읽거나 탐지 도구를 실행하지 않는다. 현재 권한 검사는 임시 `ADMIN` 경계이며 역할·연결 범위 권한은 후속이다.
 
 현재 AWS 검증이 비활성이거나 합성 실험 저장소에서 차단된 경우에는 개별 키에 `UNCHECKED` 시도와 사유가 남더라도 실행의 검증 단계는 `SKIPPED`일 수 있다. 화면은 `SKIPPED`를 `VALID`나 검사 성공으로 바꾸지 않는다. 공급자 응답이 불확실하거나 기록에 실패한 경우는 `PARTIAL`로 구분한다.
 
