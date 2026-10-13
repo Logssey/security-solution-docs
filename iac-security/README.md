@@ -30,8 +30,8 @@
 
 | 항목 | 확인 결과 | 반영 |
 |---|---|---|
-| 파드→EC2 연결 | Cartography Kubernetes 모듈에 `KubernetesPod -RUNS_ON-> KubernetesNode -IS_INSTANCE-> AWSEC2Instance`가 있음. 단, EC2 연결은 노드의 `providerID` 기준 | 직접 만들지 않고 Cartography 모듈 사용. Kubespray라 `providerID`가 비면 내부 IP 매칭만 보강 (ADR-03, ERD) |
-| 실효 권한 | Cartography는 권한 매핑 파일로 `CAN_READ` 등을 계산하고 거부도 반영(조건부 거부는 무조건 거부로 처리). 10/10 수집에서 관계가 안 생긴 건 설정 문제일 가능성 | "Cartography가 못 한다" → "사용자 정의 매핑 파일로 계산 + 1등급은 시뮬레이터 확인"으로 수정 (ADR-04) |
+| 파드→EC2 연결 | Cartography Kubernetes 모듈에 `KubernetesPod -RUNS_ON-> KubernetesNode -IS_INSTANCE-> AWSEC2Instance`가 있음. 단, EC2 연결은 노드의 `providerID` 기준 | 직접 만들지 않고 Cartography 모듈 사용. Kubespray라 `providerID`가 비면 내부 IP 매칭만 보강 (ADR-03, ERD). 10/13 확인: 노드 6개 모두 비어 있어 내부 IP 매칭으로 확정 |
+| 실효 권한 | Cartography는 권한 매핑 파일로 `CAN_READ` 등을 계산하고 거부도 반영(조건부 거부는 무조건 거부로 처리). 10/10 수집에서 관계가 안 생긴 건 설정 문제일 가능성 | "Cartography가 못 한다" → "사용자 정의 매핑 파일로 계산 + 1등급은 시뮬레이터 확인"으로 수정 (ADR-04). 10/13 원인 확인 후 재수집, 시뮬레이터 결과와 일치 |
 | CloudFront·시크릿 노드 | `AWSCloudFrontDistribution`(S3 오리진만 연결), `AWSSecretsManagerSecret` 있음 | CloudFront→NLB만 보강, 시크릿 노드는 그대로 사용 (ERD) |
 | plan JSON 민감값 | `terraform show -json`은 민감값을 평문으로 출력 | 제거 후 전송 설계 유지 (ADR-06) |
 | lock 검증 | `init -lockfile=readonly`는 lock 파일을 바꾸지 않고 체크섬만 검증 | 설계 유지 |
@@ -41,11 +41,12 @@
 
 **구축 초반에 확인할 것**
 
-1. Cartography 권한 매핑이 돌지 않은 원인 확인, 사용자 정의 파일(`secretsmanager:GetSecretValue`, `s3:GetObject`)로 다시 수집
-2. Kubespray 노드의 `providerID` 값 확인 (비면 내부 IP 매칭)
+1. Cartography 권한 매핑이 돌지 않은 원인 확인, 사용자 정의 파일(`secretsmanager:GetSecretValue`, `s3:GetObject`)로 다시 수집 → 10/13 완료 (기본 매핑 파일을 못 찾던 것이 원인, ADR-04)
+2. Kubespray 노드의 `providerID` 값 확인 (비면 내부 IP 매칭) → 10/13 완료. 6개 모두 비어 있어 내부 IP 매칭으로 감 (ERD)
 3. 서비스 계정 OIDC(ADR-07) 시범 적용, 어려우면 대안으로 전환
 
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
+| 수정일 | 2026-10-13 |

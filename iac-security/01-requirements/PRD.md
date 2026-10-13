@@ -43,7 +43,7 @@
 | FR-G2 | 허용 목록(프로바이더 단위) 밖 프로바이더는 차단, 모듈 ref·version과 프로바이더 버전 미고정은 경고 | MVP |
 | FR-G3 | lock·backend·워크플로 파일 변경 감지. backend 변경은 중단, 나머지는 보안 리뷰 필수 | MVP |
 | FR-G4 | `init -lockfile=readonly`로 프로바이더 해시 검증, 원격 모듈은 내려받은 뒤 재검사 | MVP |
-| FR-P1 | 매일 Cartography 수집(AWS + Kubernetes) 후 부족한 관계(CloudFront→NLB, IMDS 자격 증명, 필요 시 노드→EC2)를 보강 | MVP |
+| FR-P1 | 매일 Cartography 수집(AWS + Kubernetes) 후 부족한 관계(CloudFront→NLB, IMDS 자격 증명, 노드→EC2(`providerID`가 비어 내부 IP 매칭))를 보강 | MVP |
 | FR-P2 | plan JSON을 그래프 복사본에 반영해 머지 전·후 "인터넷 → 데이터" 경로 차이 계산 | MVP |
 | FR-P3 | 새 경로의 끝이 1등급이면 차단, 2등급·네트워크 도달만이면 경고, 경로 감소는 정보 | MVP |
 | FR-P4 | 1등급 데이터에 닿는 권한은 IAM 시뮬레이터로 확인 후 확정 | MVP |
@@ -98,3 +98,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
+| 수정일 | 2026-10-13 |

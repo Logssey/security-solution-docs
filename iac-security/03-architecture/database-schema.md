@@ -273,15 +273,17 @@ CREATE TABLE iac_audit_events (
 - 보강 관계에는 `_source = 'logssey'`와 `lastupdated`를 붙여 Cartography 관계와 구분하고, 다음 실행에서 확인 안 된 것은 삭제
 - 라벨은 공식 스키마 기준(AWS 접두). 10/7 수집에서는 `EC2Instance`·`S3Bucket` 같은 이전 라벨도 함께 붙어 있었음
 - 데이터 노드의 등급(`tier`)은 `iac_data_assets`를 기준으로 매일 보강 단계에서 그래프에 붙임
+- 노드→EC2 연결 (10/13 확인): Kubespray 노드 6개 모두 `providerID`가 비어 있어 Cartography가 `IS_INSTANCE`를 만들지 못함. `KubernetesNode`에는 IP 속성도 없으므로, 보강 단계에서 k8s API로 노드 InternalIP를 읽어 `AWSEC2Instance.privateipaddress`와 매칭해 `IS_INSTANCE`를 추가
+- 매일 수집은 AWS와 Kubernetes 모듈을 함께 실행 (10/10 수집은 `--selected-modules aws`라 Kubernetes 노드·파드가 빠져 있었음)
 
 | 구분 | 이름 | 출처 |
 |---|---|---|
 | 노드 | `AWSEC2Instance`, `AWSRole`, `AWSInstanceProfile`, `AWSPolicy`, `AWSPolicyStatement`, `AWSS3Bucket`, `AWSRDSInstance`, `AWSLoadBalancerV2`, `AWSEC2SecurityGroup`, `AWSCloudFrontDistribution`, `AWSSecretsManagerSecret` | Cartography AWS 모듈 |
 | 노드 | `KubernetesCluster`, `KubernetesNode`, `KubernetesPod` | Cartography Kubernetes 모듈 |
 | 노드 | `Internet` (가상 노드 1개, 경로 출발점) | logssey 보강 |
-| 관계 | `INSTANCE_PROFILE`, `ASSOCIATED_WITH`, `POLICY`, `STATEMENT`, `EXPOSE`(LB→EC2), `MEMBER_OF_EC2_SECURITY_GROUP`, `RUNS_ON`(파드→노드), `IS_INSTANCE`(노드→EC2, `providerID` 기준) | Cartography |
+| 관계 | `INSTANCE_PROFILE`, `ASSOCIATED_WITH`, `POLICY`, `STATEMENT`, `EXPOSE`(LB→EC2), `MEMBER_OF_EC2_SECURITY_GROUP`, `RUNS_ON`(파드→노드), `IS_INSTANCE`(노드→EC2, `providerID` 기준. 현재 클러스터에서는 만들어지지 않음, 아래 보강으로 대체) | Cartography |
 | 관계 | `CAN_READ`·`CAN_WRITE`(주체→S3·시크릿, 거부 반영) | Cartography 권한 매핑 + 사용자 정의 매핑 파일 |
-| 관계 | `ORIGIN`(CloudFront→NLB), `HAS_CREDS_OF`(EC2→역할, IMDS 조건), `CAN_REACH {port}`(네트워크 도달), `IS_INSTANCE` 대체(`providerID`가 비면 내부 IP 매칭) | logssey 보강 |
+| 관계 | `ORIGIN`(CloudFront→NLB), `HAS_CREDS_OF`(EC2→역할, IMDS 조건), `CAN_REACH {port}`(네트워크 도달), `IS_INSTANCE` 대체(노드 InternalIP ↔ `AWSEC2Instance.privateipaddress` 매칭) | logssey 보강 |
 
 - 경로 쿼리는 `Internet`에서 출발해 `tier`가 붙은 데이터 노드까지 최대 6단계 탐색, 결과는 `iac_attack_paths`에 저장
 - PR 분석은 이 그래프의 복사본(또는 메모리 안 부분 그래프)에 plan 변경을 얹어 계산하고 원본은 수정 안 함. 결과는 `iac_run_path_changes`에 저장
@@ -290,3 +292,4 @@ CREATE TABLE iac_audit_events (
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
+| 수정일 | 2026-10-13 |
