@@ -30,7 +30,7 @@ AWS 본문 수집은 계정 전체 읽기 승인을 곧바로 본문 읽기로 �
 |---|---|---|
 | `AWS_SECRETS_MANAGER_VALUE` | `aws://<계정 ID>/<리전>/secrets-manager/secret/<URL 인코딩한 정확한 Secret ARN>` | `GetSecretValue`의 `AWSCURRENT` 텍스트 |
 | `AWS_SSM_PARAMETER_VALUE` | `aws://<계정 ID>/<리전>/ssm/parameter/<URL 인코딩한 정확한 Parameter ARN>` | 복호화 옵션을 사용한 `GetParameter` 값 |
-| `AWS_S3_OBJECT_CONTENT` | `aws://<계정 ID>/<리전>/s3/object/<버킷>/<URL 인코딩한 정확한 객체 키>` | 소유 계정·크기·ETag·버전을 확인한 뒤 조건부 `GetObject` 본문 |
+| `AWS_S3_OBJECT_CONTENT` | `aws://<계정 ID>/<리전>/s3/object/<버킷>/<URL 인코딩한 정확한 객체 키>` | 소유 계정·크기·ETag 확인 후 `If-Match` 조건부 `GetObject` 본문. `HeadObject`에 버전 ID가 있으면 그 버전도 지정 |
 
 현재 `approved_ref`는 DB `VARCHAR(500)`에 저장되므로 이보다 긴 URI는 MVP에서 거부한다. Secret ARN, Parameter 이름, S3 객체 키 자체도 민감할 수 있어 연결 DB와 백업의 접근을 제한한다. 값 범위에서 실제 읽은 텍스트만 메모리에서 Gitleaks로 전달하고 탐지 결과의 위치는 자원명 대신 `aws-content-scope:<scope_id>` 별칭으로 기록한다. 발견한 키 후보의 형식 탐지는 외부 노출, 영향도 또는 심각도 판정이 아니다. 실제 AWS 값 API 호출 결과는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 시험 범위를 명시한다. 승인된 Git 이력과 Actions, Notion, K8s Secret 및 다른 AWS 콘텐츠 수집은 아직 연결되지 않았다.
 
@@ -58,7 +58,7 @@ AWS 본문 수집은 계정 전체 읽기 승인을 곧바로 본문 읽기로 �
 
 각 행은 구현 후보이며 운영 지원 선언이 아니다. 운영 지원에는 테스트 전용 자격 증명으로 성공, 명시적 무효, 권한 부족, 호출 제한, 네트워크 오류, 구성요소 누락을 구분한 기록이 필요하다. 공급자별 후보와 한계는 [검증 조사](../05-research/verification-and-risk.md)를 따른다.
 
-현재 GitHub 처리기는 발견한 AWS 키·후보를 실행 주기 내 중복 제거한 뒤 `secret_validation_attempts`에 결과를 연결한다. AWS 어댑터는 발견된 **완전한** 장기 키 쌍 또는 세션 토큰을 포함한 임시 키로 STS `GetCallerIdentity`만 호출하도록 구현했다. `SECRET_AWS_VALIDATION_ENABLED`의 기본값은 `false`이며 이때 `UNCHECKED/DISABLED`를 기록한다. `Logssey/test-find-key` 합성 실험 저장소에서는 설정과 관계없이 STS 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`를 기록한다. 어댑터는 AWS 리소스 수집기나 권한·영향 분석기를 대신하지 않는다. 승인된 대상과 정책을 정하기 전에는 능동 검증 호출을 켜지 않는다.
+현재 GitHub 처리기와 값 읽기를 별도로 활성화한 정확한 AWS 본문 처리기는 발견한 AWS 키·후보를 실행 주기 내 중복 제거한 뒤 `secret_validation_attempts`에 결과를 연결한다. 본문 읽기 활성화와 능동 STS 검증 활성화는 서로 다른 설정이다. AWS 어댑터는 발견된 **완전한** 장기 키 쌍 또는 세션 토큰을 포함한 임시 키로 STS `GetCallerIdentity`만 호출하도록 구현했다. `SECRET_AWS_VALIDATION_ENABLED`의 기본값은 `false`이며 이때 `UNCHECKED/DISABLED`를 기록한다. `Logssey/test-find-key` 합성 실험 저장소에서는 설정과 관계없이 STS 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`를 기록한다. 어댑터는 AWS 리소스 수집기나 권한·영향 분석기를 대신하지 않는다. 승인된 대상과 정책을 정하기 전에는 능동 검증 호출을 켜지 않는다.
 
 ## 4. 검증 결과와 실패
 

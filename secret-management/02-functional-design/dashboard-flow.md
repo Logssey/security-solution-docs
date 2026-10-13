@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [대시보드 디자인 문서](https://github.com/Logssey/dashboard-design-docs/blob/3bac546/02-functional-design/README.md), [프런트엔드 공통 레이아웃](https://github.com/Logssey/dashboard-frontend/blob/3602e575c79342a2421724fdd8cff1f66892bf06/src/layout/AppLayout.tsx), [디자인 토큰](https://github.com/Logssey/dashboard-frontend/blob/3602e575c79342a2421724fdd8cff1f66892bf06/src/styles/tokens.css). 화면 이미지 71~75는 기능 참고 자료다.
 
-아래 SVG 여섯 장은 **구현 목표 와이어프레임**이다. 2026-10-14 프런트엔드 `develop` `2911e12`의 `/secrets`는 비동기 실행 등록·상태 조회, 고유 인벤토리 목록·상세와 IAM `METADATA_ONLY` 표시를 제공한다. 담당자·대응·심각도와 통합 현황의 목표 화면은 아직 구현되지 않았으며 통합 현황에는 기존 100점 카드가 남아 있다. 와이어프레임은 PRD에 따른 목표 배치이며 구현 완료나 실제 검사 결과를 뜻하지 않는다. 현재 구현과 목표의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다. 그림의 수치와 시각은 집계 관계를 설명하기 위한 예시다.
+아래 SVG 여섯 장은 **구현 목표 와이어프레임**이다. 2026-10-14 프런트엔드 `develop` `29c4fc7`의 `/secrets`는 비동기 실행 등록·상태 조회, 고유 인벤토리 목록·상세, IAM `METADATA_ONLY` 표시와 승인된 AWS 값 범위의 실행 결과 표시를 제공한다. AWS 보관소 값에서 후보를 찾은 상세에는 외부 노출로 단정하지 않는 안내를 표시한다. 담당자·대응·심각도와 통합 현황의 목표 화면은 아직 구현되지 않았으며 통합 현황에는 기존 100점 카드가 남아 있다. 와이어프레임은 PRD에 따른 목표 배치이며 구현 완료나 실제 검사 결과를 뜻하지 않는다. 현재 구현과 목표의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다. 그림의 수치와 시각은 집계 관계를 설명하기 위한 예시다.
 
 ## 1. 통합 화면의 위치
 

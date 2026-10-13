@@ -1,6 +1,6 @@
 # 현재 구현과 Secret 기능 연동 차이
 
-확인 기준: 2026-10-14, `dashboard-backend`의 `develop` `9ebb4a8`과 `dashboard-frontend`의 `develop` `2911e12`까지. 아래의 «구현»은 코드와 분리된 개발 DB에서의 검증 범위를 뜻하며 모든 원천의 운영 지원을 뜻하지 않는다. 정식 목표 계약은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [API 계약](../03-architecture/api-contract.md)에 둔다.
+확인 기준: 2026-10-14, `dashboard-backend`의 `develop` `9ebb4a8`과 `dashboard-frontend`의 `develop` `29c4fc7`까지. 아래의 «구현»은 코드와 분리된 개발 DB에서의 검증 범위를 뜻하며 모든 원천의 운영 지원을 뜻하지 않는다. 정식 목표 계약은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [API 계약](../03-architecture/api-contract.md)에 둔다.
 
 ## 1. 문서와 구현의 경계
 
@@ -18,7 +18,7 @@
 | AWS 정확한 값 수집 | 별도로 승인된 단일 Secrets Manager Secret, SSM Parameter 또는 S3 객체 범위에서만 현재 값을 읽는 Java 경로가 워커에 연결됐다. `SECRET_AWS_CONTENT_READ_ENABLED`는 기본 `false`이고 AWS 수집·작업 실행 활성화, 프로필·STS 계정 일치와 `CURRENT_VALUE_ONLY` 범위를 모두 요구한다. 활성화되면 텍스트를 크기 제한과 함께 메모리에서 Gitleaks로 전달하고 안전한 탐지 결과만 저장한다. | 실계정 시험에서 Secret·Parameter 각 1건의 읽기는 성공했고 S3 후보는 `AWS_CONTENT_NON_TEXT`로 거부됐다. 안전한 UTF-8 S3 객체의 수집·탐지 완료와 운영 범위의 원문 비노출 검증은 남았다. 다른 자원으로 범위를 자동 확장하거나 외부 노출·심각도를 추정하지 않는다. |
 | 탐지·정규화 | 워커가 Gitleaks 8.30.1에 승인된 GitHub 파일과 활성화된 정확한 AWS 본문을 `stdin`으로 전달한다. V4에 도구 실행, 고유 키, 발견 위치, 도구 발견 기록이 있으며 완전한 키는 보호키 HMAC으로 묶고 불완전 후보는 위치별로 분리한다. AWS 본문의 원천 참조는 자원명 대신 내부 범위 ID 기반 별칭이다. | 지원 룰과 형식을 확장하고 실제 자료 기준 품질을 검증한다. |
 | 유효성 검증 | GitHub 또는 활성화된 정확한 AWS 본문에서 발견한 AWS 키 후보를 V5 검증 시도 이력에 연결한다. 같은 완전 키는 실행 주기 내 한 번만 처리한다. STS 호출 설정은 기본 `false`이며 비활성은 `UNCHECKED/DISABLED`로 기록한다. 합성 실험 저장소는 설정과 관계없이 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`로 기록한다. 이때 실행의 검증 단계는 `SKIPPED`일 수 있다. | 승인된 비합성 테스트 자격 증명과 호출 정책으로 실제 STS 분기를 검증한다. 다른 발급자 유형의 검증기는 후속이다. |
-| 조회 화면 | `/secrets` 화면이 연결 선택, 비동기 실행 등록·상태 조회, 고유 키 목록·상세를 사용한다. `GET /api/v1/secrets`, `/{id}`, `/connections`는 V4–V6 전용 기록을 읽는다. IAM 목록은 `METADATA_ONLY`로 필터링하고 상세에는 최신 관측의 키 상태·최근 사용 시각 등을 별도 표시한다. 기존 `/api/v1/credentials`는 전환 기간에 남아 있다. | 다른 호출자의 기존 API 사용처를 확인하고 제거한다. 요약·대응·스냅샷 조회는 후속이다. |
+| 조회 화면 | `/secrets` 화면이 연결 선택, 비동기 실행 등록·상태 조회, 고유 키 목록·상세를 사용한다. 실행 범위에는 승인된 Secrets Manager 값·SSM Parameter 값·S3 객체 내용을 각각 표시한다. AWS 본문에서 후보가 발견된 상세는 자원명 대신 승인 보관소 값으로 표시하고, 형식 발견만으로 외부 노출이 확인된 것은 아니라는 안내를 보여준다. `GET /api/v1/secrets`, `/{id}`, `/connections`는 V4–V6 전용 기록을 읽는다. IAM 목록은 `METADATA_ONLY`로 필터링하고 상세에는 최신 관측의 키 상태·최근 사용 시각 등을 별도 표시한다. 기존 `/api/v1/credentials`는 전환 기간에 남아 있다. | 다른 호출자의 기존 API 사용처를 확인하고 제거한다. 요약·대응·스냅샷 조회는 후속이다. |
 | 심각도·대응 | Secret의 미평가와 환경 `UNKNOWN`을 임의 등급이나 `PROD`로 바꾸지 않는다. | 권한·영향 근거, 평가 이력, 담당자·검토·체크리스트·외부 조치·재검증을 구현한다. |
 | 통합 현황 | 기존 Overview는 일반 `detection_events` 조회와 100점 카드 계약을 유지한다. Secret의 원본 기록은 전용 테이블에 있다. | 통합 조회에서 두 출처를 중복 없이 합성하고 단위·미평가·누락 범위를 명시한다. |
 
