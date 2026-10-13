@@ -49,6 +49,14 @@
 
 ## 3. 변경
 
+### 수동 전체 스캔
+
+정식 수동 전체 스캔은 `/api/v1/secrets` 아래에서 비동기 작업으로 등록하고 ScanRun의 실행 ID를 반환한다. 화면은 `GET /api/v1/secrets/runs/{runId}`로 상태를 조회한다. API 요청에서 원천 콘텐츠를 읽거나 탐지 도구를 실행하지 않는다. 등록 엔드포인트의 세부 경로, 요청·응답 필드와 HTTP 상태는 공통 검토 후 구현하며 이 문서가 구현 완료를 뜻하지 않는다.
+
+현재 `/api/v1/credentials`와 `/api/v1/credentials/scan`은 기존 화면 전환 기간에만 유지한다. 화면과 다른 호출자를 정식 API로 전환하고 사용처가 없음을 확인한 뒤 제거한다. 전환 기간의 필드와 현재 구현의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록하며 정식 모델이나 실행 경계로 채택하지 않는다.
+
+### 대응 건 변경과 재검증
+
 | Method | 경로 | 요청과 불변 조건 |
 |---|---|---|
 | PATCH | `/api/v1/secrets/cases/{caseId}/assignment` | 팀과 개인, 사유, `expectedVersion`. 수행자, 변경 전후, 시각 감사 |

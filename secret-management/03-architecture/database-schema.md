@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL에 추가할 물리 스키마의 구현 기준이다. 확인한 버전은 [dashboard-backend](https://github.com/Logssey/dashboard-backend) `5d2d1b1`, [dashboard-design-docs](https://github.com/Logssey/dashboard-design-docs) `3bac546`이며 2026-10-12 같은 코드 기준을 정적으로 재확인했다. 현재 백엔드의 `V1__create_tables.sql`에는 `dashboard_users`, `assets`, `detection_events`만 있다. 이 문서의 테이블은 아직 백엔드에 생성되지 않았다. 백엔드에는 기존 V1을 수정하지 않고 후속 Flyway 마이그레이션으로 추가한다. 대시보드 설계 저장소의 `04-data/credentials-draft.md`는 대체된 과거 초안으로 현재 구현 기준에서 제외한다. Secret 상세 모델은 현재 PRD와 ADR 및 이 스키마를 따른다.
+이 문서는 PostgreSQL에 추가할 물리 스키마의 구현 기준이다. 2026-10-13 정적 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend) `14b1812`다. V1에는 `dashboard_users`, `assets`, `detection_events`가 있으며 공유 V2에는 기존 단일 `credentials`가 있다. 공유 main에는 이 문서의 정식 분리 모델이 아직 구현되지 않았다. 로컬에는 연결·작업 예약용 Secret 테이블 5개의 미공유 구현이 있으므로 공유 코드와 구분한다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다. 기존 V1과 공유 V2를 수정하지 않고 후속 Flyway 마이그레이션으로 정식 모델을 추가한다.
 
 로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
@@ -178,6 +178,8 @@ CREATE UNIQUE INDEX uq_secret_active_membership
 
 API DB 계정은 Secret 조회 및 대응 변경 테이블에 필요한 권한만 갖고, 워커 DB 계정은 작업 선점과 탐지 및 검사 적재 권한을 갖는다. 연결용 비밀은 DB 밖의 비밀 저장소에 두며 `auth_ref`만 저장한다. HMAC 보호키는 DB 밖에서 관리하고 버전 교체 시 이전 버전 지문을 안전하게 재계산할 수 있는 시점까지 병행 조회한다. 원천에서 키를 다시 읽을 수 없으면 키 동일성 재계산과 재검증이 불가능하므로 임의 병합하지 않는다. 데이터, 백업, 감사 로그의 접근 권한과 보존 기간은 범주별 운영 설정으로 확정한다. 보존 기간이 정해지지 않은 범주는 자동 삭제하지 않는다.
 
-마이그레이션 순서는 연결 및 작업, 키 및 발견 위치, 근거 및 검사와 평가, 대응과 역할, 스냅샷, 인덱스와 권한 순이다. 기존 V1 데이터는 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고, 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 현재 로컬 샘플 적재기는 기동마다 `assets`를 전부 삭제하므로, Secret 위치가 `assets`를 참조하는 로컬 환경에서는 샘플 행만 교체하도록 적재기를 고친 뒤 데이터를 넣어야 한다. 새 `/api/v1/secrets` 조회를 먼저 구현하고 통합 현황의 새 버전은 위의 API 합성 규칙을 사용한다. 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
+마이그레이션 순서는 연결 및 작업, 키 및 발견 위치, 근거 및 검사와 평가, 대응과 역할, 스냅샷, 인덱스와 권한 순이다. 기존 V1 데이터는 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고, 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 10/13 main의 로컬 샘플 적재기는 전체 삭제 대신 조건부 정리를 수행한다. 기존 `credential_id` 연결 이벤트도 삭제하므로 이전 대상 기록과 정리 SQL을 대조하고 비샘플 데이터 보존을 일괄 가정하지 않는다. 시작 시 외부 스캔은 여전히 남아 있어 [실행 정책](security-and-runtime.md)에 맞게 제거해야 한다. 새 `/api/v1/secrets` 조회를 먼저 구현하고 통합 현황의 새 버전은 위의 API 합성 규칙을 사용한다. 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
+
+공유 `V2__create_credentials.sql`은 유지하고 미공유 스케줄러 마이그레이션은 V3로 변경한다. 기존 개발 DB를 보존한 채 별도 개발 DB에 전체 마이그레이션 적용을 검증하고 필요한 데이터를 이전한다. 기존 DB에는 스케줄러 V2가 이미 적용돼 있어 파일 이름만 바꿔 재실행하지 않는다. 이전 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행하며 이후 번호는 공통 DB 담당자가 조율한다. 이 문서 분리 작업에서는 번호 변경이나 DB 이전을 수행하지 않는다.
 
 구현 검증은 Flyway 빈 DB 적용과 기존 V1 위 적용, 잘못된 FK와 중복 현재 건 및 중복 작업의 거부, 6시간 정기와 수동 실행의 독립성, 부분 실패 후 위치 유지, 동일 키의 다중 위치와 다중 엔진 중복 제거, 최신 실패와 지난 성공 보존, 부분 예외 집계, 스냅샷의 카드 및 목록 수 일치, 원문이 DB와 로그에 남지 않는지를 확인한다.
