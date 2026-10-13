@@ -8,10 +8,31 @@
 |---|---|---|
 | GitHub | 승인된 저장소의 코드, 선택된 브랜치와 커밋 이력, 승인된 Actions 워크플로 설정 파일 | 조직, 저장소, 브랜치, 이력 범위를 연결에 명시한다. 실행 로그, 아티팩트, 저장 비밀 값은 별도 권한과 수집 범위가 없으면 미지원으로 표시한다. |
 | Notion | 연결에 공유된 페이지와 지원되는 텍스트 블록 | 페이지, 하위 블록과 페이지네이션 범위를 기록한다. 공유되지 않은 페이지, 첨부 파일과 OCR은 읽지 못한 범위로 표시한다. |
-| AWS | 승인된 계정과 리소스의 설정, 권한 및 지원되는 사용 메타데이터 | 계정, 리전, 서비스, 리소스 종류별로 허용 범위를 기록한다. 원문을 읽는 비밀 저장소, 객체 내용과 로그는 별도 승인 없이는 수집 완료로 표시하지 않는다. |
+| AWS | 승인된 계정과 리소스의 설정, 권한 및 지원되는 사용 메타데이터 | 계정, 리전, 서비스, 리소스 종류별로 활성 범위를 기록한다. 계정 전체 읽기 승인은 모든 콘텐츠의 자동 수집을 뜻하지 않는다. 비밀 저장소 값, 객체 내용과 로그는 해당 범위의 수집기가 연결·활성화되고 실제 실행을 확인하기 전에는 수집 완료로 표시하지 않는다. |
 | K8s | 승인된 클러스터와 네임스페이스의 내부 Secret 객체 | Kubernetes API와 별도 최소 RBAC를 사용한다. projected 토큰, 외부 비밀 저장소, 노드와 etcd의 값은 Secret 객체 수집에 포함됐다고 표시하지 않는다. |
 
-현재 워커가 수집하는 것은 GitHub App에 승인된 저장소·브랜치·경로의 **현재 커밋 파일**뿐이다. 승인된 Git 이력과 Actions, Notion, AWS 리소스, K8s Secret 수집은 위 목표 범위에 속하지만 아직 지원하지 않는다. AWS 계정의 리전·서비스·리소스와 읽기 권한 범위는 확정되지 않아 AWS 리소스 수집을 시작하지 않았다. 현재 구현·검증 범위는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 둔다.
+현재 워커는 GitHub App에 승인된 저장소·브랜치·경로의 **현재 커밋 파일**, 승인된 AWS 계정의 **IAM 접근키 및 저장소 목록 메타데이터**, 별도 활성화된 **정확한 AWS 자원 한 건의 본문**을 처리할 수 있다. AWS는 실행 전에 명시된 프로필·연결 참조와 STS 계정이 각 승인 범위에 일치하는지 확인한다. 아래 네 종류의 메타데이터 범위와 뒤의 세 종류의 값 범위는 구분한다. 리전 범위는 연결에 명시된 리전만 실행하며 워커가 리전을 자동 발견하거나 범위 밖으로 확장하지 않는다.
+
+| `content_type` | 승인 참조 형식 | 읽는 정보와 호출 |
+|---|---|---|
+| `IAM_ACCESS_KEY_METADATA` | `aws://<계정 ID>/global/iam/access-keys` | IAM 사용자 접근키 목록·상태·발급 시각·최근 사용, 루트 접근키 개수 확인 |
+| `AWS_SECRETS_MANAGER_METADATA` | `aws://<계정 ID>/<리전>/secrets-manager/all` | Secrets Manager `ListSecrets`의 항목 수 |
+| `AWS_SSM_PARAMETER_METADATA` | `aws://<계정 ID>/<리전>/ssm/parameters` | SSM `DescribeParameters`의 항목 수 |
+| `AWS_S3_BUCKET_METADATA` | `aws://<계정 ID>/global/s3/buckets` | S3 `ListBuckets`의 버킷 수. 객체 목록은 읽지 않음 |
+
+위 네 메타데이터 범위는 현재 상태만 읽는다. Secrets Manager·SSM·S3 범위는 `history_limit=CURRENT_STATE_ONLY`가 필수이고 IAM 범위는 그 값 또는 NULL을 허용한다. IAM 접근키 ID 원문과 사용자명은 일반 DB·API·로그에 두지 않고 보호키 HMAC 참조와 마스킹 표지만 기록한다. 루트 접근키가 있거나 확인할 수 없으면 사용자 목록만으로 계정 전체를 확인했다고 표시하지 않고 부분 수집으로 남긴다. 다른 세 목록 수집기는 공급자 응답의 이름·ARN·설명·태그를 메모리에서 개수로만 세고 버린다. 페이지 제한 또는 일부 페이지의 권한 오류는 정상 0건이 아닌 부분 수집으로 기록한다.
+
+IAM 접근키 목록만 `METADATA_ONLY` 인벤토리와 실행별 관측을 만든다. Secrets Manager·SSM·S3 목록은 실행 범위의 항목 수·상태·안전한 사유 코드만 기록하고 `CredentialSet`이나 발견 위치를 만들지 않는다. 어떤 목록도 원문 자격 증명 발견, Gitleaks Finding, STS 유효성 판정, 비정상 노출 또는 영향·심각도 판정으로 승격하지 않는다.
+
+AWS 본문 수집은 계정 전체 읽기 승인을 곧바로 본문 읽기로 확대하지 않는다. 연결에 **정확한 단일 자원**을 별도로 승인하고 `SECRET_AWS_CONTENT_READ_ENABLED=true`를 명시해야 한다. 기본값은 `false`이며 AWS 수집·작업 실행 설정도 따로 켜야 한다. 세 종류 모두 `history_limit=CURRENT_VALUE_ONLY`만 허용하고 전체 목록, 경로 접두사, 와일드카드 또는 메타데이터 범위를 본문 승인으로 해석하지 않는다.
+
+| `content_type` | 승인 참조 형식 | 별도 활성화 시 읽는 현재 값 |
+|---|---|---|
+| `AWS_SECRETS_MANAGER_VALUE` | `aws://<계정 ID>/<리전>/secrets-manager/secret/<URL 인코딩한 정확한 Secret ARN>` | `GetSecretValue`의 `AWSCURRENT` 텍스트 |
+| `AWS_SSM_PARAMETER_VALUE` | `aws://<계정 ID>/<리전>/ssm/parameter/<URL 인코딩한 정확한 Parameter ARN>` | 복호화 옵션을 사용한 `GetParameter` 값 |
+| `AWS_S3_OBJECT_CONTENT` | `aws://<계정 ID>/<리전>/s3/object/<버킷>/<URL 인코딩한 정확한 객체 키>` | 소유 계정·크기·ETag 확인 후 `If-Match` 조건부 `GetObject` 본문. `HeadObject`에 버전 ID가 있으면 그 버전도 지정 |
+
+현재 `approved_ref`는 DB `VARCHAR(500)`에 저장되므로 이보다 긴 URI는 MVP에서 거부한다. Secret ARN, Parameter 이름, S3 객체 키 자체도 민감할 수 있어 연결 DB와 백업의 접근을 제한한다. 값 범위에서 실제 읽은 텍스트만 메모리에서 Gitleaks로 전달하고 탐지 결과의 위치는 자원명 대신 `aws-content-scope:<scope_id>` 별칭으로 기록한다. 발견한 키 후보의 형식 탐지는 외부 노출, 영향도 또는 심각도 판정이 아니다. 실제 AWS 값 API 호출 결과는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 시험 범위를 명시한다. 승인된 Git 이력과 Actions, Notion, K8s Secret 및 다른 AWS 콘텐츠 수집은 아직 연결되지 않았다.
 
 모든 연결은 콘텐츠 유형, 원천 객체 ID와 버전, 읽은 범위, 최초와 최근 성공, 부분 실패, 거부, 미지원 위치를 기록한다. 수집 대상이 0건인 정상 성공과 접근 불가로 결과가 0건인 경우를 구분한다. 승인된 원천 이외의 URL을 발견했다는 이유로 새 수집원을 자동 추가하지 않는다.
 
@@ -19,7 +40,7 @@
 
 ## 2. 탐지와 정규화
 
-수집된 코드, 문서, 설정을 비신뢰 입력으로 처리한다. MVP에서는 [ADR-S001](adr/ADR-S001.md)의 합성 표본 비교 결과에 따라 Gitleaks 8.30.1을 후보 추출기로 실행한다. 현재 GitHub 처리기는 승인된 현재 커밋의 파일 바이트를 원천 객체별로 읽어 탐지 도구의 `stdin`에 전달하고 객체·버전·줄 위치를 결과에 연결한다. Git 이력, Notion, AWS, K8s 텍스트의 같은 처리 방식은 후속 수집기 계약이다. API의 크기 제한과 누락 이력은 수집 실패 또는 미지원 범위로 표시한다. 룰은 유형별 형식, 접두사, 정규식과 문맥을 사용하며 도구 및 설정 버전을 기록한다. 비밀 구성요소와 공개 식별자를 구별한다. 불완전한 AWS AccessKeyId나 공개 인증서만으로 완전한 인증 수단을 만들지 않는다. 동일성은 [데이터 계약](data-contract.md)에 따라 확인하고 발견 근거를 보존한다.
+수집된 코드, 문서, 설정을 비신뢰 입력으로 처리한다. MVP에서는 [ADR-S001](adr/ADR-S001.md)의 합성 표본 비교 결과에 따라 Gitleaks 8.30.1을 후보 추출기로 실행한다. 현재 GitHub 처리기는 승인된 현재 커밋의 파일 바이트를 원천 객체별로 읽어 탐지 도구의 `stdin`에 전달하고 객체·버전·줄 위치를 결과에 연결한다. 정확한 AWS 본문 범위는 기본 비활성 경로에서 크기 제한과 UTF-8 텍스트 검사를 통과한 한 건을 같은 탐지·정규화 경로에 전달한다. Git 이력, Notion, K8s 텍스트의 같은 처리 방식은 후속 수집기 계약이다. 수집기의 크기 제한에 걸리거나 본문이 누락되면 범위별 안전한 실패 또는 미지원 사유로 표시한다. 룰은 유형별 형식, 접두사, 정규식과 문맥을 사용하며 도구 및 설정 버전을 기록한다. 비밀 구성요소와 공개 식별자를 구별한다. 불완전한 AWS AccessKeyId나 공개 인증서만으로 완전한 인증 수단을 만들지 않는다. 동일성은 [데이터 계약](data-contract.md)에 따라 확인하고 발견 근거를 보존한다.
 
 탐지 품질은 유형, 수집원, 시점별 합성 평가셋과 승인된 테스트 자료에서 누락, 오탐, 중복과 위치 복원 가능성을 보고한다. Gitleaks 실행 파일 버전과 해시, 룰 설정을 고정해 같은 표본에서 결과를 재현한다. 실제 수집 자료와 검증된 정답셋으로 재현율과 정밀도를 별도 측정한다. 다른 도구를 재평가할 때는 동일 입력에서 추가 발견과 실패를 비교하며, TruffleHog를 쓰는 평가에는 `--no-verification`을 적용한다. 어떤 도구의 결과도 공급자별 유효성 판정으로 무조건 복사하지 않는다.
 
@@ -37,7 +58,7 @@
 
 각 행은 구현 후보이며 운영 지원 선언이 아니다. 운영 지원에는 테스트 전용 자격 증명으로 성공, 명시적 무효, 권한 부족, 호출 제한, 네트워크 오류, 구성요소 누락을 구분한 기록이 필요하다. 공급자별 후보와 한계는 [검증 조사](../05-research/verification-and-risk.md)를 따른다.
 
-현재 GitHub 처리기는 발견한 AWS 키·후보를 실행 주기 내 중복 제거한 뒤 `secret_validation_attempts`에 결과를 연결한다. AWS 어댑터는 발견된 **완전한** 장기 키 쌍 또는 세션 토큰을 포함한 임시 키로 STS `GetCallerIdentity`만 호출하도록 구현했다. `SECRET_AWS_VALIDATION_ENABLED`의 기본값은 `false`이며 이때 `UNCHECKED/DISABLED`를 기록한다. `Logssey/test-find-key` 합성 실험 저장소에서는 설정과 관계없이 STS 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`를 기록한다. 어댑터는 AWS 리소스 수집기나 권한·영향 분석기를 대신하지 않는다. 승인된 대상과 정책을 정하기 전에는 능동 검증 호출을 켜지 않는다.
+현재 GitHub 처리기와 값 읽기를 별도로 활성화한 정확한 AWS 본문 처리기는 발견한 AWS 키·후보를 실행 주기 내 중복 제거한 뒤 `secret_validation_attempts`에 결과를 연결한다. 본문 읽기 활성화와 능동 STS 검증 활성화는 서로 다른 설정이다. AWS 어댑터는 발견된 **완전한** 장기 키 쌍 또는 세션 토큰을 포함한 임시 키로 STS `GetCallerIdentity`만 호출하도록 구현했다. `SECRET_AWS_VALIDATION_ENABLED`의 기본값은 `false`이며 이때 `UNCHECKED/DISABLED`를 기록한다. `Logssey/test-find-key` 합성 실험 저장소에서는 설정과 관계없이 STS 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`를 기록한다. 어댑터는 AWS 리소스 수집기나 권한·영향 분석기를 대신하지 않는다. 승인된 대상과 정책을 정하기 전에는 능동 검증 호출을 켜지 않는다.
 
 ## 4. 검증 결과와 실패
 

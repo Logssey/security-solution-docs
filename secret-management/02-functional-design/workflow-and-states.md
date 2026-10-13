@@ -7,8 +7,8 @@
 | 단위 | 뜻 |
 |---|---|
 | Source / Connection | 수집 위치와 연결 범위. GitHub 저장소, Notion 페이지, 블록, AWS 리소스, K8s 네임스페이스 등 |
-| CredentialSet / key set | 함께 인증에 쓰이는 구성요소 묶음. AWS ID+Secret(+Session Token) 등. 원본 구성요소는 별도 취급 |
-| Occurrence | 키가 발견된 위치 한 건. 동일 키가 여러 곳에 있으면 여러 위치를 보존 |
+| CredentialSet / key set | 함께 인증에 쓰이는 구성요소 묶음. AWS ID+Secret(+Session Token) 등. `METADATA_ONLY`는 발급처 목록에서 존재만 확인한 별도 구성 상태이고 원본 비밀 값이 발견됐다는 뜻이 아님 |
+| Occurrence | 키가 발견된 위치 한 건 또는 발급처 목록의 메타데이터 관측 위치. 동일 키가 여러 곳에 있으면 여러 위치를 보존하고 목록 관측을 비정상 노출로 간주하지 않음 |
 | Finding | 유형, 위치, 엔진, 룰, 탐지 근거를 연결한 결과 |
 | ValidationAttempt | 특정 시각에 특정 검증기가 수행한 검사 결과 |
 | Assessment | 영향 범위와 심각도 판정, 근거 및 정책 버전 |
@@ -27,7 +27,7 @@
 | 축 | 값 | 의미 |
 |---|---|---|
 | 유효성 | VALID / INVALID / UNKNOWN / UNCHECKED | 유효 / 무효 확인 / 확인 불가 / 미검증 |
-| 심각도 | CRITICAL / HIGH / MEDIUM / LOW, 또는 미평가 | [심각도 정책](severity-policy.md)에 따른 조치 우선순위. 현재 DB는 미평가를 지원하지 않으므로 확장 필요 |
+| 심각도 | CRITICAL / HIGH / MEDIUM / LOW, 또는 미평가 | [심각도 정책](severity-policy.md)에 따른 조치 우선순위. Secret 목록은 현재 `UNASSESSED`를 반환하지만 평가 이력과 정책 실행은 후속 구현 |
 | 검토 | UNREVIEWED / REVIEWED | 담당자가 근거를 검토했는지. 기존 계약 승계 |
 | 조치 | OPEN / IN_PROGRESS / REVALIDATION_PENDING / RESOLVED | 신규 및 분석 / 조치 중 / 재검증 대기 / 해결 |
 | 예외 | RISK_ACCEPTED | 승인된 위험 수용. 네 막대와 배타적으로 집계하며 오탐, 대상 제외와 구별 |
@@ -48,6 +48,7 @@
 - 검증 불가: 사유 표시와 수동 검토. 비정상 노출 근거가 있으면 대응 건을 생성한다.
 - 유효한 비정상 노출: 대응 건을 생성하고 담당자를 지정한다.
 - 안전한 저장소의 정상 키 목록을 읽은 것만으로 사고를 생성하지 않는다.
+- AWS IAM 목록의 `METADATA_ONLY` 항목은 노출·유효성·권한을 확인한 결과가 아니므로 그 사실만으로 사고나 심각도를 만들지 않는다.
 - 기존 사고가 이후 무효로 바뀌어도 과거 악용, 잔여 노출까지 해결됐다고 가정하지 않는다. 종결 조건은 [대응 정책](response-policy.md)을 따른다.
 
 ## 4. 4단계 조치 현황
