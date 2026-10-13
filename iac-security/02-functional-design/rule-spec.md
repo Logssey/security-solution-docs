@@ -73,9 +73,10 @@
 |---|---|---|---|---|---|
 | `rule.sg_open_world` | Conftest (plan JSON) | 인그레스 `0.0.0.0/0`·`::/0`, 포트 무관 | 경고 | MEDIUM | 설계 |
 | `rule.iam_full_access` | Conftest (plan JSON) | `*FullAccess` 관리형 정책 연결, `Action: "*"` | 경고 | HIGH | 설계 |
-| `rule.kics` | KICS | KICS 결과를 그대로 가져옴. KICS 쿼리 ID는 `iac_findings.params`에 | KICS CRITICAL·HIGH → 경고, 나머지 → 정보 | KICS 값 그대로 (INFO → LOW) | 설계 |
+| `rule.kics` | KICS | KICS 결과를 그대로 가져옴. KICS 쿼리 ID는 `iac_findings.params`에 | KICS CRITICAL·HIGH → 경고, 나머지 → 정보 | KICS 값 그대로 (INFO → LOW) | 다음 단계 (FR-R1, ADR-09) |
 
-설정 오류만으로는 차단하지 않음. 차단은 ①에서 경로가 생길 때.
+- 설정 오류만으로는 차단하지 않음. 차단은 ①에서 경로가 생길 때.
+- MVP는 Conftest 보완 규칙 두 개(`rule.sg_open_world`, `rule.iam_full_access`)만 검사. KICS 연동과 설정 오류 목록 화면(FR-R1)은 다음 단계 (ADR-09, 10/13 결정)
 
 ## ① 경로 규칙
 
@@ -111,9 +112,10 @@
 - 규칙 변경은 PR로만, 변경 시 `version` 올림
 - 회귀 테스트: 위험 시나리오 S1~S6 탐지 + 실제 레포 오탐 0을 정책 PR마다 실행
 - 예외: `rule_id` + 대상 + 사유 + 승인자 + 만료일. 만료되면 다시 판정에 포함
-- 도구 버전 고정: Conftest는 10/8에 v0.56.0으로 검증함. 구축 때 최신 버전(10/12 기준 v0.71.1)으로 같은 테스트를 다시 돌리고 고정. KICS·Terraform도 같은 방식
+- 도구 버전 고정: Conftest는 10/8에 v0.56.0으로 검증함. 구축 때 최신 버전(10/12 기준 v0.71.1)으로 같은 테스트를 다시 돌리고 고정. KICS·Terraform도 같은 방식. Cartography는 10/13 재수집에 쓴 0.143.0으로 고정
 
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
+| 수정일 | 2026-10-13 |
