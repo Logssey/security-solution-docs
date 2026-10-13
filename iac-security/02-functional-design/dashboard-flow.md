@@ -23,10 +23,10 @@
 |---|---|---|---|
 | A 상단 상태줄 | 검사 주기 태그, 마지막 전체 점검 시각 | `GET /summary` | 지금 점검(`POST /jobs/{job}/trigger`), 규칙 보기(레포 `policy/` 링크, 변경은 PR로만) |
 | B 지표 4개 | 1등급까지 열린 경로, 실제 드리프트, State 속 실제 시크릿, ② 위반(main 기준). 지표 아래에 열린 발견 건의 심각도별 건수 | `GET /summary` | 누르면 해당 영역으로 이동 |
-| C 지금 열린 공격 경로 | 단계별 경로(진입 → 컴퓨트 → 자격 증명 → 권한 → 데이터), 끊을 지점, 끊긴 관계, 경로의 심각도 | `GET /paths?status=open`, `GET /paths/{id}` | 끊을 지점별 수정 방법 안내. 수정 PR 생성은 다음 단계(FR-D2) |
-| D ① PR 경로 미리보기 | 열린 PR의 판정(차단·경고·경로 −N), 가장 높은 심각도, 한 줄 사유 | `GET /prs?state=open` | 누르면 S-02 패널 |
+| C 지금 열린 공격 경로 | 단계별 경로(진입 → 컴퓨트 → 자격 증명 → 권한 → 데이터), 끊을 지점, 끊긴 관계, 경로의 심각도 | `GET /paths?status=OPEN`, `GET /paths/{pathId}` | 끊을 지점별 수정 방법 안내. 수정 PR 생성은 다음 단계(FR-D2) |
+| D ① PR 경로 미리보기 | 열린 PR의 판정(차단·경고·경로 −N), 가장 높은 심각도, 한 줄 사유 | `GET /prs?state=OPEN` | 누르면 S-02 패널 |
 | E ② plan 전 검사 | 관문 6개(0, 1, 2, 2b, 3, 4) 상태와 공급망 요약 | `GET /gates` | 없음 |
-| F ③ State·드리프트 | State 읽기 주체, 버킷 정책, 민감 후보 → 실제, 드리프트 목록(높음·중간·낮음, 무시 목록은 숨김) | `GET /state/summary`, `GET /drifts` | 드리프트 담당 지정(`PATCH /findings/{id}`) |
+| F ③ State·드리프트 | State 읽기 주체, 버킷 정책, 민감 후보 → 실제, 드리프트 목록(높음·중간·낮음, 무시 목록은 숨김) | `GET /state/summary`, `GET /drifts?status=OPEN` | 드리프트 담당 지정(`PATCH /findings/{id}`) |
 | G 할 수 있는 조치 | 조치, 끊는 것, 방법, 출처(①②③) | `GET /remediations/suggested` | 담당 지정, 명령 복사. 수정 PR은 다음 단계(FR-D2) |
 | H 검사 주기와 상태 | 작업별 주기, 입력, 마지막 실행, 상태(CloudTrail 포함) | `GET /jobs` | 없음 (주기는 gitops의 CronJob에서 변경) |
 
@@ -80,3 +80,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
+| 수정일 | 2026-10-13 |
