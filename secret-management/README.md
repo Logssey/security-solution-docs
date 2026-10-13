@@ -4,7 +4,9 @@
 
 ## 대시보드 문서와의 역할
 
-[대시보드 설계 문서](https://github.com/Logssey/dashboard-design-docs)는 공통 기술 스택, 세션 로그인, 레이아웃, API 공통 규약과 기존 샘플 구현을 관리한다. 이 문서 묶음은 Secret의 요구사항, 원문 처리, 상태, 상세 화면, 데이터와 API 계약을 관리한다. 기존 `credentials-draft.md`와 ADR-D009는 과거 검토 기록이며 Secret 상세 모델은 여기의 현재 기준을 따른다.
+[대시보드 설계 문서](https://github.com/Logssey/dashboard-design-docs)는 공통 기술 스택, 세션 로그인, 공통 레이아웃, 통합 현황과 API 공통 규약을 관리한다. 이 문서 묶음은 Secret의 요구사항, 수집·탐지·검증, 원문 처리, 상태, 상세 화면, 데이터와 API 계약을 관리한다. Secret 상세 설계를 대시보드 문서에 중복 정의하지 않는다.
+
+2026-10-13 문서 분리에서는 기존 Secret 설계와 일치하는 새 연동 정보만 반영했다. 단일 키 테이블 초안, 임의 위험 판정과 Notion Admin PAT Mock 상세는 정식 설계로 옮기지 않았다. 현재 `/credentials` 구현과 전환 계획은 [구현 연동 현황](04-integration/current-implementation-and-gaps.md)에 구분해 기록한다.
 
 현재 구현과 개발 목표는 [구현 차이](04-integration/current-implementation-and-gaps.md)에서 구분한다. 개발용 DB는 기존 ADR-D004를 유지하고 운영 저장 위치는 ADR-D005의 별도 미결정 사항이다. 단계별 제공 범위는 PRD에 기록하며 전체 필수 요구사항을 첫 MVP의 완료 주장으로 바꾸지 않는다.
 

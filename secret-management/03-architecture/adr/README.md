@@ -2,7 +2,7 @@
 
 개별 ADR은 하나의 설계 선택을 맥락, 결정, 근거, 대안, 결과 순서로 기록한다. 전체 구성과 처리 흐름은 [아키텍처 설계 문서](../README.md)에 둔다.
 
-공통 기술 스택, 세션 로그인과 로컬 개발 DB는 [대시보드 ADR](https://github.com/Logssey/dashboard-design-docs/blob/main/03-architecture/README.md)을 유지한다. 대시보드 ADR-D009의 원문 보관 초안은 이 묶음의 ADR-S005로 대체한다. ADR-D005의 운영 저장 위치는 여전히 별도 미결정 사항이다. 각 ADR의 PRD v0.4 표기는 결정 당시 근거이며 현재 PRD v0.5에는 같은 필수 요구사항과 단계별 개발 범위가 연결되어 있다.
+공통 기술 스택, 세션 로그인과 로컬 개발 DB는 [대시보드 ADR](https://github.com/Logssey/dashboard-design-docs/blob/main/03-architecture/README.md)을 유지한다. Secret 원문 정책은 이 묶음의 ADR-S005를 따른다. ADR-D005의 운영 저장 위치는 여전히 별도 미결정 사항이다. 각 ADR의 PRD v0.4 표기는 결정 당시 근거이며 현재 PRD v0.5에는 같은 필수 요구사항과 단계별 개발 범위가 연결되어 있다.
 
 ## 상태
 

@@ -1,97 +1,64 @@
 # 현재 구현과 Secret 기능 연동 차이
 
-확인일: 2026-10-12, 프론트 `3602e57`, 백엔드 `5d2d1b1`, 대시보드 설계 문서 개정 전 `3bac546`, Secret 문서 개정 전 `acb9b1d`의 정적 확인 기준. 네 레포를 원격 `main`과 대조했으며 기준 커밋 차이는 없었다. 아래 문서 정리로 코드가 변경된 것은 아니며 빌드, 앱 실행, 외부 연결과 Mock 시험은 검증하지 않았다.
+확인일: 2026-10-13. 정적 확인 기준은 프론트 `cafca5c`, 백엔드 공유 main `14b1812`, 대시보드 문서 분리 전 main `23b8e2d`다. 로컬 `feat/secret-scheduler`의 미커밋·미푸시 작업은 공유 코드와 구분한다. 이번 문서 분리에서 빌드, 서버 재시작, 외부 수집, 마이그레이션 적용과 DB 이전은 수행하지 않았다.
 
-## 1. 기준 저장소
+## 1. 문서와 구현의 경계
 
-프론트는 React, TypeScript, Vite, 백엔드는 Java 21, Spring Boot, DB는 PostgreSQL, Flyway를 사용한다. 별도 `dashboard-frontend`, `dashboard-backend`, `dashboard-design-docs`와 이 문서 레포가 같은 개발 작업 폴더에 연결된 상태에서 정적으로 확인했다. 각 레포는 독립 저장소이며 대시보드 코드를 이 문서 레포에 복사하지 않는다. 감시 대상 Re:Used의 거래 기능은 본 솔루션 기능과 구분한다.
+[대시보드 설계 문서](https://github.com/Logssey/dashboard-design-docs)는 공통 기술 스택, 로그인, 공통 화면, 통합 현황과 공통 API를 관리한다. Secret의 제품 요구사항, 수집·탐지·검증, 키 모델, 평가·대응, 상세 화면과 전용 API는 이 문서 묶음에서 관리한다. 이 문서는 현재 코드와 정식 설계 사이의 차이를 기록하며 PRD와 ADR을 대신하지 않는다.
 
-새 Secret 기능도 이 기술 기반을 따른다. [ADR-S001](../03-architecture/adr/ADR-S001.md)은 Gitleaks와 TruffleHog의 단독 또는 병행 운영을 비교 대상으로 두며, [ADR-S008](../03-architecture/adr/ADR-S008.md)은 Java API와 분리된 Java 워커를 실행 구조로 정한다. Python 서비스는 추가하지 않는다.
+대시보드 문서의 단일 키 테이블, 임의 등급 판정, Admin PAT Mock 상세는 정식 설계로 옮기지 않았다. 원문 처리·분리 모델·상태·집계처럼 이미 정의된 원칙은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [실행 정책](../03-architecture/security-and-runtime.md)을 참조한다.
 
-## 2. 확인된 구현과 추가 작업
+## 2. 현재 코드와 남은 연동
 
-| 영역 | 현재 코드에서 확인한 내용 | 요구사항 반영 시 필요한 변경 |
+| 영역 | 현재 코드에서 확인한 내용 | 정식 설계 연결에 필요한 작업 |
 |---|---|---|
-| 화면 라우트 | `/overview` 구현, `/secrets`는 ComingSoonPage | 시크릿 요약, 목록, 상세, 지정, 대응 흐름 구현 |
-| 상세 검토 | DetailDrawer의 검토 완료는 준비 중 알림 | 저장 API, 권한, 감사 이력, 실패 처리 |
-| 플랫폼 | 기존 Overview와 assets는 AWS, KUBERNETES, GITHUB | Secret 연결·발급자 타입에 NOTION 등 지원 유형 추가. 기존 assets에 가짜 Notion·PROD 자산을 만들지 않으며 타입 존재와 실제 수집기 구현을 구별 |
-| 수집, 검증 | 확인한 코드에 외부 수집, 유효성 워커 없음 | AWS, K8s, GitHub, Notion 승인 범위의 6시간 주기 재수집과 탐지, 발견한 자격 증명의 유형별 검증, 실행 관리 |
-| 담당자 | ownerTeam 문자열 | 개인 담당자 참조, 지정 가능 범위, 변경 이력 |
-| 상태 | 심각도 4개, 검토 2개, 조치 4개 | 유효성, 재검증 대기, 심각도 미평가, 예외 세부 정책 |
-| 환경 | ALL 조회 필터, 이벤트는 PROD/DEV 필수 | 환경 미확인 SaaS, 키의 표현. 임의 환경 지정 방지 |
-| 최신성 | collectedAt이 서버 기동 시 생성되는 표본 시각 | 실행별 수집, 검사, 성공, 실패, 다음 예정 시각 |
-| 점수 | `max(0, 100 - 4 × Critical - High)` | PRD 기준: 100점 표시를 Critical/High/Medium/Low 분포와 건수 중심으로 전환 |
-| 집계 | COUNTED_EVENTS가 TRUE로 조치 상태 전체 포함 | 탐지 이력, 현재 대응, 만료폐기 신규사고 제외, 예외의 모수 정의 |
-| 샘플 | local 프로파일의 LocalSampleDataLoader가 시작 시 assets와 detection_events를 전부 삭제 | Secret FK 연결 전 샘플 행만 교체하도록 변경. 샘플 표시와 실수집 연결을 분리하고 코드 존재로 운영 실데이터를 주장하지 않음 |
-| 인증 | HttpSession, 세션 쿠키, CSRF, DB 역할 ADMIN | 담당자, 예외 승인, 연결 관리의 서버 권한 정책 추가 설계 |
-| 오류 | 400·401·403·500 기본 JSON, 일부 404·405는 본문 없음 | 공통 code·message 형식 보완, Secret 409·429 등 추가. 선택 확장 필드는 하위 호환 유지 |
+| 화면 | `/overview`와 기본 `/secrets` 목록·수동 스캔 화면이 있다 | 정식 요약·대응 목록·상세·지정·체크리스트·실행 상태 조회 연결 |
+| 판정 표시 | 문서에서 발견한 키는 미평가, 환경 미확인은 UNKNOWN으로 표시한다. 발급처 목록에는 위험 등급을 부여하지 않는다 | 유형별 완전성·유효성·노출·영향 근거와 평가 이력 연결 |
+| 수집·탐지 | API가 Notion 페이지 읽기와 현재 Java 형식 탐지를 직접 수행한다 | Notion 페이지 읽기를 별도 워커 수집기로 정리하고 선정한 탐지 도구·정규화 파이프라인 연결 |
+| 시작 동작 | local 샘플 적재기는 설정이 있으면 Notion 스캔을 호출한다 | 외부 스캔 호출을 제거하고 작업 등록·워커 실행으로만 연결 |
+| 일반 이벤트 | 10/13 코드에서 Secret 자동 detection_events 생성과 등급 부여를 제거했다 | 정식 Secret 전용 기록과 새 통합 조회 연결 |
+| 저장 | 공유 V2의 단일 credentials가 있으며 같은 키 재발견 시 storage_location을 갱신한다 | 고유 키와 여러 발견 위치를 분리하고 검사·평가·대응 이력을 연결 |
+| 샘플 적재 | 전체 행 삭제 대신 조건부 정리 후 샘플을 재적재한다. 샘플 외에도 기존 credential_id 연결 이벤트를 삭제한다 | 이전할 기존 기록과 정리 조건을 대조하고 신규 FK·기록이 재적재로 손상되지 않는지 확인 |
+| 예약 | 로컬 Java 워커에는 DB 기반 작업 예약만 있다. 작업은 PENDING이고 수집 실행기는 없다 | 작업 선점·리스 복구·한도 내 재시도·수집 소비와 실행 이력 구현 |
+| 인증 | 기존 세션·CSRF와 ADMIN을 사용한다 | Secret 역할과 연결 범위 권한, 수행자·변경 감사 연결 |
+| 상태·담당자 | 기존 Overview의 ownerTeam과 상태 계약을 유지한다 | 정식 모델의 개인 담당자·변경 이력·재검증 대기·예외와 해결 근거 구현 |
+| 통합 현황 | 기존 100점 카드와 일반 탐지 조회가 남아 있다 | Secret 대응 건 합성 계약과 새 버전을 검증한 뒤 클라이언트 전환 |
 
-정적 확인 소스 위치: 프론트엔드 `src/App.tsx`, `src/api/types.ts`, `src/api/client.ts`, `src/components/DetailDrawer.tsx`; 백엔드 `OverviewService.java`, `OverviewQueryRepository.java`, `LocalSampleDataLoader.java`, `SecurityConfig.java`, `GlobalExceptionHandler.java`. 이후 코드가 변경되면 확인일과 기준 커밋, 구현·실행 검증 상태를 함께 갱신한다.
+소스 확인 위치: 프론트 `src/pages/SecretsPage.tsx`, `src/api/credentials.ts`, `src/api/types.ts`; 백엔드 `CredentialListController.java`, `CredentialListService.java`, `NotionLeakScanService.java`, `NotionPageReader.java`, `LeakCredentialRepository.java`, `LocalSampleDataLoader.java`, `V2__create_credentials.sql`. 코드 존재와 운영 지원·실제 연결 성공은 구분한다.
 
-### 문서 정합성 정리
+## 3. 전환 기간의 기존 API
 
-- 대시보드는 공통 구조와 기존 샘플 구현, Secret 문서는 상세 요구사항·상태·데이터·API를 관리한다.
-- `credentials-draft.md`는 대체된 과거 초안이며 ADR-D009는 Secret ADR-S005로 대체한다. UNKNOWN 환경을 PROD로 처리하거나 만료·폐기만으로 신규 사고를 만드는 과거 규칙은 사용하지 않는다.
-- ADR-D006의 네 상태와 ADR-D007의 준비 중 동작은 기존 샘플 계약이다. Secret 상세 상태·화면으로 확장하되 기존 API 필드 의미를 바꾸지 않는다.
-- API 공통 명세의 예전 필드 변환표를 제거하고 오류 기본 필드와 선택 확장 필드를 통일한다. 문서 수정은 코드 수정이나 실행 검증 완료를 뜻하지 않는다.
-- Notion Enterprise Admin API Mock은 후속 읽기 전용 목록 조회 검토이며 페이지·블록 수집 MVP와 구분한다. 목록 관리 안내를 Secret 등급이나 대응 건으로 변환하지 않는다.
-- 로컬 개발은 기존 ADR-D004를 유지한다. 운영 저장 위치 ADR-D005는 Proposed로 남기고 승인된 실데이터 연결 전에 확정한다.
+아래는 현재 사용처를 이전하기 위한 구현 기록이다. 정식 API와 모델은 [API 계약](../03-architecture/api-contract.md)에 정의하며 기존 필드를 목표 계약으로 복사하지 않는다.
 
-### 조치 상태 매핑
-
-| 기존 actionStatus | 새 화면 단계 | 필요한 처리 |
-|---|---|---|
-| OPEN | 신규 및 분석 | 신규와 분석을 하나의 단계로 표시 |
-| IN_PROGRESS | 조치 중 | 기존 상태 유지 |
-| 없음 | 재검증 대기 | 조치 이후 재검증 대기를 별도 상태로 추가 |
-| RESOLVED | 해결 | 해결 근거와 시각을 함께 저장 |
-| RISK_ACCEPTED | 예외 | 위험 수용에 한해 매핑하고 다른 예외와 구분 |
-
-## 3. 기존 API 계약
-
-현재 Overview는 다음 조회 API를 호출한다. 환경 필터는 ALL/PROD/DEV다.
-
-| Method | 경로 | 역할 |
-|---|---|---|
-| GET | `/api/v1/overview/summary` | 통합 요약 |
-| GET | `/api/v1/overview/risk-trend` | 추이 |
-| GET | `/api/v1/overview/assets` | 자산 요약 |
-| GET | `/api/v1/overview/priority-findings` | 우선 확인 결과 |
-
-세션 인증과 CSRF, camelCase, 대문자 enum, UTC 시각을 연동 기준으로 삼는다. 구체 계약은 별도 백엔드의 `OverviewController.java`, `SecurityConfig.java`와 프론트엔드의 `src/api/client.ts`에서 확인한다. 기존 API 설계 문서의 설명과 실제 타입이 다르면 계약 개정 시 함께 정합성을 맞춘다.
-
-아래는 **신규 기능 계약의 요약**이며 현재 코드에 존재하는 API가 아니다. 경로, 공통 필터, 권한, 오류와 동시 변경 조건은 [API 계약](../03-architecture/api-contract.md)에 정의한다.
-
-| 기능 | 요청, 응답에 필요한 정보 |
+| 현재 경로 | 현재 계약과 전환 시 주의사항 |
 |---|---|
-| 탐지 요약, 목록 | 필터, 집계 단위, 기준시점, 페이지 정보, 마스킹 결과, 수집 누락 |
-| key set 상세 | 유형, 발급자, 여러 발견 위치, 탐지 근거, 검증, 평가 이력 |
-| 검토, 담당자, 상태 변경 | 대상, 변경값, 수행자 권한, 사유, 시각, 동시 변경 조건 |
-| 조치 체크리스트 | 가이드 버전, 항목 완료 기록, 증거, 실제 외부 조치 시각 |
-| 재검증 요청 | 실행 ID, 대기/진행/결과, 중복 요청 제어. 키 원문은 브라우저에 반환하지 않음 |
-| 연결, 실행 상태 | 허용 범위, 마지막 성공, 최근 시도, 다음 예정, 실패, 지연 |
+| GET `/api/v1/credentials` | 필터는 issuer, status, foundOnly다. 요약은 totalCount, foundCount, candidateCount, inventoryCount이고 전체 기준이다. 응답에는 source, location, environment, componentState, severity, missingReason이 있다. source의 API/SCAN/MANUAL은 현재 구현 식별자이며 정식 수집 소스·발급자 구분으로 재해석하지 않는다 |
+| POST `/api/v1/credentials/scan` | 세션·CSRF를 확인하고 API 프로세스에서 직접 Notion 스캔을 실행한다. 응답은 COMPLETED/PARTIAL/NOT_CONFIGURED/FAILED와 scannedPages, unreadablePages, foundKeys, newKeys, message, scannedAt이다. 현재는 공급자 실패도 HTTP 200의 status로 전달한다 |
 
-## 4. 데이터 모델 차이
+현재 화면은 위 API를 사용한다. 예전 riskOnly, risks, atRiskCount, expiringSoonCount와 newEvents는 10/13 현재 계약에 없다. 형식 탐지의 CONFIRMED 표시는 현재 구성요소 판정이며 인증 성공이나 위험 등급을 뜻하지 않는다. 임시 AWS 키의 세션 토큰 등 유형별 필수 구성요소는 정식 계약에 맞춰 보완해야 한다.
 
-정적 확인 당시 백엔드의 `V1__create_tables.sql`은 dashboard_users, assets, detection_events 세 테이블을 정의했다. detection_events에는 선택적 asset 연결, 필수 environment, owner_team, severity, 검토, 조치 상태가 있다. 자격 증명 구성요소, 발견 위치, 검증 이력, 개인 담당자, 변경 이력은 없다.
+현재 foundKeys는 스캔 결과 목록 길이이며 여러 페이지의 같은 키를 고유 키 한 건으로 센다고 보장하지 않는다. 전체 키·발견 위치·Finding 집계는 정식 모델에서 각각 정의한다. 기존 API의 직접 실행·오류 전달 방식은 전환 대상이며 비동기 정식 API의 동작 기준이 아니다.
 
-| 논리 모델 | 목적 |
-|---|---|
-| Connection / ScanRun | 연결 대상, 권한 범위와 실행, 실패, 최신성 추적 |
-| CredentialSet / Occurrence | 같은 인증 수단과 여러 발견 위치를 연결, 발급자와 소스 분리 |
-| ValidationAttempt | 시점별 유효성, 사유, 방법, 관측 주체 기록 |
-| Assessment | 영향 근거, 심각도, 정책 버전 |
-| ResponseCase / AssignmentHistory | 검토, 조치, 담당자, 체크리스트, 예외 이력 |
+대시보드 공통 인증·Overview 계약은 [공통 API 명세](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)를 참조한다.
 
-논리 관계, 위치별 조치와 집계, 원문 영속 미보관은 [데이터 계약](../03-architecture/data-contract.md)에 정의한다. 기존 백엔드 V1과 대시보드 설계 문서를 확인한 확장 테이블, 제약, 인덱스와 마이그레이션 순서는 [데이터베이스 스키마](../03-architecture/database-schema.md)에 정의한다. 기존 V1은 수정하지 않는다. 이 문서 정리 작업에서는 DB 마이그레이션이나 대시보드 코드를 변경하지 않았다.
+## 4. Notion 수집기 재사용 범위
 
-## 5. 코드 연동 순서
+현재 페이지 읽기 코드에는 검색 목록의 커서 페이지네이션, Markdown 본문 읽기와 제한된 호출 한도 재시도 처리가 있다. 본문 읽기는 현재 단일 응답이며 블록·본문 전체의 페이지네이션이 구현됐다고 표시하지 않는다. 404로 읽지 못한 페이지는 unreadablePages와 PARTIAL로 구분한다. 이 기능은 재사용 가능하지만 아직 공통 연결의 승인 범위·객체 버전·실행 ID·분리 모델 저장에 연결되지 않았다.
 
-1. [데이터베이스 스키마](../03-architecture/database-schema.md)에 따라 기존 V1을 유지한 후속 마이그레이션을 추가하고 빈 DB와 기존 DB에 적용한다. Secret FK 연동 전 샘플 적재기 삭제 범위를 보완한다.
-2. 합성 표본으로 탐지·정규화·마스킹 결과와 최소 목록·상세 API를 연결하고 스프린트 1의 GitHub·AWS 수집·검증을 승인된 테스트 범위에서 시험한다. 실데이터 연결 전 ADR-D005의 저장 위치와 접근 권한을 확정한다.
-3. 스프린트 2에서 담당자·역할, 검토·체크리스트·외부 조치 기록·수동 재검증·해결 조건을 저장·감사와 연결한다. AI 가이드 보조 없이 기본 흐름이 동작해야 한다.
-4. 스프린트 3에서 Notion·K8s 수집과 지원 유형을 확대하고 6시간 반복 실행·재시도·중복 방지·실패 최신성을 검증한다.
-5. 스프린트 4에서 영향 근거와 기존 severity-v2 규칙, 매트릭스·통합 API를 연결한다. 새 통합 계약·기준시점·하위 호환을 정의하고 클라이언트 전환 후 100점 표시를 제거한다.
-6. 각 단계에서 실패·누락·원문 비노출을 확인하고 전체 출시 수용 기준은 모든 필수 기능과 운영 검증이 충족된 뒤 판단한다. 단계별 목표와 지원 범위는 [PRD](../01-requirements/PRD.md)의 제공 계획을 따른다.
+토큰이 접근할 수 있는 페이지 목록 전체를 승인 범위와 동일하게 취급하지 않는다. 명시적으로 승인한 페이지·지원 콘텐츠만 처리하도록 연결한다. 담당 기능과 공통 결과·테스트 경계는 [수집원 계약](../03-architecture/source-and-validator-contract.md)을 따른다. Admin PAT 목록은 이번 작업에서 제외한다.
 
-성공 기준은 API를 호출했다는 사실이 아니라 저장, 새로고침, 실패 복구 후에도 근거, 상태, 집계가 일치하는 것이다.
+## 5. 로컬 스케줄러와 DB 전환 상태
+
+로컬 스케줄러는 Java 21 별도 모듈에 연결, 승인 범위, 작업, 검사 실행, 실행 범위 테이블 5개와 예약 로직을 구현했다. 6시간 기본 일정, 도래 작업 예약과 중복 방지까지 있으며 작업 소비·파일 읽기·탐지는 없다. 공유 main에 반영된 것으로 표시하지 않는다.
+
+공유 V2와 미공유 스케줄러 V2가 같은 번호를 사용한다. 스케줄러를 V3로 옮기고 별도 개발 DB에서 전체 적용·필요 데이터 이전을 검증하는 절차는 [DB 스키마의 마이그레이션 절](../03-architecture/database-schema.md#6-보안-보존과-마이그레이션)에 둔다. 원래 개발 DB와 적용 이력은 보존한다. 현재 코드·DB 전환은 미완료이며 이번 문서 정리에서 번호나 데이터를 바꾸지 않았다.
+
+## 6. 다음 구현과 협업 검토
+
+1. 공통 DB 담당자가 마이그레이션 번호, 승인 범위 표현, 실행 결과와 데이터 이전 계약을 조율한다. 구체적인 담당자 이름은 아직 지정되지 않았다.
+2. 워커 실행기는 도래 작업을 선점하고 공통 수집기를 호출한다. Notion 담당자는 페이지 수집기와 관련 테스트를 공통 계약에 맞춰 정리한다.
+3. 정식 `/api/v1/secrets`의 수동 등록·실행 조회 세부 계약을 함께 검토하고 기존 화면 사용처를 전환한다.
+4. [PRD](../01-requirements/PRD.md)의 단계별 GitHub·AWS·Notion·K8s 지원, 대응 기능과 영향 평가를 구현하고 각 단계의 실패·누락·원문 비노출을 확인한다. 이번 Notion 수집기 정리가 전체 지원 완료나 스프린트 일정 변경을 뜻하지 않는다.
+5. 공통 DB·API·ADR 변경은 구현 전에 합의하고 공동 저장소 변경은 PR로 검토한다.
+
+저장·새로고침·실패 복구 후에도 근거·상태·집계가 일치하는지 검증하며 제품 수용 기준은 코드가 존재한다는 사실만으로 충족되지 않는다.
