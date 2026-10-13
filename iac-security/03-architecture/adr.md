@@ -15,12 +15,14 @@
 | [ADR-09](#adr-09) | 규칙 도구 선택 | KICS 주력 + Conftest 보완 규칙. Checkov·Trivy는 선택. MVP는 Conftest만, KICS 연동은 다음 단계 | 결정 |
 | [ADR-10](#adr-10) | 그래프·결과 저장소 | 그래프는 전용 Neo4j, 결과는 대시보드 PostgreSQL의 `iac_` 테이블 | 결정 |
 | [ADR-11](#adr-11) | 어디에, 무슨 언어로 구현하나 | dashboard-backend(Spring Boot)에 `iac` 모듈로 통합, 분석은 별도 Java 워커 | 결정 |
+| [ADR-12](#adr-12) | 사람의 AWS·State 권한 | 사람은 읽기 전용(plan-ro와 같은 정책), 로컬 plan은 래퍼로 허용, apply는 CI apply 역할만, 비상시 break-glass | 결정 (적용은 팀 일정) |
 
 **상태 값**
 
 - 결정: 확정, 그대로 구축
 - 결정 (구축 초반 검증·시범 적용): 방향은 확정, 구축 초반에 실제로 확인한 뒤 확정하거나 대안으로 전환
 - 결정 대기: 확정 필요
+- 결정 (적용은 팀 일정): 방향은 확정, 팀 전체 작업 방식이 바뀌어 구축 스프린트와 별도 일정으로 적용
 
 새 결정은 표에 한 줄, 아래에 같은 형식의 섹션 하나를 추가. 한 건이 길어지면 `adr/ADR-NN.md`로 분리하고 이 문서에는 표 한 줄과 링크만 남김.
 
@@ -144,6 +146,30 @@
 - **영향**
     - CI 요청이 dashboard-backend로 들어옴. CI 경로만 CloudFront → 공개 NLB로 열고, OIDC 토큰 검증과 요청 크기·횟수 제한을 둠 (SR-9)
     - API와 워커는 DB 계정과 권한을 나눔 (ERD의 DB 계정 표)
+
+### ADR-12
+
+**사람의 AWS·State 권한** · 상태: 결정 (적용은 팀 일정)
+
+- **결정**
+    - 사람은 IAM Identity Center 읽기 전용 권한만 가짐(plan-ro와 같은 정책)
+    - 로컬 plan은 래퍼(`make plan`)로 허용: ② 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`, backend 설정은 래퍼가 넘김
+    - 남의 PR은 로컬에서 plan하지 않고 CI plan 결과로 리뷰
+    - apply는 CI apply 역할만(GitHub OIDC, main + environment `prod`)
+    - 비상시 break-glass 역할(MFA, 사용 즉시 알림)
+    - IAM 사용자 장기 키 폐기, CloudTrail 켬
+- **근거**
+    - 10/9·10/13 점검: tfstate 읽기 주체가 IAM 사용자 5명(팀원 전원, 장기 키), CloudTrail 꺼짐
+    - 사람에게 쓰기 권한이 있으면 로컬 apply로 ②①③을 건너뛸 수 있어, apply 경로가 CI 하나여야 검사가 의미가 있음
+    - 로컬 plan을 막으면 확인할 때마다 CI를 거쳐야 해서 느림
+    - State 속 실제 시크릿은 0건(10/9)이고 `state.secret_added`로 유지하므로 사람의 State 읽기는 허용
+    - 읽기 전용 역할은 S3 `use_lockfile` 잠금을 못 쓰므로 로컬 plan은 `-lock=false`
+- **버린 대안**
+    - 로컬 plan도 금지하고 PR에서만 plan (Atlantis 방식. 피드백이 느리고 팀 규모에 과함)
+    - 원격 실행 서비스 (HCP Terraform 등. 새 서비스 도입)
+    - 현재처럼 합의만 (기술적으로 우회 가능)
+- **한계**: 조직 오너·AWS 관리자는 보호 설정을 바꿀 수 있어 막지 못함. 인원 최소화·MFA·감사 로그로 줄이고, 이 솔루션은 드리프트·State 읽기 주체 증가로 탐지만 함
+- **적용 순서와 체크리스트**: [위협 모델·범위](../01-requirements/threat-model.md)의 범위 밖 전제 조건 (apply CI 전환 → 사람 권한 전환 → tfstate 버킷 정책)
 
 | 항목 | 내용 |
 |---|---|
