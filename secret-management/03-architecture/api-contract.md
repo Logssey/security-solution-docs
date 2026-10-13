@@ -1,14 +1,14 @@
-# 대시보드 API 계약
+# Secret API 계약
 
 기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
 
-이 문서는 새 Secret 기능의 구현 계약이다. 아래 경로는 현재 코드에 존재한다고 주장하지 않는다. 기존 `/api/v1/overview`의 실제 응답과 호환성은 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따라 점검한다.
+이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·조회는 구현됐고 요약·대응·스냅샷 경로는 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
 
 ## 1. 공통 계약
 
 모든 조회와 변경은 기존 세션 인증 경계를 통과한다. 변경 요청은 POST·PATCH·PUT·DELETE 모두 CSRF 검증과 서버 권한 검사를 적용한다. 공급자 연결 자격 증명과 발견된 키 원문은 요청, 응답, 오류, 로그에 넣지 않는다. 응답 필드는 camelCase, 상태·분류 enum은 대문자, 시각은 UTC ISO 8601 형식을 사용한다. `scope`의 `currentCases`·`inventory`·`history`, `unit`의 `ResponseCase`·`CredentialSet`은 계약 식별 문자열이며 아래 표기를 유지한다. 공통 기준은 [대시보드 API 명세](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)를 따른다.
 
-조회는 `source`, `provider`, `environment`, `credentialType`, `validity`, `severity`, `actionStatus`, `exception`, `assignee`, 기간 필터 중 해당 경로에 맞는 값을 받는다. 응답은 적용된 `filters`, `scope`, `unit`, `asOf`, `snapshotId`, `total`, `partialCoverage`를 반환한다. 요약, 매트릭스와 기본 대응 목록은 `scope=currentCases`, `unit=ResponseCase`이고 각 키의 최신 건만 센다. 인벤토리는 `scope=inventory`, `unit=CredentialSet`이다. 이력 목록은 `scope=history`, `unit=ResponseCase`로 과거 건을 각각 센다. 화면은 첫 조회의 `snapshotId`를 매트릭스와 목록에 전달한다. 같은 스냅샷과 필터의 카드, 매트릭스, 목록 건수는 일치해야 한다. 만료된 스냅샷은 409와 새 조회 안내를 반환한다. 페이지네이션은 안정된 정렬 키와 다음 커서를 사용한다.
+후속 집계 API는 `source`, `provider`, `environment`, `credentialType`, `validity`, `severity`, `actionStatus`, `exception`, `assignee`, 기간 필터 중 해당 경로에 맞는 값을 받는다. 응답은 적용된 `filters`, `scope`, `unit`, `asOf`, `snapshotId`, `total`, `partialCoverage`를 반환한다. 요약, 매트릭스와 기본 대응 목록은 `scope=currentCases`, `unit=ResponseCase`이고 각 키의 최신 건만 센다. 인벤토리는 `scope=inventory`, `unit=CredentialSet`이다. 이력 목록은 `scope=history`, `unit=ResponseCase`로 과거 건을 각각 센다. 화면은 첫 조회의 `snapshotId`를 매트릭스와 목록에 전달한다. 같은 스냅샷과 필터의 카드, 매트릭스, 목록 건수는 일치해야 한다. 만료된 스냅샷은 409와 새 조회 안내를 반환한다. 현재 MVP 실행 조회는 이 스냅샷·필터 계약을 제공하지 않는다.
 
 오류의 필수 필드는 공통 규약과 같은 `code`, `message`다. `requestId`, `retryable`, `details`는 선택 확장 필드이며 기존 클라이언트는 없어도 처리한다. `requestId`는 원문을 포함하지 않는 추적값, `retryable`은 재시도 가능 여부이며 `details`에는 키 원문, 원천 콘텐츠나 임의 내부 식별자를 넣지 않는다. 입력 오류는 400 `INVALID_INPUT`, 세션 없음은 401 `UNAUTHENTICATED`, 권한 없음은 403 `FORBIDDEN`, 대상 없음은 404 `NOT_FOUND`, 메서드 오류는 405 `METHOD_NOT_ALLOWED`, 버전 충돌과 스냅샷 만료는 409 `CONFLICT`, 대시보드 요청 제한은 429 `RATE_LIMITED`, 서버 장애는 5xx로 구분한다. 409의 상세 사유는 안전한 확장 정보로 구분한다. 공급자 검사 결과의 401, 403, 404 등은 대시보드 HTTP 오류와 별도로 ValidationAttempt의 사유로 기록한다.
 
@@ -16,17 +16,20 @@
 
 ## 2. 조회
 
-| Method | 경로 | 응답의 핵심 정보 |
-|---|---|---|
-| GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
-| GET | `/api/v1/secrets/cases` | 기본 현재 대응 건 목록. `scope=history`이면 과거 대응 건 목록. 마스킹한 식별자, 발견 소스와 발급자, 심각도, 유효성, 담당자, 단계, 예외, 시각, 커서 |
-| GET | `/api/v1/secrets/cases/{caseId}` | 대응 건, 위치별 근거와 상태, 검사 및 평가 이력, 담당자, 체크리스트, 조치 및 감사 이력 |
-| GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
-| GET | `/api/v1/secrets/inventory` | 전체 고유 키 목록에서 정상 보관, 미검증, 대응 중, 만료 및 폐기 기록을 구분 |
-| GET | `/api/v1/secrets/connections` | 승인 범위, 지원 및 미지원 콘텐츠, 최근 수집 결과, 누락과 지연. 연결 비밀은 제외 |
-| GET | `/api/v1/secrets/runs/{runId}` | 수집 또는 검증 실행의 범위, 시각, 결과, 부분 실패와 재시도 정보 |
+| 단계 | Method | 경로 | 응답의 핵심 정보 |
+|---|---|---|---|
+| MVP | GET | `/api/v1/secrets` | 고유 키 목록. `page`, `size`, `issuer`, `componentState` 필터와 `items`, `total`, `page`, `size` 응답. 마스킹 식별자, 미평가 심각도, 최신 검증 결과·사유, 위치 수 |
+| MVP | GET | `/api/v1/secrets/{id}` | 키의 마스킹 식별자, 유형·완전성, 최신 검증 결과, 위치별 원천·환경·존재 상태, 최초·최근 발견 시각 |
+| MVP | GET | `/api/v1/secrets/connections` | 수동 스캔용 활성 GitHub 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외 |
+| MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드 |
+| 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
+| 후속 | GET | `/api/v1/secrets/cases` | 기본 현재 대응 건 목록. `scope=history`이면 과거 대응 건 목록. 마스킹한 식별자, 발견 소스와 발급자, 심각도, 유효성, 담당자, 단계, 예외, 시각, 커서 |
+| 후속 | GET | `/api/v1/secrets/cases/{caseId}` | 대응 건, 위치별 근거와 상태, 검사 및 평가 이력, 담당자, 체크리스트, 조치 및 감사 이력 |
+| 후속 | GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
 
-상세의 발견 위치 링크는 허용된 경로만 생성하고 대상 사용자의 원천 접근 권한을 다시 확인한다. 임의 원천 URL을 그대로 리다이렉트하지 않는다. 마스킹된 문맥도 비신뢰 텍스트로 렌더링한다.
+MVP 목록은 고유 키 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. 아직 대응 건이나 집계 스냅샷을 제공하지 않으므로 아래의 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
+
+향후 상세의 발견 위치 링크를 만들 때에는 허용된 경로만 생성하고 대상 사용자의 원천 접근 권한을 다시 확인한다. 현재 MVP는 위치 메타데이터를 반환하며 원천으로 자동 리다이렉트하지 않는다. 마스킹된 문맥도 비신뢰 텍스트로 렌더링한다.
 
 요약 응답의 핵심 형태는 다음과 같다. 수치는 계약 예시이며 실제 운영 결과가 아니다.
 
@@ -51,9 +54,11 @@
 
 ### 수동 전체 스캔
 
-정식 수동 전체 스캔은 `/api/v1/secrets` 아래에서 비동기 작업으로 등록하고 ScanRun의 실행 ID를 반환한다. 화면은 `GET /api/v1/secrets/runs/{runId}`로 상태를 조회한다. API 요청에서 원천 콘텐츠를 읽거나 탐지 도구를 실행하지 않는다. 등록 엔드포인트의 세부 경로, 요청·응답 필드와 HTTP 상태는 공통 검토 후 구현하며 이 문서가 구현 완료를 뜻하지 않는다.
+정식 수동 전체 스캔은 `POST /api/v1/secrets/runs`로 비동기 등록한다. 요청 본문은 `connectionId`와 선택적 `idempotencyKey`다. 세션·CSRF와 현재 `ADMIN` 권한 검사를 거쳐 승인 범위가 있는 **활성 GitHub 연결**을 작업으로 예약한다. 다른 원천 연결은 실행 처리기가 없어 409로 거부한다. 응답은 `202 Accepted`, `Location: /api/v1/secrets/runs/{runId}`, `{ "runId": 123, "status": "PENDING" }` 형태다. 같은 사용자와 멱등 키의 재요청은 기존 실행 ID를 반환한다. 화면은 `GET /api/v1/secrets/runs/{runId}`로 상태와 단계별 결과, 범위·객체 수, 재시도 시각, 안전한 실패 코드를 조회한다. API는 원천 콘텐츠를 읽거나 탐지 도구를 실행하지 않는다. 현재 권한 검사는 임시 `ADMIN` 경계이며 역할·연결 범위 권한은 후속이다.
 
-현재 `/api/v1/credentials`와 `/api/v1/credentials/scan`은 기존 화면 전환 기간에만 유지한다. 화면과 다른 호출자를 정식 API로 전환하고 사용처가 없음을 확인한 뒤 제거한다. 전환 기간의 필드와 현재 구현의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록하며 정식 모델이나 실행 경계로 채택하지 않는다.
+현재 AWS 검증이 비활성이거나 합성 실험 저장소에서 차단된 경우에는 개별 키에 `UNCHECKED` 시도와 사유가 남더라도 실행의 검증 단계는 `SKIPPED`일 수 있다. 화면은 `SKIPPED`를 `VALID`나 검사 성공으로 바꾸지 않는다. 공급자 응답이 불확실하거나 기록에 실패한 경우는 `PARTIAL`로 구분한다.
+
+현재 `/api/v1/credentials`와 `/api/v1/credentials/scan`은 기존 호출자의 전환 기간에만 유지한다. 새 Secret 화면은 정식 API를 사용한다. 다른 사용처가 없음을 확인한 뒤 기존 경로를 제거한다. 전환 기간의 필드와 현재 구현의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록하며 정식 모델이나 실행 경계로 채택하지 않는다.
 
 ### 대응 건 변경과 재검증
 
