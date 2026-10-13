@@ -2,13 +2,14 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `1a67be3`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개를 추가했다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
+이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `200a675`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개, V6은 AWS IAM 접근키 메타데이터 관측 테이블 1개와 고유 인덱스를 추가했다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
 
 | 마이그레이션 | 현재 구현된 테이블 | 아직 포함하지 않는 범위 |
 |---|---|---|
 | V3 | `secret_connections`, `secret_connection_scopes`, `secret_jobs`, `secret_scan_runs`, `secret_run_scopes` | `REVALIDATE` 작업, 역할·담당자 |
 | V4 | `secret_credential_sets`, `secret_occurrences`, `secret_tool_runs`, `secret_findings` | 평가·대응·사용 근거 |
 | V5 | `secret_validation_attempts` | 공급자별 영향 평가와 수동 재검증 API |
+| V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | 키 원문, 유효성·노출·권한·심각도 평가, 다른 AWS 서비스 수집 |
 
 로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
@@ -39,7 +40,7 @@ Secret 전용 테이블 이름은 `secret_` 접두사를 쓴다. 기본 키는 �
 
 ## 3. 테이블 명세
 
-V3–V5에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이블은 후속 목표를 적는다. `NOT NULL`을 적지 않은 현재 컬럼은 NULL을 허용한다. 목표 표에서 연속으로 적은 시각 컬럼은 각각 `TIMESTAMPTZ`이며, 연속으로 적은 사용자 ID는 각각 `BIGINT FK`다. 코드형 값은 `VARCHAR`와 `CHECK`를 쓰되 공급자별 키 유형과 룰 ID는 버전 관리하는 애플리케이션 등록부에서 검증한다.
+V3–V6에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이블은 후속 목표를 적는다. `NOT NULL`을 적지 않은 현재 컬럼은 NULL을 허용한다. 목표 표에서 연속으로 적은 시각 컬럼은 각각 `TIMESTAMPTZ`이며, 연속으로 적은 사용자 ID는 각각 `BIGINT FK`다. 코드형 값은 `VARCHAR`와 `CHECK`를 쓰되 공급자별 키 유형과 룰 ID는 버전 관리하는 애플리케이션 등록부에서 검증한다.
 
 ### 3.1. 연결, 범위, 실행
 
@@ -59,15 +60,16 @@ V3–V5에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이�
 
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
-| `secret_credential_sets` | `credential_set_id BIGINT PK`, `issuer VARCHAR(40) NOT NULL`, `credential_type VARCHAR(80) NOT NULL`, `component_state VARCHAR(20) NOT NULL`, `issuer_connection_id BIGINT FK`, `fingerprint BYTEA`, `candidate_locator BYTEA`, `fingerprint_key_version VARCHAR(40)`, `masked_label VARCHAR(120)`, `external_key_ref VARCHAR(300)`, `owner_ref VARCHAR(200)`, `purpose_label VARCHAR(200)`, `issued_at TIMESTAMPTZ`, `expiry_policy VARCHAR(10) NOT NULL`, `expires_at TIMESTAMPTZ`, `lifecycle_status VARCHAR(20) NOT NULL`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL`, `created_at TIMESTAMPTZ NOT NULL` | V4는 완전한 `CONFIRMED`에 보호키 HMAC `fingerprint`, 불완전한 `CANDIDATE`에 원천 위치를 포함한 보호키 HMAC `candidate_locator`를 둔다. 마스킹 문자열이나 접두사만으로 후보를 병합하지 않는다. `METADATA_ONLY`는 스키마에서 허용하지만 발급처 목록 수집은 아직 없다. `expiry_policy`는 `FIXED`, `NEVER`, `UNKNOWN`; `lifecycle_status`는 `ACTIVE`, `EXPIRED`, `REVOKED`, `UNKNOWN`이다. `lifecycle_evidence_id`는 후속 근거 테이블과 함께 추가한다. |
+| `secret_credential_sets` | `credential_set_id BIGINT PK`, `issuer VARCHAR(40) NOT NULL`, `credential_type VARCHAR(80) NOT NULL`, `component_state VARCHAR(20) NOT NULL`, `issuer_connection_id BIGINT FK`, `fingerprint BYTEA`, `candidate_locator BYTEA`, `fingerprint_key_version VARCHAR(40)`, `masked_label VARCHAR(120)`, `external_key_ref VARCHAR(300)`, `owner_ref VARCHAR(200)`, `purpose_label VARCHAR(200)`, `issued_at TIMESTAMPTZ`, `expiry_policy VARCHAR(10) NOT NULL`, `expires_at TIMESTAMPTZ`, `lifecycle_status VARCHAR(20) NOT NULL`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL`, `created_at TIMESTAMPTZ NOT NULL` | V4는 완전한 `CONFIRMED`에 보호키 HMAC `fingerprint`, 불완전한 `CANDIDATE`에 원천 위치를 포함한 보호키 HMAC `candidate_locator`를 둔다. 마스킹 문자열이나 접두사만으로 후보를 병합하지 않는다. V6의 IAM 접근키 목록은 `METADATA_ONLY`와 `AWS_IAM_ACCESS_KEY`로 기록하고 원문 키 ID 대신 보호키 HMAC `external_key_ref`, 끝 4자리만 남긴 `masked_label`을 사용한다. `expiry_policy`는 `FIXED`, `NEVER`, `UNKNOWN`; `lifecycle_status`는 `ACTIVE`, `EXPIRED`, `REVOKED`, `UNKNOWN`이다. `lifecycle_evidence_id`는 후속 근거 테이블과 함께 추가한다. |
 | `secret_occurrences` | `occurrence_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `connection_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `asset_id BIGINT FK`, `source_object_ref VARCHAR(500) NOT NULL`, `location_key VARCHAR(500) NOT NULL`, `latest_object_version VARCHAR(200)`, `environment VARCHAR(10) NOT NULL`, `exposure_status VARCHAR(10) NOT NULL`, `exposure_range VARCHAR(10) NOT NULL`, `presence_status VARCHAR(10) NOT NULL`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL`, `last_seen_run_id BIGINT FK`, `last_complete_coverage_at TIMESTAMPTZ` | `UQ(credential_set_id, connection_id, source_object_ref, location_key)`. 환경은 `PROD`, `DEV`, `UNKNOWN`; 노출은 `ABNORMAL`, `NORMAL`, `UNKNOWN`; 범위는 `BROAD`, `BOUNDED`, `UNKNOWN`; 존재는 `PRESENT`, `MISSING`, `UNKNOWN`. `scope_id`는 같은 연결에 속해야 한다. 자산 연결은 선택이다. |
 | `secret_findings` | `finding_id BIGINT PK`, `occurrence_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `tool_run_id BIGINT NOT NULL FK`, `finding_key VARCHAR(100) NOT NULL`, `rule_id VARCHAR(120) NOT NULL`, `rule_version VARCHAR(100) NOT NULL`, `masked_context TEXT`, `detected_at TIMESTAMPTZ NOT NULL` | `UQ(tool_run_id, finding_key)`. 마스킹된 문맥만 저장한다. 동일 위치의 두 엔진 결과를 둘 다 남기되 위치를 두 번 만들지 않는다. `tool_run_id`와 `run_id`의 관계를 적재 트랜잭션에서 검증한다. |
 | `secret_evidence` | `evidence_id BIGINT PK`, `credential_set_id BIGINT FK`, `occurrence_id BIGINT FK`, `run_id BIGINT FK`, `kind VARCHAR(40) NOT NULL`, `observation_status VARCHAR(20) NOT NULL`, `source VARCHAR(80) NOT NULL`, `source_ref VARCHAR(500)`, `observed_at TIMESTAMPTZ`, `collected_at TIMESTAMPTZ NOT NULL`, `mapping_version VARCHAR(80)`, `classification_id BIGINT FK`, `safe_facts JSONB NOT NULL` | `CHECK(credential_set_id IS NOT NULL OR occurrence_id IS NOT NULL)`. 근거 종류는 `EXPOSURE`, `IDENTITY`, `PERMISSION`, `RESOURCE`, `USAGE`, `ABUSE`, `LIFECYCLE`, `REVALIDATION` 등이다. 상태는 `CONFIRMED`, `NO_RECORD`, `UNSUPPORTED`, `UNAVAILABLE`, `CONFLICT`. `NO_RECORD`는 미사용 또는 악용 없음의 확정이 아니다. `safe_facts`는 허용 필드만 서버가 생성한다. |
 | `secret_validation_attempts` | `attempt_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `job_id BIGINT NOT NULL FK`, `validator_id VARCHAR(120) NOT NULL`, `validator_version VARCHAR(80) NOT NULL`, `endpoint_class VARCHAR(80) NOT NULL`, `requested_at`, `completed_at TIMESTAMPTZ NOT NULL`, `provider_checked_at TIMESTAMPTZ`, `result VARCHAR(10) NOT NULL`, `reason_code VARCHAR(80) NOT NULL`, `next_due_at TIMESTAMPTZ` | V5는 `(run_id, job_id)` 복합 FK로 실제 실행과 연결한다. 결과는 `VALID`, `INVALID`, `UNKNOWN`, `UNCHECKED`이고 안전한 사유 코드만 저장한다. 실제 공급자 확인이 없는 `UNCHECKED`의 `provider_checked_at`은 NULL이다. 근거 테이블과 `evidence_id`는 후속이다. |
+| `secret_aws_access_key_observations` | `credential_set_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `key_status VARCHAR(10) NOT NULL`, `issued_at`, `last_used_at TIMESTAMPTZ`, `last_used_service VARCHAR(120)`, `last_used_region VARCHAR(80)`, `observed_at TIMESTAMPTZ NOT NULL` | V6의 기본 키는 `(credential_set_id, run_id)`이며 같은 키의 실행별 관측을 보존한다. `key_status`는 `ACTIVE`, `INACTIVE`, `EXPIRED`, `UNKNOWN`만 허용한다. 최근 사용 기록이 없거나 조회 실패한 경우를 미사용으로 단정하지 않는다. 키 ID 원문·사용자명·Secret 값은 저장하지 않는다. |
 | `secret_assessments` | `assessment_id BIGINT PK`, `occurrence_id BIGINT NOT NULL FK`, `run_id BIGINT FK`, `policy_version VARCHAR(80) NOT NULL`, `rule_id VARCHAR(20) NOT NULL`, `assessment_kind VARCHAR(10) NOT NULL`, `exposure_status VARCHAR(10) NOT NULL`, `exposure_range VARCHAR(10) NOT NULL`, `credential_state VARCHAR(20) NOT NULL`, `impact VARCHAR(10) NOT NULL`, `abuse VARCHAR(20) NOT NULL`, `validity VARCHAR(10) NOT NULL`, `severity VARCHAR(10)`, `missing_reason VARCHAR(120)`, `mapping_version VARCHAR(80)`, `assessed_at TIMESTAMPTZ NOT NULL`, `approved_by_user_id BIGINT FK`, `supersedes_assessment_id BIGINT FK` | `assessment_kind`는 `AUTO`, `MANUAL`; 등급은 `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `UNASSESSED` 또는 정상 보관의 NULL. `impact`는 `ADMIN`, `IMPORTANT`, `LIMITED`, `MINIMAL`, `UNKNOWN`. 수동 하향에는 승인자와 반증 근거가 필요하다. 과거 평가를 UPDATE하지 않는다. |
 | `secret_assessment_evidence` | `assessment_id BIGINT NOT NULL FK`, `evidence_id BIGINT NOT NULL FK`, `input_name VARCHAR(40) NOT NULL`, 복합 PK | 평가 입력마다 증거와 관측 시각을 `secret_evidence`에 연결한다. 없는 근거는 `missing_reason`으로 남긴다. |
 
-`secret_credential_sets.lifecycle_evidence_id`는 `secret_evidence`를 구현할 때 FK로 추가한다. 발급자와 유형은 수집 플랫폼과 독립적이다. 예를 들어 Notion 문서에 있는 AWS 키는 `secret_connections.provider=NOTION`, `secret_credential_sets.issuer=AWS`다. AWS Access Key ID처럼 공개 식별자가 있어도 비밀 구성요소가 부족하면 `CANDIDATE`로 남긴다. 발급처가 목록으로 존재를 확인했지만 값을 반환하지 않으면 `METADATA_ONLY`이며 이는 유효성 `VALID`의 증거가 아니다. 원문 없이 확인된 플랫폼 목록과 발견 값을 동일한 키로 자동 병합하지 않는다. 마지막 사용 시각, 확인 권한과 자원의 `secret_evidence` 기록은 후속 목표다.
+`secret_credential_sets.lifecycle_evidence_id`는 `secret_evidence`를 구현할 때 FK로 추가한다. 발급자와 유형은 수집 플랫폼과 독립적이다. 예를 들어 Notion 문서에 있는 AWS 키는 `secret_connections.provider=NOTION`, `secret_credential_sets.issuer=AWS`다. AWS Access Key ID처럼 공개 식별자가 코드에서 단독으로 발견되면 비밀 구성요소가 부족하므로 `CANDIDATE`로 남긴다. 발급처 목록에서 존재를 확인했지만 값을 반환하지 않으면 `METADATA_ONLY`이며 이는 유효성 `VALID`나 비정상 노출의 증거가 아니다. 원문 없이 확인된 플랫폼 목록과 발견 값을 동일한 키로 자동 병합하지 않는다. 최근 사용 메타데이터는 V6 관측 이력에 저장하며 확인 권한과 자원의 일반 `secret_evidence` 기록은 후속 목표다.
 
 ### 3.3. 대응과 변경 이력
 
@@ -103,7 +105,7 @@ V3–V5에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이�
 
 ## 4. 인덱스와 제약 구현
 
-다음은 V3–V5에 적용된 대표 인덱스다. 아래에 없는 평가·대응·스냅샷 인덱스와 CHECK는 해당 기능의 후속 마이그레이션에서 적용한다. 현재 FK에는 별도 삭제 연쇄 정책을 두지 않는다.
+다음은 V3–V6에 적용된 대표 인덱스다. 아래에 없는 평가·대응·스냅샷 인덱스와 CHECK는 해당 기능의 후속 마이그레이션에서 적용한다. 현재 FK에는 별도 삭제 연쇄 정책을 두지 않는다.
 
 ```sql
 CREATE UNIQUE INDEX uq_secret_fingerprint
@@ -112,6 +114,9 @@ CREATE UNIQUE INDEX uq_secret_fingerprint
 CREATE UNIQUE INDEX uq_secret_candidate_locator
   ON secret_credential_sets (fingerprint_key_version, candidate_locator)
   WHERE component_state = 'CANDIDATE';
+CREATE UNIQUE INDEX uq_secret_aws_metadata_identity
+  ON secret_credential_sets (issuer, credential_type, issuer_connection_id, external_key_ref)
+  WHERE component_state = 'METADATA_ONLY' AND issuer = 'AWS';
 CREATE UNIQUE INDEX uq_secret_job_idempotency
   ON secret_jobs (idempotency_key)
   WHERE idempotency_key IS NOT NULL;
@@ -133,9 +138,9 @@ CREATE UNIQUE INDEX uq_secret_enabled_scope
   WHERE enabled;
 ```
 
-V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candidate_locator`, `METADATA_ONLY`의 식별값 부재를 강제한다. `expiry_policy='FIXED'`에는 `expires_at`이 필요하다. V5는 결과 코드, 사유 코드 형식, 시각 순서와 `VALID`·`INVALID`의 실제 확인 시각을 검사한다. 평가의 `severity='UNASSESSED'`와 `missing_reason`, 대응 해결 시각, 예외 기간 등은 해당 후속 테이블을 만들 때 적용할 목표다. `scope_id`와 `connection_id` 및 실행과 작업의 연결은 현재 복합 FK로 강제한다. 연결된 `assets`의 provider와 환경을 무조건 복사하지 않는다.
+V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candidate_locator`, `METADATA_ONLY`의 자격 증명 지문 부재를 강제한다. `expiry_policy='FIXED'`에는 `expires_at`이 필요하다. V5는 결과 코드, 사유 코드 형식, 시각 순서와 `VALID`·`INVALID`의 실제 확인 시각을 검사한다. V6은 같은 AWS 연결·유형·보호 참조의 IAM 메타데이터 항목을 하나로 묶고 실행마다 관측을 추가한다. 평가의 `severity='UNASSESSED'`와 `missing_reason`, 대응 해결 시각, 예외 기간 등은 해당 후속 테이블을 만들 때 적용할 목표다. `scope_id`와 `connection_id` 및 실행과 작업의 연결은 현재 복합 FK로 강제한다. 연결된 `assets`의 provider와 환경을 무조건 복사하지 않는다.
 
-아래 FK 목록은 현재 V3–V5와 후속 목표 테이블을 함께 나타낸다. 후속 테이블의 FK는 아직 DB에 없다.
+아래 FK 목록은 현재 V3–V6과 후속 목표 테이블을 함께 나타낸다. 후속 테이블의 FK는 아직 DB에 없다.
 
 | FK 열 | 참조 대상 |
 |---|---|
@@ -149,13 +154,14 @@ V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candid
 
 ## 5. 적재와 상태 변경 규칙
 
-다음은 전체 설계의 적재 순서다. 현재 V3–V5와 GitHub 워커가 수행하는 부분은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 구분한다.
+다음은 전체 설계의 적재 순서다. 현재 V3–V6과 GitHub·AWS IAM 워커가 수행하는 부분은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 구분한다.
 
 1. 연결과 승인 범위를 등록할 때 범위 버전, 수집 가능한 콘텐츠, 분류 근거와 비밀 저장소 참조를 기록한다.
 2. 정기 작업을 예약하고 워커가 선점한 뒤 `secret_scan_runs`를 만든다. 범위별 성공, 실패, 미지원과 엔진별 성공, 실패를 독립적으로 확정한다.
 3. 도구 출력은 워커 메모리에서 정규화한다. 키 원문은 HMAC 계산과 승인된 검증에만 쓰고 DB나 큐에 싣지 않는다. 불완전 후보는 다른 후보와 합치지 않는다.
 4. 같은 키와 원천 위치는 기존 `secret_occurrences`를 갱신하고 새 발견은 추가한다. 엔진 결과는 `secret_findings`에 별도 기록한다. 완료된 범위에서만 미발견 위치를 `MISSING`으로 갱신한다. 일부 실패 범위의 기존 위치는 `UNKNOWN`으로 남긴다.
 5. GitHub 처리기는 발견한 AWS 키·후보의 시도를 실행 주기 내 중복 제거하고 V5 `secret_validation_attempts`에 안전한 상태·사유·시각을 저장한다. 기본 비활성 또는 합성 실험 저장소에서는 `UNCHECKED`를 기록하며 STS를 호출하지 않는다. 사용 정보와 영향 근거의 `secret_evidence` 저장은 후속 마이그레이션 대상이다. 최신 시도와 마지막 성공 판정은 다른 조회다.
+   AWS IAM 처리기는 별도 분기로 접근키 메타데이터를 `METADATA_ONLY` 인벤토리와 V6 관측 이력에 기록한다. 이 분기에서는 탐지·검증을 수행하지 않고 실행 단계 상태를 `SKIPPED`로 남긴다. 완전한 IAM 목록 수집에서만 이전에 보이던 접근키의 부재를 `MISSING`으로 표시하고 부분 실패 때는 부재를 확정하지 않는다.
 6. 각 비정상 노출 위치에 `severity-v2` 평가를 추가한다. 자동 판정과 승인된 수동 변경, 사용한 근거를 분리한다. 신규 발견의 만료 또는 폐기가 근거로 확인되면 인벤토리에 보존하고 신규 대응 건은 만들지 않는다.
 7. 대응 대상은 현재 건에 위치를 연결한다. 해결 뒤 재노출이면 기존 건을 이력으로 닫고 새 건을 만든다. 할당, 검토, 작업, 체크리스트, 예외, 해결 변경은 버전 확인과 감사 이벤트를 같은 트랜잭션에 쓴다.
 8. 조회 스냅샷은 모든 단계의 확정 데이터를 기준으로 생성한다. 실패 범위가 있으면 `partialCoverage`와 `missingSources`를 생성 시점에 계산해 스냅샷에 고정한다. 실패를 0건 정상 수집으로 치환하지 않는다.
@@ -164,8 +170,8 @@ V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candid
 
 API DB 계정은 Secret 조회 및 대응 변경 테이블에 필요한 권한만 갖고, 워커 DB 계정은 작업 선점과 탐지 및 검사 적재 권한을 갖는다. 연결용 비밀은 DB 밖의 비밀 저장소에 두며 `auth_ref`만 저장한다. HMAC 보호키는 DB 밖에서 관리하고 버전 교체 시 이전 버전 지문을 안전하게 재계산할 수 있는 시점까지 병행 조회한다. 원천에서 키를 다시 읽을 수 없으면 키 동일성 재계산과 재검증이 불가능하므로 임의 병합하지 않는다. 데이터, 백업, 감사 로그의 접근 권한과 보존 기간은 범주별 운영 설정으로 확정한다. 보존 기간이 정해지지 않은 범주는 자동 삭제하지 않는다.
 
-현재 마이그레이션 순서는 V3 연결·작업, V4 키·위치·탐지, V5 검증 이력이다. 기존 V1 데이터는 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 서버 시작 시 외부 Notion 스캔을 호출하던 동작은 제거했고 새 Secret 화면은 비동기 실행 API를 사용한다. 전환 기간의 `/api/v1/credentials/scan` 직접 실행은 다른 사용처를 확인한 뒤 정리한다. 통합 현황의 새 버전은 위의 API 합성 규칙을 사용하고 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
+현재 마이그레이션 순서는 V3 연결·작업, V4 키·위치·탐지, V5 검증 이력, V6 IAM 메타데이터 관측이다. 기존 V1 데이터는 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 서버 시작 시 외부 Notion 스캔을 호출하던 동작은 제거했고 새 Secret 화면은 비동기 실행 API를 사용한다. 전환 기간의 `/api/v1/credentials/scan` 직접 실행은 다른 사용처를 확인한 뒤 정리한다. 통합 현황의 새 버전은 위의 API 합성 규칙을 사용하고 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
 
-공유 `V2__create_credentials.sql`은 유지하고 충돌했던 미공유 스케줄러 마이그레이션은 V3로 반영했다. V4와 V5도 `develop`에 순서대로 반영됐다. 기존 개발 DB의 적용 이력은 보존하며 파일 이름만 바꿔 재실행하지 않는다. 별도 개발 DB에서는 V1–V4와 GitHub 테스트 작업을 실행했고, V5의 Flyway 적용과 저장 제약은 분리된 PostgreSQL 테스트에서 검증했다. 원래 DB의 필요한 데이터 이전은 아직 수행하지 않았다. 이전 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행한다. 후속 마이그레이션 번호는 공통 DB 담당자가 조율한다.
+공유 `V2__create_credentials.sql`은 유지하고 충돌했던 미공유 스케줄러 마이그레이션은 V3로 반영했다. V4부터 V6도 `develop`에 순서대로 반영됐다. 기존 개발 DB의 적용 이력은 보존하며 파일 이름만 바꿔 재실행하지 않는다. 별도 개발 DB에서는 V1–V6과 GitHub·AWS IAM 작업 실행을 확인했다. 원래 DB의 필요한 데이터 이전은 아직 수행하지 않았다. 이전 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행한다. 후속 마이그레이션 번호는 공통 DB 담당자가 조율한다.
 
 구현 검증은 Flyway 빈 DB 적용과 기존 V1 위 적용, 잘못된 FK와 중복 현재 건 및 중복 작업의 거부, 6시간 정기와 수동 실행의 독립성, 부분 실패 후 위치 유지, 동일 키의 다중 위치와 다중 엔진 중복 제거, 최신 실패와 지난 성공 보존, 부분 예외 집계, 스냅샷의 카드 및 목록 수 일치, 원문이 DB와 로그에 남지 않는지를 확인한다.
