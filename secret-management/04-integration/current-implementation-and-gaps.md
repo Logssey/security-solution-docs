@@ -1,6 +1,6 @@
 # 현재 구현과 Secret 기능 연동 차이
 
-확인 기준: 2026-10-14, `dashboard-backend`의 `develop` `9ebb4a8`과 `dashboard-frontend`의 `develop` `29c4fc7`까지. 아래의 «구현»은 코드와 분리된 개발 DB에서의 검증 범위를 뜻하며 모든 원천의 운영 지원을 뜻하지 않는다. 정식 목표 계약은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [API 계약](../03-architecture/api-contract.md)에 둔다.
+확인 기준: 2026-10-14, Secret 하위 메뉴 개편과 스캔 이력·연결 테스트 API까지. 아래의 «구현»은 코드와 분리된 개발 DB에서의 검증 범위를 뜻하며 모든 원천의 운영 지원을 뜻하지 않는다. 정식 목표 계약은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [API 계약](../03-architecture/api-contract.md)에 둔다.
 
 ## 1. 문서와 구현의 경계
 
@@ -11,14 +11,15 @@
 | 영역 | 구현 상태 | 남은 작업 |
 |---|---|---|
 | 실행 경계 | API는 `POST /api/v1/secrets/runs`로 작업을 등록하고 상태를 조회한다. 서버 시작 시 외부 스캔은 수행하지 않는다. 별도 Java 워커가 예약, 작업 선점과 승인된 GitHub·AWS 범위의 수집·탐지를 실행한다. | 기존 `/credentials/scan` 직접 Notion 실행 경로의 다른 사용처를 확인하고 제거하며 Notion 수집을 워커로 옮긴다. |
-| 연결·범위·작업 | V3에 연결, 승인 범위, `FULL_SCAN` 작업, 실행, 실행 범위 5개 테이블이 있다. 6시간 기본 예약, 중복 방지, 리스·재시도 실행기가 있다. 예약기와 실행기는 기본 비활성이다. | 운영용 연결 등록·권한 관리와 원천별 처리기를 확장한다. `REVALIDATE` 작업은 아직 없다. |
+| 연결·범위·작업 | V3에 연결, 승인 범위, `FULL_SCAN` 작업, 실행, 실행 범위 5개 테이블이 있다. 6시간 기본 예약, 중복 방지, 리스·재시도 실행기가 있다. 예약기와 실행기는 기본 비활성이다. 활성 연결은 제한된 요약으로 조회한다. 연결 테스트는 GitHub 첫 승인 저장소의 설치 토큰 권한 또는 AWS STS 계정 신원만 확인하고 스캔·연결 상태 변경을 하지 않는다. | 운영용 연결 등록·설정 편집·범위별 권한 관리와 원천별 처리기를 확장한다. 연결 테스트는 전체 승인 범위나 서비스·파일 읽기 가능성을 보장하지 않는다. `REVALIDATE` 작업은 아직 없다. |
 | GitHub 수집 | 읽기 전용 GitHub App 설치 토큰으로 승인된 저장소·브랜치·경로의 현재 커밋 파일을 읽는다. `CURRENT_COMMIT_ONLY`를 지원하고 크기·총량·깊이 제한, 부분 실패를 기록한다. GitHub 파이프라인과 작업 실행기는 둘 다 명시적으로 켜야 한다. | 승인된 이력, Actions 설정 등 추가 콘텐츠는 별도 구현·검증한다. |
 | AWS IAM 메타데이터 | V6과 별도 Java 워커가 승인된 계정의 IAM 사용자 접근키 목록·상태·발급 시각·최근 사용 메타데이터를 읽는다. STS로 연결 계정을 확인하고 명시된 AWS 프로필과 범위가 일치해야 한다. 접근키 ID는 보호키 HMAC 참조와 끝 4자리 표시로 바꿔 기록한다. 발견 값은 `METADATA_ONLY`이며 탐지와 검증 단계는 `SKIPPED`다. 워커 실행과 AWS 수집은 각각 기본 비활성이다. | 루트 접근키가 있거나 확인할 수 없으면 범위 누락을 표시한다. IAM 목록에서 비밀 구성요소를 복원하거나 권한·영향을 평가하지 않는다. |
 | AWS 저장소 목록 메타데이터 | 승인된 리전별 Secrets Manager `ListSecrets`, SSM `DescribeParameters`, 계정 단위 S3 `ListBuckets`의 **개수만** 수집한다. 각 범위의 완료·부분 실패·실패와 안전한 사유 코드를 V3 실행 범위에 남긴다. 계정·프로필 일치를 먼저 검사하고 다른 리전을 자동 발견하거나 읽지 않는다. 이 목록은 고유 키 인벤토리나 검증 시도를 만들지 않는다. | 이 목록 경로에서는 Secret 값, 파라미터 값, S3 객체 목록·본문 및 자원별 상세·노출 판정을 수집하지 않는다. |
 | AWS 정확한 값 수집 | 별도로 승인된 단일 Secrets Manager Secret, SSM Parameter 또는 S3 객체 범위에서만 현재 값을 읽는 Java 경로가 워커에 연결됐다. `SECRET_AWS_CONTENT_READ_ENABLED`는 기본 `false`이고 AWS 수집·작업 실행 활성화, 프로필·STS 계정 일치와 `CURRENT_VALUE_ONLY` 범위를 모두 요구한다. 활성화되면 텍스트를 크기 제한과 함께 메모리에서 Gitleaks로 전달하고 안전한 탐지 결과만 저장한다. | 실계정 시험에서 Secret·Parameter 각 1건의 읽기는 성공했고 S3 후보는 `AWS_CONTENT_NON_TEXT`로 거부됐다. 안전한 UTF-8 S3 객체의 수집·탐지 완료와 운영 범위의 원문 비노출 검증은 남았다. 다른 자원으로 범위를 자동 확장하거나 외부 노출·심각도를 추정하지 않는다. |
 | 탐지·정규화 | 워커가 Gitleaks 8.30.1에 승인된 GitHub 파일과 활성화된 정확한 AWS 본문을 `stdin`으로 전달한다. V4에 도구 실행, 고유 키, 발견 위치, 도구 발견 기록이 있으며 완전한 키는 보호키 HMAC으로 묶고 불완전 후보는 위치별로 분리한다. AWS 본문의 원천 참조는 자원명 대신 내부 범위 ID 기반 별칭이다. | 지원 룰과 형식을 확장하고 실제 자료 기준 품질을 검증한다. |
 | 유효성 검증 | GitHub 또는 활성화된 정확한 AWS 본문에서 발견한 AWS 키 후보를 V5 검증 시도 이력에 연결한다. 같은 완전 키는 실행 주기 내 한 번만 처리한다. STS 호출 설정은 기본 `false`이며 비활성은 `UNCHECKED/DISABLED`로 기록한다. 합성 실험 저장소는 설정과 관계없이 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`로 기록한다. 이때 실행의 검증 단계는 `SKIPPED`일 수 있다. | 승인된 비합성 테스트 자격 증명과 호출 정책으로 실제 STS 분기를 검증한다. 다른 발급자 유형의 검증기는 후속이다. |
-| 조회 화면 | `/secrets` 화면이 연결 선택, 비동기 실행 등록·상태 조회, 고유 키 목록·상세를 사용한다. 실행 범위에는 승인된 Secrets Manager 값·SSM Parameter 값·S3 객체 내용을 각각 표시한다. AWS 본문에서 후보가 발견된 상세는 자원명 대신 승인 보관소 값으로 표시하고, 형식 발견만으로 외부 노출이 확인된 것은 아니라는 안내를 보여준다. `GET /api/v1/secrets`, `/{id}`, `/connections`는 V4–V6 전용 기록을 읽는다. IAM 목록은 `METADATA_ONLY`로 필터링하고 상세에는 최신 관측의 키 상태·최근 사용 시각 등을 별도 표시한다. 기존 `/api/v1/credentials`는 전환 기간에 남아 있다. | 다른 호출자의 기존 API 사용처를 확인하고 제거한다. 요약·대응·스냅샷 조회는 후속이다. |
+| 조회 화면 | Secret 사이드바에 `/secrets` 현황, `/secrets/findings` 탐지 목록, `/secrets/connections` 연결 관리, `/secrets/history` 스캔 이력을 둔다. 기존 비동기 실행 등록·상태 조회와 고유 키 목록·상세를 재사용한다. 탐지 목록에서 현재 필터의 전체 페이지를 조회해 마스킹 CSV로 내보내고, 연결 관리에서 제한된 연결 테스트를 호출한다. 스캔 이력은 실행의 요청·시작·완료 시각, 전체·단계 상태와 부분 실패 범위를 보여준다. IAM 목록은 `METADATA_ONLY`로 구분하고 AWS 보관소의 후보만으로 외부 노출이라고 단정하지 않는다. | 다른 호출자의 기존 `/api/v1/credentials` 사용처를 확인하고 제거한다. 연결 추가·설정 편집, 신규 키 수를 포함한 실행별 집계, 요약·대응·스냅샷 조회는 후속이다. |
+| 조치 현황 | 목표인 신규 및 분석 / 조치 중 / 재검증 대기 / 해결의 네 단계와 별도 예외 자리를 그린다. | `secret_response_cases`와 `/api/v1/secrets/summary`가 없어 실제 단계별 건수는 미제공으로 표시한다. 인벤토리 수, 스캔 성공 수, 미평가 심각도를 조치 단계의 0건 또는 완료 건수로 바꾸지 않는다. |
 | 심각도·대응 | Secret의 미평가와 환경 `UNKNOWN`을 임의 등급이나 `PROD`로 바꾸지 않는다. | 권한·영향 근거, 평가 이력, 담당자·검토·체크리스트·외부 조치·재검증을 구현한다. |
 | 통합 현황 | 기존 Overview는 일반 `detection_events` 조회와 100점 카드 계약을 유지한다. Secret의 원본 기록은 전용 테이블에 있다. | 통합 조회에서 두 출처를 중복 없이 합성하고 단위·미평가·누락 범위를 명시한다. |
 
@@ -30,21 +31,23 @@ GitHub App을 허용된 `Logssey/test-find-key`의 `fixtures/`에만 연결한 �
 
 S3에서는 텍스트 MIME과 작은 크기에 맞는 후보 27개를 별도 메모리 조사했지만 모두 바이너리 또는 유효하지 않은 UTF-8이어서 안전한 시험 대상을 찾지 못했다. 따라서 실제 S3 UTF-8 본문의 끝까지 이어지는 수집·탐지는 검증하지 못했고 S3 운영 콘텐츠에서 발견 기록도 없다. 시험에 사용한 정확한 Secret·Parameter 값과 AWS 자격 증명 토큰을 분리된 결과 DB의 `approved_ref`를 제외한 데이터, 워커 로그와 Git 추적 파일에 대조했을 때 원문 일치 항목은 0건이었다. `approved_ref`에는 승인된 자원 식별자가 들어갈 수 있으므로 이 결과를 모든 데이터·모든 실행의 원문 비저장 보장으로 확대하지 않는다. 실제 키 유효성, 권한, 외부 노출과 심각도도 이 시험으로 판정하지 않았다.
 
-소스 확인 위치: 백엔드의 `V3__create_secret_scheduler_tables.sql`부터 `V6__create_aws_iam_metadata.sql`, `SecretRunController.java`, `SecretInventoryController.java`, `SecretRunScopeResultResponse.java`, `secret-worker`의 `GitHubSecretJobProcessor.java`, `AwsSecretJobProcessor.java`, `AwsIamCollector.java`, `AwsMetadataCollector.java`, `AwsContentScope.java`, `AwsContentPipeline.java`, `AwsCredentialValidator.java`; 프론트 `SecretsPage.tsx`, `SecretDetailDrawer.tsx`, `src/api/secrets.ts`; 전환 대상은 기존 `CredentialListController.java`와 `NotionLeakScanService.java`다.
+소스 확인 위치: 백엔드의 `V3__create_secret_scheduler_tables.sql`부터 `V6__create_aws_iam_metadata.sql`, `SecretRunController.java`, `SecretRunListItemResponse.java`, `SecretConnectionTestController.java`, `SecretInventoryController.java`, `SecretRunScopeResultResponse.java`, `secret-worker`의 `GitHubSecretJobProcessor.java`, `AwsSecretJobProcessor.java`, `AwsIamCollector.java`, `AwsMetadataCollector.java`, `AwsContentScope.java`, `AwsContentPipeline.java`, `AwsCredentialValidator.java`; 프론트의 Secret 하위 메뉴, 탐지 목록·CSV·연결 관리·스캔 이력 화면과 `src/api/secrets.ts`; 전환 대상은 기존 `CredentialListController.java`와 `NotionLeakScanService.java`다.
 
 ## 3. 현재 비동기 API와 기존 API
 
 | 경로 | 현재 계약과 경계 |
 |---|---|
 | POST `/api/v1/secrets/runs` | 인증된 `ADMIN`이 활성 GitHub 연결 또는 지원되는 IAM·Secrets Manager·SSM·S3 메타데이터와 단일 자원 AWS 값 범위가 있는 활성 AWS 연결의 `connectionId`와 선택적 `idempotencyKey`로 비동기 실행을 등록한다. 지원되지 않는 원천·AWS 범위는 409로 거부한다. 값 범위가 등록돼도 별도 값 읽기 설정이 꺼져 있으면 본문 API를 호출하지 않는다. `202 Accepted`, `Location` 헤더와 `{ "runId", "status" }`를 반환한다. API는 원천을 읽거나 탐지를 실행하지 않는다. 같은 멱등 키의 재요청은 기존 실행을 반환한다. |
+| GET `/api/v1/secrets/runs?page={page}&size={size}` | `ADMIN`에게 실행을 요청 시각 최신순으로 페이지 조회한다. `items`, `total`, 0부터 시작하는 `page`, `size`를 반환하며 페이지 크기는 1–100(기본 20)이다. 각 항목은 실행·연결 ID, 공급자·현재 연결 표시 이름, 수동·예약 구분, 전체·단계별 상태, 범위와 완료·미완료 수, **확인한 원천 객체 수**, 요청·시작·완료 시각, 허용된 실패 코드만 제공한다. 일시중지된 연결의 과거 실행도 보인다. 객체 수를 신규 키 수로 표시하지 않는다. |
 | GET `/api/v1/secrets/runs/{runId}` | `ADMIN`에게 전체·수집·탐지·검증 상태, 범위와 완료·누락 범위 수, 읽은 객체 수, 재시도 횟수, 시각, 허용된 실패 코드를 반환한다. `scopeResults`는 각 범위의 내부 ID·지원 콘텐츠 유형·리전·상태·개수·안전한 누락 코드를 제공하고 계정 ID, `approved_ref`, 자원 이름·ARN과 공급자 오류 문구는 제외한다. 작업이 대기 중이면 `PENDING`, 리스 중이면 `RUNNING`으로 표시한다. |
 | GET `/api/v1/secrets` | `ADMIN`에게 고유 키 목록을 `items`, `total`, 0부터 시작하는 `page`, `size`로 반환한다. `issuer`, `componentState` 필터와 1–100개 페이지 크기를 지원한다. `METADATA_ONLY`는 값 발견과 구분한다. 최신 검증 시도가 없으면 `UNCHECKED`, 심각도는 `UNASSESSED`다. |
 | GET `/api/v1/secrets/{id}` | `ADMIN`에게 마스킹된 키 요약과 개별 위치, 환경·노출·존재 상태를 반환한다. IAM 메타데이터 항목은 최신 `iamMetadata`에 키 상태, 발급·최근 사용·관측 시각, 사용 서비스·리전을 별도 반환한다. 보호키 지문과 원문은 제외한다. |
 | GET `/api/v1/secrets/connections` | `ADMIN`에게 활성 승인 범위를 가진 GitHub 연결과 지원 형식의 IAM·Secrets Manager·SSM·S3 메타데이터 또는 정확한 값 범위를 가진 AWS 연결을 표시한다. 다른 원천과 지원되지 않는 AWS 범위는 선택 목록에서 제외한다. |
+| POST `/api/v1/secrets/connections/{connectionId}/test` | `ADMIN`과 CSRF 검사를 거친 동기 요청이다. `CONNECTED`·`FAILED`·`UNAVAILABLE`, 안전한 사유 코드와 확인 시각만 반환한다. AWS는 승인 범위의 단일 계정과 STS 신원을 확인하고 GitHub는 첫 활성 승인 저장소의 설치 토큰·`contents:read` 권한을 확인한다. 파일·비밀 값·개별 AWS 서비스 권한은 검사하지 않으며 스캔 등록이나 연결 상태 변경도 없다. |
 | GET `/api/v1/credentials` | 전환 기간의 단일 `credentials` 조회다. 정식 Secret 고유 키·위치 모델과 집계 단위가 다르다. |
 | POST `/api/v1/credentials/scan` | 전환 기간에 남은 API 프로세스의 동기 Notion 스캔이다. 새 비동기 작업의 성공이나 검증 결과로 해석하지 않는다. |
 
-`ADMIN` 검사는 현재 임시 접근 경계다. 설계된 Secret 역할·연결 범위 권한과 감사는 아직 적용되지 않았다. 실행 API는 세션·CSRF를 사용하며 원문 자격 증명을 받지 않는다. 새 화면은 정식 경로를 사용하고 기존 API는 다른 사용처가 없어지면 제거한다. 대시보드의 공통 인증·Overview 계약은 [공통 API 명세](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)를 참조한다.
+`ADMIN` 검사는 현재 임시 접근 경계다. 설계된 Secret 역할·연결 범위 권한과 감사는 아직 적용되지 않았다. 실행 등록과 연결 테스트는 세션·CSRF를 사용하며 원문 자격 증명을 받지 않는다. CSV는 별도 내보내기 API가 아니라 브라우저가 같은 `issuer`·`componentState` 필터로 목록을 최대 100건씩 끝까지 조회해 만든다. UTF-8 BOM과 수식 주입 방어를 적용하고 키 원문·위치 참조를 제외한다. 총수·페이지·중복 ID 일관성 검사가 실패하면 파일 생성을 중단한다. 현재 목록 API에는 스냅샷 토큰이 없어, 동시 변경이 있어도 검사 조건을 모두 만족한 경우까지 같은 시점의 결과라고 보장하지 않는다. 새 화면은 정식 경로를 사용하고 기존 API는 다른 사용처가 없어지면 제거한다. 대시보드의 공통 인증·Overview 계약은 [공통 API 명세](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)를 참조한다.
 
 ## 4. 원천별 범위와 다음 작업
 

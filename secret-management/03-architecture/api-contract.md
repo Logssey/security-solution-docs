@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
 
-이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·조회는 구현됐고 요약·대응·스냅샷 경로는 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
+이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·목록·상세 조회와 연결 테스트는 구현됐고 요약·대응·스냅샷 경로는 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
 
 ## 1. 공통 계약
 
@@ -21,6 +21,7 @@
 | MVP | GET | `/api/v1/secrets` | 고유 인벤토리 목록. `page`, `size`, `issuer`, `componentState` 필터와 `items`, `total`, `page`, `size` 응답. `CONFIRMED`·`CANDIDATE`·`METADATA_ONLY`를 구분하고 마스킹 식별자, 미평가 심각도, 최신 검증 결과·사유, 위치 수 표시 |
 | MVP | GET | `/api/v1/secrets/{id}` | 마스킹 식별자, 유형·구성 상태, 최신 검증 결과, 위치별 원천·환경·존재 상태, 최초·최근 발견 시각. IAM 메타데이터 항목은 최신 관측의 `iamMetadata`에 키 상태, 발급·최근 사용·관측 시각과 최근 사용 서비스·리전을 별도 제공 |
 | MVP | GET | `/api/v1/secrets/connections` | 수동 실행용 활성 GitHub 연결과 지원 형식의 AWS 메타데이터 또는 단일 자원 값 범위가 있는 활성 AWS 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외. 값 범위가 보여도 워커의 별도 값 읽기 설정이 활성이라는 뜻은 아님 |
+| MVP | GET | `/api/v1/secrets/runs?page={page}&size={size}` | 0부터 시작하는 페이지, 크기 1–100(기본 20). `requestedAt` 최신순, 같은 시각이면 `runId` 내림차순. `{items,total,page,size}`를 반환하며 종료된 실행과 대기 중인 실행, 현재 일시중지된 연결의 과거 실행을 함께 조회 |
 | MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드. `scopeResults`에 범위별 내부 ID·지원 콘텐츠 유형·리전·수집 상태·항목 수·안전한 누락 코드만 포함 |
 | 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
 | 후속 | GET | `/api/v1/secrets/cases` | 기본 현재 대응 건 목록. `scope=history`이면 과거 대응 건 목록. 마스킹한 식별자, 발견 소스와 발급자, 심각도, 유효성, 담당자, 단계, 예외, 시각, 커서 |
@@ -28,6 +29,8 @@
 | 후속 | GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
 
 MVP 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 정확한 AWS 본문에서 키 후보를 탐지해도 그 자원이 외부에 노출됐다는 뜻은 아니며 노출·영향·심각도는 별도 근거로 평가한다. 아직 대응 건이나 집계 스냅샷을 제공하지 않으므로 아래의 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
+
+실행 이력 목록의 각 `items[]`는 `runId`, `connectionId`, `provider`, 현재 연결 `displayName`, `triggerType`, `status`, `collectionStatus`, `detectionStatus`, `validationStatus`, `scopeCount`, `completedScopeCount`, `incompleteScopeCount`, `collectedObjectCount`, `requestedAt`, `startedAt`, `finishedAt`, `failureCode`만 포함한다. 전체·단계 상태와 시각은 상세 API와 같은 의미다. `failureCode`는 허용된 코드만 노출하고 알 수 없는 내부 문구는 `UNSPECIFIED_FAILURE`로 바꾼다. 계정 번호, `auth_ref`, `approved_ref`, 자원 이름·ARN, 원문 값, 공급자 오류 본문과 범위별 상세는 목록에 넣지 않는다. `collectedObjectCount`는 확인한 원천 항목 수이며 **새로 발견한 키 수가 아니다**. 스캔 이력은 `secret_scan_runs` 단위이고 `/cases?scope=history`의 과거 대응 건과 다르다. 현재 `displayName`은 실행 당시 이름의 스냅샷이 아니라 연결의 현행 표시 이름이다.
 
 향후 상세의 발견 위치 링크를 만들 때에는 허용된 경로만 생성하고 대상 사용자의 원천 접근 권한을 다시 확인한다. 현재 MVP는 위치 메타데이터를 반환하며 원천으로 자동 리다이렉트하지 않는다. 마스킹된 문맥도 비신뢰 텍스트로 렌더링한다.
 
@@ -48,7 +51,7 @@ MVP 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED
 }
 ```
 
-`actionCounts`의 다섯 값과 `severityCounts`의 다섯 값은 각각 `total`과 같다. 수집 실패가 있으면 `partialCoverage=true`와 실패한 범위, 사유, 시각을 `missingSources`에 포함한다. 일부 수집 실패를 정상 0건으로 합산하지 않는다.
+`actionCounts`의 네 조치 단계와 별도 `RISK_ACCEPTED` 예외 수, `severityCounts`의 다섯 값은 각각 `total`과 같다. `RISK_ACCEPTED`는 다섯 번째 진행 단계가 아니다. 수집 실패가 있으면 `partialCoverage=true`와 실패한 범위, 사유, 시각을 `missingSources`에 포함한다. 일부 수집 실패를 정상 0건으로 합산하지 않는다.
 
 ## 3. 변경
 
@@ -57,6 +60,12 @@ MVP 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED
 정식 수동 전체 스캔은 `POST /api/v1/secrets/runs`로 비동기 등록한다. 요청 본문은 `connectionId`와 선택적 `idempotencyKey`다. 세션·CSRF와 현재 `ADMIN` 권한 검사를 거쳐 승인 범위가 있는 **활성 GitHub 연결** 또는 IAM·Secrets Manager·SSM·S3의 **지원되는 메타데이터 범위나 정확한 단일 자원 값 범위가 있는 활성 AWS 연결**을 작업으로 예약한다. 그 밖의 원천과 지원되지 않는 AWS 범위는 409로 거부한다. 응답은 `202 Accepted`, `Location: /api/v1/secrets/runs/{runId}`, `{ "runId": 123, "status": "PENDING" }` 형태다. 같은 사용자와 멱등 키의 재요청은 기존 실행 ID를 반환한다. 화면은 `GET /api/v1/secrets/runs/{runId}`로 상태와 단계별 결과, 범위·객체 수, 재시도 시각, 안전한 실패 코드를 조회한다. AWS 메타데이터 실행의 객체 수는 각 범위에서 관측한 접근키 또는 목록 항목 수의 합계이며 탐지·검증 단계는 `SKIPPED`다. 값 범위는 `CURRENT_VALUE_ONLY`와 별도 `SECRET_AWS_CONTENT_READ_ENABLED` 설정이 필요하다. 기본 비활성이면 본문 SDK 호출을 하지 않고 범위에 안전한 미실행 코드를 남긴다. 읽기를 켠 범위만 Gitleaks 탐지·정규화 경로로 전달하며 검증은 별도 기본 비활성 설정에 따른다. 범위별 결과에는 계정 ID, 승인 참조, 자원 이름·ARN, 값 또는 공급자 오류 메시지를 반환하지 않는다. 실행기가 비활성이면 등록된 작업은 대기한다. API는 원천 콘텐츠를 읽거나 탐지 도구를 실행하지 않는다. 현재 권한 검사는 임시 `ADMIN` 경계이며 역할·연결 범위 권한은 후속이다.
 
 현재 AWS 검증이 비활성이거나 합성 실험 저장소에서 차단된 경우에는 개별 키에 `UNCHECKED` 시도와 사유가 남더라도 실행의 검증 단계는 `SKIPPED`일 수 있다. 화면은 `SKIPPED`를 `VALID`나 검사 성공으로 바꾸지 않는다. 공급자 응답이 불확실하거나 기록에 실패한 경우는 `PARTIAL`로 구분한다.
+
+### 연결 테스트
+
+`POST /api/v1/secrets/connections/{connectionId}/test`는 본문 없이 현재 `ADMIN` 세션과 CSRF 토큰으로 호출한다. 동기 `200 OK`의 응답은 `{ "connectionId", "provider", "status", "reasonCode", "checkedAt" }`이며 `status`는 `CONNECTED`, `FAILED`, `UNAVAILABLE` 중 하나다. 성공의 `reasonCode`는 `null`이다. 실패·확인 불가 시에는 `INVALID_APPROVED_SCOPE`, `AWS_ACCOUNT_MISMATCH`, `AWS_ACCESS_DENIED`, `AWS_RATE_LIMITED`, `AWS_UNAVAILABLE`, `GITHUB_APP_UNAVAILABLE`, `GITHUB_ACCESS_DENIED`, `GITHUB_RATE_LIMITED`, `GITHUB_UNAVAILABLE` 중 하나만 반환한다. 알 수 없는 코드는 화면에 일반 오류로 표시한다. 연결이 없으면 404, 일시중지·오류·미지원 연결이면 409, 비관리자면 403이다.
+
+AWS 연결은 활성 승인 범위가 단일 계정을 가리키는지 검사한 다음 제한 시간 안에 STS `GetCallerIdentity`로 프로필의 신원을 확인한다. 개별 IAM·Secrets Manager·SSM·S3 권한이나 비밀 값은 읽지 않는다. GitHub 연결은 첫 번째 활성 승인 저장소 한 곳으로 제한한 `contents:read` 설치 토큰 발급과 반환된 저장소·권한을 확인하며 파일은 읽지 않는다. `CONNECTED`를 모든 승인 범위의 수집 성공이나 키의 유효성으로 표현하지 않는다. 이 호출은 스캔을 등록하거나 연결 상태를 바꾸지 않으며 `auth_ref`, 승인 참조, 저장소명, 계정 번호, 자격 증명과 공급자 오류 본문을 응답·일반 로그에 넣지 않는다. 기존 `GET /connections`는 활성 연결의 스캔 선택 목록으로 유지하고 일시중지·오류 연결은 포함하지 않는다.
 
 현재 `/api/v1/credentials`와 `/api/v1/credentials/scan`은 기존 호출자의 전환 기간에만 유지한다. 새 Secret 화면은 정식 API를 사용한다. 다른 사용처가 없음을 확인한 뒤 기존 경로를 제거한다. 전환 기간의 필드와 현재 구현의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록하며 정식 모델이나 실행 경계로 채택하지 않는다.
 
