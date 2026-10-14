@@ -15,6 +15,7 @@
 | [규칙 명세서](02-functional-design/rule-spec.md) | 판정 어휘, 일반 원칙, 평가 순서, 사실(fact), CVE별 규칙, 사람 검토, 규칙 추가 절차 | GR, F-, RULE- |
 | [API 명세서](03-architecture/api-contract.md) | 공통 규약, 리소스 스키마, 엔드포인트 12개(MVP 설계 초안), 지금의 CLI 대응 | API, E- |
 | [화면 명세서](02-functional-design/dashboard-flow.md) | 화면 6개의 명세와 와이어프레임 | SCR |
+| [PoC 결과](05-research/poc-results.md) | PoC 기준 실행, 실측 수치, 요구사항으로 이어진 관찰과 실험 근거 | - |
 
 권장 열람 순서: PRD → ARD → 규칙 명세서 → API 명세서 → 화면 명세서
 
