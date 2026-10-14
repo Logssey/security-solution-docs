@@ -515,6 +515,18 @@ Idempotency-Key: falco-{sourceEventId}
 }
 ```
 
+Falcosidekick은 별도 Envelope을 만들지 않고 아래 Adapter로 Falco JSON을 그대로 보낸다.
+Cluster와 Schema 정보는 고정 Header로 전달하며, `sensorId`가 없으면 Event의
+`output_fields.k8s.node.name`으로 Sensor를 자동 등록한다.
+
+```http
+POST /internal/v1/runtime/events/falco/raw
+X-Runtime-Cluster-Id: logssey-prod
+X-Runtime-Schema-Version: falco-json-0.1
+X-Runtime-Collector-Token: {collector-token}
+Content-Type: application/json
+```
+
 ```json
 {
   "rawEventId": 991,
@@ -539,23 +551,27 @@ Payload Envelope은 API-RT-I01과 같고 `schemaVersion`과 `event`만 Tetragon 
 ### API-RT-I03. Sensor Heartbeat 수신
 
 ```http
-POST /internal/v1/runtime/sensors/{sensorId}/heartbeat
+POST /internal/v1/runtime/sensors/heartbeat
+X-Runtime-Collector-Token: {collector-token}
+Content-Type: application/json
 ```
 
 ```json
 {
   "clusterId": "logssey-prod",
   "nodeName": "worker-a",
-  "type": "FALCO",
-  "version": "sensor-reported-version",
+  "sensorType": "FALCO",
+  "version": "0.45.0",
   "driver": "modern_ebpf",
   "ruleSetVersion": "runtime-rules-0.1.0",
   "status": "HEALTHY",
-  "eventQueueDepth": 0,
-  "lastEventAt": "2026-10-08T01:04:40Z",
-  "errors": []
+  "queueDepth": 0,
+  "error": null
 }
 ```
+
+서버 수신 시각을 Heartbeat 시각으로 사용한다. 마지막 Heartbeat가 2분을 넘으면
+`DEGRADED`, 5분을 넘으면 `OFFLINE`으로 조회한다. 임계값은 환경 변수로 조정한다.
 
 ## 9. 중복 방지와 재처리
 
@@ -613,9 +629,9 @@ POST /internal/v1/runtime/sensors/{sensorId}/heartbeat
 ## 13. 구현 계약
 
 1. Dashboard API는 기존 Logssey Session·CSRF 인증을 그대로 사용한다.
-2. Cluster Collector는 Sensor 원본 Event를 단건으로 전송하며 중앙 API는 원본 저장 후 `202 Accepted`를 반환한다.
-3. Source Event ID가 없으면 Collector가 정규화 전 Payload의 SHA-256 Hash와 Sensor Instance ID를 조합해 Idempotency Key를 만든다.
-4. Falco는 Cluster Collector의 HTTP Endpoint로 JSON Alert를 전송한다. Falcosidekick은 MVP 필수 구성에서 제외한다.
+2. Falco Event는 Falcosidekick Webhook으로 단건 전송하며 중앙 API는 원본 저장 후 `202 Accepted`를 반환한다.
+3. Source Event ID나 `Idempotency-Key`가 없으면 중앙 API가 마스킹한 원본 Payload의 SHA-256 Hash로 중복 Key를 만든다.
+4. Falcosidekick은 Collector Token, Cluster ID, Schema Version을 고정 Header로 전달한다. Token은 Git에 저장하지 않고 Kubernetes Secret으로 주입한다.
 5. Tetragon은 JSON Export의 `process_exec.exec_id`를 우선 Source Event ID로 사용하고, 없는 Event는 Payload Hash를 사용한다.
 6. Raw Event 재처리는 내부 Admin Job으로만 제공하며 Dashboard 공개 API에는 포함하지 않는다.
 7. 모든 상태 변경 API는 Audit Log를 남기고 낙관적 Lock Version을 사용한다.
