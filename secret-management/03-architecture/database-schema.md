@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-15 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop`에 반영된 V1–V6과 10/15 대응 건 구현 브랜치의 `96245c2` V7이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업, V4는 키·위치·탐지, V5는 검증 시도, V6은 AWS IAM 접근키 메타데이터 관측을 추가했다. Secrets Manager·SSM·S3의 개수 수집과 정확한 AWS 단일 값 수집 경로는 기존 V3–V5를 사용한다. V7은 대응 건·담당자·권한의 기초를 추가하며 평가·검토·체크리스트·외부 조치·재검증·집계 스냅샷은 아직 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
+이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-15 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop`에 병합된 V1–V7이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업, V4는 키·위치·탐지, V5는 검증 시도, V6은 AWS IAM 접근키 메타데이터 관측을 추가했다. Secrets Manager·SSM·S3의 개수 수집과 정확한 AWS 단일 값 수집 경로는 기존 V3–V5를 사용한다. V7은 대응 건·담당자·권한의 기초를 추가하며 평가·검토·체크리스트·외부 조치·재검증·집계 스냅샷은 아직 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
 
 | 마이그레이션 | 현재 구현된 테이블 | 아직 포함하지 않는 범위 |
 |---|---|---|
@@ -10,7 +10,7 @@
 | V4 | `secret_credential_sets`, `secret_occurrences`, `secret_tool_runs`, `secret_findings` | 평가·대응·사용 근거 |
 | V5 | `secret_validation_attempts` | 공급자별 영향 평가와 수동 재검증 API |
 | V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | IAM 비밀 키 원문, 유효성·노출·권한·심각도 평가, Secrets Manager·SSM·S3 목록의 자원별 개별 기록 |
-| V7 (구현 브랜치) | `secret_response_cases`, `secret_case_occurrences`, `secret_assignment_history`, `secret_audit_events`, `secret_role_grants`, `secret_team_memberships`; 승인 범위의 대응 구분 | 기존 발견의 자동 대응 건 생성, 노출 판정 API·근거 이력, 검토·체크리스트·외부 조치·재검증, 평가·스냅샷 |
+| V7 | `secret_response_cases`, `secret_case_occurrences`, `secret_assignment_history`, `secret_audit_events`, `secret_role_grants`, `secret_team_memberships`; 승인 범위의 대응 구분 | 기존 발견의 자동 대응 건 생성, 노출 판정 API·근거 이력, 검토·체크리스트·외부 조치·재검증, 평가·스냅샷 |
 
 로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
@@ -41,7 +41,7 @@ Secret 전용 테이블 이름은 `secret_` 접두사를 쓴다. 기본 키는 �
 
 ## 3. 테이블 명세
 
-V3–V6은 `develop`에 반영된 제약, V7은 10/15 구현 브랜치의 제약이다. 후속 목표는 별도로 표시한다. `NOT NULL`을 적지 않은 현재 컬럼은 NULL을 허용한다. 목표 표에서 연속으로 적은 시각 컬럼은 각각 `TIMESTAMPTZ`이며, 연속으로 적은 사용자 ID는 각각 `BIGINT FK`다. 코드형 값은 `VARCHAR`와 `CHECK`를 쓰되 공급자별 키 유형과 룰 ID는 버전 관리하는 애플리케이션 등록부에서 검증한다.
+V3–V7은 `develop`에 반영된 제약이다. 후속 목표는 별도로 표시한다. `NOT NULL`을 적지 않은 현재 컬럼은 NULL을 허용한다. 목표 표에서 연속으로 적은 시각 컬럼은 각각 `TIMESTAMPTZ`이며, 연속으로 적은 사용자 ID는 각각 `BIGINT FK`다. 코드형 값은 `VARCHAR`와 `CHECK`를 쓰되 공급자별 키 유형과 룰 ID는 버전 관리하는 애플리케이션 등록부에서 검증한다.
 
 ### 3.1. 연결, 범위, 실행
 
@@ -180,6 +180,6 @@ API DB 계정은 Secret 조회 및 대응 변경 테이블에 필요한 권한�
 
 마이그레이션 순서는 V3 연결·작업, V4 키·위치·탐지, V5 검증 이력, V6 IAM 메타데이터 관측, V7 대응 건·담당자 기초다. V7은 기존 범위를 `UNCLASSIFIED`로 두고 기존 인벤토리에서 대응 건을 자동 생성하지 않는다. 기존 V1 데이터도 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 서버 시작 시 외부 Notion 스캔을 호출하던 동작은 제거했고 새 Secret 화면은 비동기 실행 API를 사용한다. 전환 기간의 `/api/v1/credentials/scan` 직접 실행은 다른 사용처를 확인한 뒤 정리한다. 통합 현황의 새 버전은 위의 API 합성 규칙을 사용하고 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
 
-공유 `V2__create_credentials.sql`은 유지하고 충돌했던 미공유 스케줄러 마이그레이션은 V3로 반영했다. V4부터 V6도 `develop`에 순서대로 반영됐다. 10/15 대응 구현 브랜치의 V7은 Testcontainers의 새 PostgreSQL에서 V1부터 전체 적용과 대상 테스트를 통과했으며 아직 공유 `develop` 병합 전이다. 기존 개발 DB의 적용 이력은 보존하며 파일 이름만 바꿔 재실행하지 않는다. 별도 개발 DB에서는 V1–V6과 GitHub·AWS IAM 작업 실행을 확인했다. 원래 DB의 필요한 데이터 이전은 아직 수행하지 않았다. 이전 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행한다. 후속 마이그레이션 번호는 공통 DB 담당자가 조율한다.
+공유 `V2__create_credentials.sql`은 유지하고 충돌했던 미공유 스케줄러 마이그레이션은 V3로 반영했다. V4–V7도 `develop`에 순서대로 병합됐다. Testcontainers의 새 PostgreSQL에서 V1–V7 전체 적용과 백엔드 테스트를 통과했다. 공유 로컬 개발 DB에도 V7이 기존 데이터를 보존하는 추가 마이그레이션으로 적용됐으며, 기존 인벤토리에서 대응 건을 소급 생성하거나 다른 Secret 테이블로 데이터를 이관하지 않았다. 기존 개발 DB의 적용 이력은 파일명 변경으로 덮어쓰지 않는다. 별도 개발 DB에서는 GitHub·AWS IAM 작업 실행도 확인했다. 향후 필요한 데이터 이전은 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행한다. 후속 마이그레이션 번호는 공통 DB 담당자가 조율한다.
 
 구현 검증은 Flyway 빈 DB 적용과 기존 V1 위 적용, 잘못된 FK와 중복 현재 건 및 중복 작업의 거부, 6시간 정기와 수동 실행의 독립성, 부분 실패 후 위치 유지, 동일 키의 다중 위치와 다중 엔진 중복 제거, 최신 실패와 지난 성공 보존, 부분 예외 집계, 스냅샷의 카드 및 목록 수 일치, 원문이 DB와 로그에 남지 않는지를 확인한다.

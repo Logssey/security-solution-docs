@@ -1,6 +1,6 @@
 # 현재 구현과 Secret 기능 연동 차이
 
-확인 기준: 2026-10-15. `develop`의 수집·탐지·검증·조회와 10/15 대응 구현 브랜치 `96245c2`의 V7 대응 건·담당자 API까지 구분한다. 아래의 «구현»은 코드와 분리된 개발 DB·자동 테스트의 검증 범위를 뜻하며 모든 원천의 운영 지원을 뜻하지 않는다. 정식 목표 계약은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [API 계약](../03-architecture/api-contract.md)에 둔다.
+확인 기준: 2026-10-15. 백엔드 `develop`의 수집·탐지·검증·조회와 V7 대응 건·담당자 API, 프런트엔드 `develop`의 대응 관리 화면을 기준으로 한다. 아래의 «구현»은 코드와 분리된 개발 DB·자동 테스트의 검증 범위를 뜻하며 모든 원천의 운영 지원을 뜻하지 않는다. 정식 목표 계약은 [데이터 계약](../03-architecture/data-contract.md), [DB 스키마](../03-architecture/database-schema.md), [API 계약](../03-architecture/api-contract.md)에 둔다.
 
 ## 1. 문서와 구현의 경계
 
@@ -18,9 +18,9 @@
 | AWS 정확한 값 수집 | 별도로 승인된 단일 Secrets Manager Secret, SSM Parameter 또는 S3 객체 범위에서만 현재 값을 읽는 Java 경로가 워커에 연결됐다. `SECRET_AWS_CONTENT_READ_ENABLED`는 기본 `false`이고 AWS 수집·작업 실행 활성화, 프로필·STS 계정 일치와 `CURRENT_VALUE_ONLY` 범위를 모두 요구한다. 활성화되면 텍스트를 크기 제한과 함께 메모리에서 Gitleaks로 전달하고 안전한 탐지 결과만 저장한다. | 실계정 시험에서 Secret·Parameter 각 1건의 읽기는 성공했고 S3 후보는 `AWS_CONTENT_NON_TEXT`로 거부됐다. 안전한 UTF-8 S3 객체의 수집·탐지 완료와 운영 범위의 원문 비노출 검증은 남았다. 다른 자원으로 범위를 자동 확장하거나 외부 노출·심각도를 추정하지 않는다. |
 | 탐지·정규화 | 워커가 Gitleaks 8.30.1에 승인된 GitHub 파일과 활성화된 정확한 AWS 본문을 `stdin`으로 전달한다. V4에 도구 실행, 고유 키, 발견 위치, 도구 발견 기록이 있으며 완전한 키는 보호키 HMAC으로 묶고 불완전 후보는 위치별로 분리한다. AWS 본문의 원천 참조는 자원명 대신 내부 범위 ID 기반 별칭이다. | 지원 룰과 형식을 확장하고 실제 자료 기준 품질을 검증한다. |
 | 유효성 검증 | GitHub 또는 활성화된 정확한 AWS 본문에서 발견한 AWS 키 후보를 V5 검증 시도 이력에 연결한다. 같은 완전 키는 실행 주기 내 한 번만 처리한다. STS 호출 설정은 기본 `false`이며 비활성은 `UNCHECKED/DISABLED`로 기록한다. 합성 실험 저장소는 설정과 관계없이 호출을 차단하고 `UNCHECKED/SYNTHETIC_FIXTURE`로 기록한다. 이때 실행의 검증 단계는 `SKIPPED`일 수 있다. | 승인된 비합성 테스트 자격 증명과 호출 정책으로 실제 STS 분기를 검증한다. 다른 발급자 유형의 검증기는 후속이다. |
-| 조회 화면 | Secret 사이드바에 `/secrets` 현황, `/secrets/findings` 탐지 목록, `/secrets/connections` 연결 관리, `/secrets/history` 스캔 이력을 둔다. 기존 비동기 실행 등록·상태 조회와 고유 키 목록·상세를 재사용한다. 탐지 목록에서 현재 필터의 전체 페이지를 조회해 마스킹 CSV로 내보내고, 연결 관리에서 제한된 연결 테스트를 호출한다. 스캔 이력은 실행의 요청·시작·완료 시각, 전체·단계 상태와 부분 실패 범위를 보여준다. IAM 목록은 `METADATA_ONLY`로 구분하고 AWS 보관소의 후보만으로 외부 노출이라고 단정하지 않는다. | 다른 호출자의 기존 `/api/v1/credentials` 사용처를 확인하고 제거한다. 연결 추가·설정 편집, 신규 키 수를 포함한 실행별 집계, 요약·대응·스냅샷 조회는 후속이다. |
-| 조치 현황 | 목표인 신규 및 분석 / 조치 중 / 재검증 대기 / 해결의 네 단계와 별도 예외 자리를 그린다. V7 브랜치에는 `secret_response_cases`와 대응 건 기본 목록·상세가 있다. | `/api/v1/secrets/summary`와 실제 단계별 집계·스냅샷은 아직 없다. 인벤토리 수, 스캔 성공 수, 미평가 심각도를 조치 단계의 0건 또는 완료 건수로 바꾸지 않는다. `TEST` 건은 운영 수에 넣지 않는다. |
-| 심각도·대응 | Secret의 미평가와 환경 `UNKNOWN`을 임의 등급이나 `PROD`로 바꾸지 않는다. V7 브랜치는 `CONFIRMED`·`ABNORMAL`·`PRESENT` GitHub 위치와 분류된 범위에서만 건을 열고, Secret 역할·연결 범위를 검사한 담당자 지정·변경 이력·안전한 감사를 저장한다. 기본 운영 목록은 시험 건을 제외한다. | 현재 워커는 노출을 `UNKNOWN`, 기존 승인 범위는 대응 구분을 `UNCLASSIFIED`로 남기므로 승인된 판정·분류 없이는 실데이터 건을 열 수 없다. 심각도·영향 평가, 검토·체크리스트·외부 조치·재검증, 운영 역할 부여·범위 분류 절차를 구현한다. |
+| 조회 화면 | Secret 사이드바에 `/secrets` 현황, `/secrets/findings` 탐지 목록, `/secrets/cases` 대응 관리, `/secrets/connections` 연결 관리, `/secrets/history` 스캔 이력을 둔다. 탐지 목록은 고유 키·상세와 마스킹 CSV를 제공한다. 대응 관리는 현재 건의 운영·`TEST` 목록을 분리하고 마스킹 상세, 권한 있는 담당자 지정·변경 사유·이력, 충돌 재조회를 제공한다. 연결 관리는 제한된 연결 테스트를 호출하고, 스캔 이력은 실행 시각·단계 상태·부분 실패 범위를 보여준다. IAM 목록은 `METADATA_ONLY`로 구분한다. | 다른 호출자의 기존 `/api/v1/credentials` 사용처를 확인하고 제거한다. 연결 추가·설정 편집, 신규 키 수를 포함한 실행별 집계, 대응 요약·스냅샷과 검토·조치·재검증 화면은 후속이다. |
+| 조치 현황 | 현황 화면은 신규 및 분석 / 조치 중 / 재검증 대기 / 해결의 네 단계와 별도 예외 자리를 집계 준비 중으로 표시한다. V7에는 `secret_response_cases`와 대응 건 기본 목록·상세 API가 있고, 프런트엔드에는 별도 대응 관리 화면이 있다. | `/api/v1/secrets/summary`와 실제 단계별 집계·스냅샷은 아직 없다. 인벤토리 수, 스캔 성공 수, 미평가 심각도를 조치 단계의 0건 또는 완료 건수로 바꾸지 않는다. `TEST` 건은 운영 수에 넣지 않는다. |
+| 심각도·대응 | Secret의 미평가와 환경 `UNKNOWN`을 임의 등급이나 `PROD`로 바꾸지 않는다. V7는 `CONFIRMED`·`ABNORMAL`·`PRESENT` GitHub 위치와 분류된 범위에서만 건을 열고, Secret 역할·연결 범위를 검사한 담당자 지정·변경 이력·안전한 감사를 저장한다. 기본 운영 목록은 시험 건을 제외한다. | 현재 워커는 노출을 `UNKNOWN`, 기존 승인 범위는 대응 구분을 `UNCLASSIFIED`로 남기므로 승인된 판정·분류 없이는 실데이터 건을 열 수 없다. 심각도·영향 평가, 검토·체크리스트·외부 조치·재검증, 운영 역할 부여·범위 분류 절차를 구현한다. |
 | 통합 현황 | 기존 Overview는 일반 `detection_events` 조회와 100점 카드 계약을 유지한다. Secret의 원본 기록은 전용 테이블에 있다. | 통합 조회에서 두 출처를 중복 없이 합성하고 단위·미평가·누락 범위를 명시한다. |
 
 GitHub App을 허용된 `Logssey/test-find-key`의 `fixtures/`에만 연결한 로컬 수집·탐지 실행에서는 파일 16개를 읽고 작업이 `SUCCEEDED`로 끝났다. 합성 표본에서 고유 키·후보 9개(완전 7, 불완전 2), 위치 15개, 도구 발견 23개가 기록됐다. 표본의 긴 합성 토큰 28개가 DB 데이터 덤프와 워커 로그에 원문으로 남지 않은 것도 확인했다. 검증 연결 이후에는 별도 테스트에서 합성 저장소의 STS 차단과 안전한 `UNCHECKED` 기록을 확인했다.
@@ -31,7 +31,7 @@ GitHub App을 허용된 `Logssey/test-find-key`의 `fixtures/`에만 연결한 �
 
 S3에서는 텍스트 MIME과 작은 크기에 맞는 후보 27개를 별도 메모리 조사했지만 모두 바이너리 또는 유효하지 않은 UTF-8이어서 안전한 시험 대상을 찾지 못했다. 따라서 실제 S3 UTF-8 본문의 끝까지 이어지는 수집·탐지는 검증하지 못했고 S3 운영 콘텐츠에서 발견 기록도 없다. 시험에 사용한 정확한 Secret·Parameter 값과 AWS 자격 증명 토큰을 분리된 결과 DB의 `approved_ref`를 제외한 데이터, 워커 로그와 Git 추적 파일에 대조했을 때 원문 일치 항목은 0건이었다. `approved_ref`에는 승인된 자원 식별자가 들어갈 수 있으므로 이 결과를 모든 데이터·모든 실행의 원문 비저장 보장으로 확대하지 않는다. 실제 키 유효성, 권한, 외부 노출과 심각도도 이 시험으로 판정하지 않았다.
 
-소스 확인 위치: 백엔드의 `V3__create_secret_scheduler_tables.sql`부터 `V7__create_secret_response_assignment.sql`, `SecretRunController.java`, `SecretRunListItemResponse.java`, `SecretConnectionTestController.java`, `SecretInventoryController.java`, `SecretRunScopeResultResponse.java`, V7의 `SecretCaseController.java`·`SecretCaseService.java`·`SecretCaseRepository.java`, `secret-worker`의 `GitHubSecretJobProcessor.java`, `AwsSecretJobProcessor.java`, `AwsIamCollector.java`, `AwsMetadataCollector.java`, `AwsContentScope.java`, `AwsContentPipeline.java`, `AwsCredentialValidator.java`; 프론트의 Secret 하위 메뉴, 탐지 목록·CSV·연결 관리·스캔 이력 화면과 `src/api/secrets.ts`; 전환 대상은 기존 `CredentialListController.java`와 `NotionLeakScanService.java`다.
+소스 확인 위치: 백엔드의 `V3__create_secret_scheduler_tables.sql`부터 `V7__create_secret_response_assignment.sql`, `SecretRunController.java`, `SecretRunListItemResponse.java`, `SecretConnectionTestController.java`, `SecretInventoryController.java`, `SecretRunScopeResultResponse.java`, V7의 `SecretCaseController.java`·`SecretCaseService.java`·`SecretCaseRepository.java`, `secret-worker`의 `GitHubSecretJobProcessor.java`, `AwsSecretJobProcessor.java`, `AwsIamCollector.java`, `AwsMetadataCollector.java`, `AwsContentScope.java`, `AwsContentPipeline.java`, `AwsCredentialValidator.java`; 프론트의 Secret 하위 메뉴, 탐지 목록·CSV·대응 관리·연결 관리·스캔 이력 화면과 `src/api/secrets.ts`·`src/api/secretCases.ts`·`src/pages/SecretCasesPage.tsx`; 전환 대상은 기존 `CredentialListController.java`와 `NotionLeakScanService.java`다.
 
 ## 3. 현재 비동기 API와 기존 API
 
@@ -44,11 +44,11 @@ S3에서는 텍스트 MIME과 작은 크기에 맞는 후보 27개를 별도 메
 | GET `/api/v1/secrets/{id}` | `ADMIN`에게 마스킹된 키 요약과 개별 위치, 환경·노출·존재 상태를 반환한다. IAM 메타데이터 항목은 최신 `iamMetadata`에 키 상태, 발급·최근 사용·관측 시각, 사용 서비스·리전을 별도 반환한다. 보호키 지문과 원문은 제외한다. |
 | GET `/api/v1/secrets/connections` | `ADMIN`에게 활성 승인 범위를 가진 GitHub 연결과 지원 형식의 IAM·Secrets Manager·SSM·S3 메타데이터 또는 정확한 값 범위를 가진 AWS 연결을 표시한다. 다른 원천과 지원되지 않는 AWS 범위는 선택 목록에서 제외한다. |
 | POST `/api/v1/secrets/connections/{connectionId}/test` | `ADMIN`과 CSRF 검사를 거친 동기 요청이다. `CONNECTED`·`FAILED`·`UNAVAILABLE`, 안전한 사유 코드와 확인 시각만 반환한다. AWS는 승인 범위의 단일 계정과 STS 신원을 확인하고 GitHub는 첫 활성 승인 저장소의 설치 토큰·`contents:read` 권한을 확인한다. 파일·비밀 값·개별 AWS 서비스 권한은 검사하지 않으며 스캔 등록이나 연결 상태 변경도 없다. |
-| GET `/api/v1/secrets/cases?page={page}&size={size}&origin={origin}` (V7 브랜치) | 현재 대응 건의 마스킹 목록이다. 기본 `origin=PRODUCTION`, 명시적 `TEST` 조회는 별도이며 각 구분에서 키당 현재 건 하나만 센다. `{items,total,page,size}`를 반환한다. 후속 스냅샷·심각도·이력 필터는 아직 없다. |
-| GET `/api/v1/secrets/cases/{caseId}` (V7 브랜치) | 건의 `caseOrigin`, 단계, 담당자, 버전, 개설 위치 ID·사유와 담당자 변경 이력을 반환한다. 현재 건과 해당 연결 범위에 Secret 역할이 있는 계정만 조회한다. |
-| POST `/api/v1/secrets/{secretId}/cases` (V7 브랜치) | `{occurrenceId,reason:"ASSESSED_EXPOSURE"}`를 받는다. 서버가 키·노출·존재·활성 GitHub 범위·`SECURITY` 권한·범위 대응 구분을 확인해 201을 반환한다. 기존 위치 `UNKNOWN`과 범위 `UNCLASSIFIED`는 개설 거부다. 개설 조건은 노출 판정·승인 절차를 대신하지 않는다. |
-| GET `/api/v1/secrets/assignees?caseId={caseId}` (V7 브랜치) | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 검증된 팀 소속만 표시한다. `SECURITY` 권한이 필요하다. |
-| PATCH `/api/v1/secrets/cases/{caseId}/assignment` (V7 브랜치) | 팀·개인, 허용된 사유 코드, `expectedVersion`을 받아 담당자·버전·변경 전후 이력·감사를 한 트랜잭션에 저장한다. 409 충돌, 세션·CSRF·`SECURITY` 권한 검사를 적용한다. |
+| GET `/api/v1/secrets/cases?page={page}&size={size}&origin={origin}` (V7) | 현재 대응 건의 마스킹 목록이다. 기본 `origin=PRODUCTION`, 명시적 `TEST` 조회는 별도이며 각 구분에서 키당 현재 건 하나만 센다. `{items,total,page,size}`를 반환한다. 후속 스냅샷·심각도·이력 필터는 아직 없다. |
+| GET `/api/v1/secrets/cases/{caseId}` (V7) | 건의 `caseOrigin`, 단계, 담당자, 버전, 개설 위치 ID·사유와 담당자 변경 이력을 반환한다. 현재 건과 해당 연결 범위에 Secret 역할이 있는 계정만 조회한다. |
+| POST `/api/v1/secrets/{secretId}/cases` (V7) | `{occurrenceId,reason:"ASSESSED_EXPOSURE"}`를 받는다. 서버가 키·노출·존재·활성 GitHub 범위·`SECURITY` 권한·범위 대응 구분을 확인해 201을 반환한다. 기존 위치 `UNKNOWN`과 범위 `UNCLASSIFIED`는 개설 거부다. 개설 조건은 노출 판정·승인 절차를 대신하지 않는다. |
+| GET `/api/v1/secrets/assignees?caseId={caseId}` (V7) | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 검증된 팀 소속만 표시한다. `SECURITY` 권한이 필요하다. |
+| PATCH `/api/v1/secrets/cases/{caseId}/assignment` (V7) | 팀·개인, 허용된 사유 코드, `expectedVersion`을 받아 담당자·버전·변경 전후 이력·감사를 한 트랜잭션에 저장한다. 409 충돌, 세션·CSRF·`SECURITY` 권한 검사를 적용한다. |
 | GET `/api/v1/credentials` | 전환 기간의 단일 `credentials` 조회다. 정식 Secret 고유 키·위치 모델과 집계 단위가 다르다. |
 | POST `/api/v1/credentials/scan` | 전환 기간에 남은 API 프로세스의 동기 Notion 스캔이다. 새 비동기 작업의 성공이나 검증 결과로 해석하지 않는다. |
 
@@ -59,6 +59,6 @@ S3에서는 텍스트 MIME과 작은 크기에 맞는 후보 27개를 별도 메
 - GitHub는 승인된 테스트 저장소의 현재 커밋과 파일 경로만 구현·확인했다. 워커가 없거나 관련 활성화 설정이 꺼져 있으면 등록된 작업이 자동으로 수집되지는 않는다.
 - AWS 계정 전체 읽기 범위는 승인됐지만 기본 실행 범위는 IAM 접근키 메타데이터와 승인된 리전별 Secrets Manager·SSM 개수, 계정 단위 S3 버킷 개수다. 별도 `AWS_SECRETS_MANAGER_VALUE`, `AWS_SSM_PARAMETER_VALUE`, `AWS_S3_OBJECT_CONTENT`는 정확한 단일 자원을 연결에 승인하고 `CURRENT_VALUE_ONLY`와 독립된 값 읽기 설정을 켜야 한다. 개발 시험은 명시적 `new` IAM 사용자 프로필을 사용했다. 운영 설계의 읽기 전용 IAM 역할과 개발 프로필은 구분한다. `SECRET_JOB_EXECUTOR_ENABLED`, `SECRET_AWS_COLLECTION_ENABLED`, `SECRET_AWS_CONTENT_READ_ENABLED`는 각각 기본 `false`다. Secret·Parameter 실제 값 수집 성공과 S3 비텍스트 거부 범위는 위 시험 결과에 한정된다. 별도 AWS STS 검증은 발견한 완전한 키 쌍에 대한 선택 기능으로, 수집과 무관하며 기본 비활성이고 합성 실험 저장소에는 호출하지 않는다.
 - Notion은 기존 API의 페이지 검색·Markdown 읽기·부분 실패 처리 코드가 있지만 워커의 승인 페이지 수집기로 아직 분리되지 않았다. 블록 전체 페이지 나눔과 지원 콘텐츠의 범위를 보완한다. Admin PAT 목록은 이번 작업에서 제외한다.
-- K8s Secret 객체 수집과 공급자별 영향 평가, 대응의 검토·외부 조치·재검증·해결 및 통합 현황은 후속 범위다. V7의 대응 건·담당자 기초만 구현 브랜치에 있다.
+- K8s Secret 객체 수집과 공급자별 영향 평가, 대응의 검토·외부 조치·재검증·해결 및 통합 현황은 후속 범위다. V7의 대응 건·담당자 기초는 백엔드와 프런트엔드 `develop`에 반영돼 있다.
 
-공유 V2 `credentials`는 유지하고 Secret 테이블은 `develop`에 V3–V6으로 추가했다. 10/15 구현 브랜치의 V7은 별도 Testcontainers PostgreSQL에서 V1부터 적용했고 대상 테스트와 전체 백엔드 테스트를 통과했으며 아직 공유 `develop` 병합 전이다. 기존 개발 DB의 V2 적용 이력을 파일명 변경으로 덮어쓰지 않는다. 별도 개발 DB에서 V1–V6 적용과 GitHub·IAM 작업 실행을 확인했다. 원래 DB의 필요한 데이터 이전은 아직 수행하지 않았다. 자세한 경계는 [마이그레이션 절](../03-architecture/database-schema.md#6-보안-보존과-마이그레이션)을 따른다.
+공유 V2 `credentials`는 유지하고 Secret 테이블 V3–V7은 백엔드 `develop`에 순서대로 병합했다. V7은 격리된 Testcontainers PostgreSQL에 V1부터 적용해 대상 및 전체 백엔드 테스트를 통과했다. 공유 로컬 개발 DB에도 V7이 추가 적용됐지만 기존 인벤토리를 대응 건으로 소급 생성하거나 다른 테이블로 데이터를 이관하지 않았다. 확인 시점의 공유 로컬 DB에는 자격 증명 15건, 발견 위치 21건, 실행 10건, 대응 건 0건, Secret 역할 부여 2건이 있다. 이 수치는 개발 환경 관측값이며 실제 노출·심각도·대응 완료를 뜻하지 않는다. 기존 V2 적용 이력은 파일명 변경으로 덮어쓰지 않는다. 향후 필요한 데이터 이전은 별도 계획과 검증 후 수행한다. 자세한 경계는 [마이그레이션 절](../03-architecture/database-schema.md#6-보안-보존과-마이그레이션)을 따른다.

@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
 
-이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·목록·상세 조회와 연결 테스트는 구현됐다. 10/15 대응 구현 브랜치의 V7에는 대응 건 개설·목록·상세와 담당자 지정의 기초 경로가 추가됐고, 요약·검토·체크리스트·외부 조치·재검증·스냅샷은 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
+이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·목록·상세 조회와 연결 테스트는 구현됐다. `develop`에 병합된 V7에는 대응 건 개설·목록·상세와 담당자 지정의 기초 경로가 추가됐고, 요약·검토·체크리스트·외부 조치·재검증·스냅샷은 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
 
 ## 1. 공통 계약
 
@@ -23,9 +23,9 @@
 | MVP | GET | `/api/v1/secrets/connections` | 수동 실행용 활성 GitHub 연결과 지원 형식의 AWS 메타데이터 또는 단일 자원 값 범위가 있는 활성 AWS 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외. 값 범위가 보여도 워커의 별도 값 읽기 설정이 활성이라는 뜻은 아님 |
 | MVP | GET | `/api/v1/secrets/runs?page={page}&size={size}` | 0부터 시작하는 페이지, 크기 1–100(기본 20). `requestedAt` 최신순, 같은 시각이면 `runId` 내림차순. `{items,total,page,size}`를 반환하며 종료된 실행과 대기 중인 실행, 현재 일시중지된 연결의 과거 실행을 함께 조회 |
 | MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드. `scopeResults`에 범위별 내부 ID·지원 콘텐츠 유형·리전·수집 상태·항목 수·안전한 누락 코드만 포함 |
-| V7 브랜치 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. 페이지는 0부터, 크기는 1–100. 집계 스냅샷·후속 필터는 아직 없음 |
-| V7 브랜치 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계, 담당 팀·개인, 버전, 개설 위치 ID·사유, 담당자 변경 이력 |
-| V7 브랜치 | GET | `/api/v1/secrets/assignees?caseId={caseId}` | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 활성 팀 소속. `SECURITY` 권한 필요 |
+| V7 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. 페이지는 0부터, 크기는 1–100. 집계 스냅샷·후속 필터는 아직 없음 |
+| V7 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계, 담당 팀·개인, 버전, 개설 위치 ID·사유, 담당자 변경 이력 |
+| V7 | GET | `/api/v1/secrets/assignees?caseId={caseId}` | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 활성 팀 소속. `SECURITY` 권한 필요 |
 | 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
 | 후속 확장 | GET | `/api/v1/secrets/cases` | 범위·스냅샷·필터를 갖춘 대응 목록. `scope=history`이면 과거 대응 건 목록. 발견 소스, 심각도, 유효성, 예외, 시각과 근거 추가 |
 | 후속 확장 | GET | `/api/v1/secrets/cases/{caseId}` | 위치별 근거와 상태, 검사 및 평가 이력, 체크리스트, 외부 조치 및 감사 이력 추가 |
@@ -74,7 +74,7 @@ AWS 연결은 활성 승인 범위가 단일 계정을 가리키는지 검사한
 
 ### 대응 건 변경과 재검증
 
-V7 브랜치의 `POST /api/v1/secrets/{secretId}/cases`는 `{ "occurrenceId", "reason": "ASSESSED_EXPOSURE" }`를 받아 201과 현재 건 상세를 반환한다. 서버는 저장된 `CONFIRMED` 키, `ABNORMAL`·`PRESENT` 위치, 활성 GitHub 연결·범위, 분류된 범위 대응 구분, 해당 연결의 `SECURITY` 권한을 확인한다. 클라이언트는 `caseOrigin`을 정할 수 없다. 기존 범위는 `UNCLASSIFIED`, 현재 수집 위치는 `UNKNOWN`이므로 별도의 승인된 노출 판정과 범위 분류 없이는 실데이터 건을 열 수 없다. IAM `METADATA_ONLY`, 불완전 후보, AWS 저장소의 값 존재나 검증 `UNKNOWN`·`UNCHECKED`만으로 개설하지 않는다. 이 개설은 노출 평가 절차 자체가 아니며 평가 근거·승인 이력은 후속 과제다.
+V7의 `POST /api/v1/secrets/{secretId}/cases`는 `{ "occurrenceId", "reason": "ASSESSED_EXPOSURE" }`를 받아 201과 현재 건 상세를 반환한다. 서버는 저장된 `CONFIRMED` 키, `ABNORMAL`·`PRESENT` 위치, 활성 GitHub 연결·범위, 분류된 범위 대응 구분, 해당 연결의 `SECURITY` 권한을 확인한다. 클라이언트는 `caseOrigin`을 정할 수 없다. 기존 범위는 `UNCLASSIFIED`, 현재 수집 위치는 `UNKNOWN`이므로 별도의 승인된 노출 판정과 범위 분류 없이는 실데이터 건을 열 수 없다. IAM `METADATA_ONLY`, 불완전 후보, AWS 저장소의 값 존재나 검증 `UNKNOWN`·`UNCHECKED`만으로 개설하지 않는다. 이 개설은 노출 평가 절차 자체가 아니며 평가 근거·승인 이력은 후속 과제다.
 
 V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeUserId", "reason", "expectedVersion" }`를 받는다. 사유는 `INITIAL_ASSIGNMENT`, `OWNERSHIP_CHANGE`, `TEAM_TRANSFER`, `UNASSIGNED`, `OTHER` 중 하나다. 권한 있는 기존 조치 담당자와 팀 소속만 지정하며, 비밀 원문이 들어갈 수 있는 자유 형식 사유를 저장하지 않는다. 같은 트랜잭션에서 담당자, 버전, 변경 전후 이력과 안전한 감사 이벤트를 저장한다. 잘못된 버전은 409이며 검토·조치 단계는 담당자 지정만으로 바뀌지 않는다. 아래 다른 변경 경로는 후속 목표다.
 
