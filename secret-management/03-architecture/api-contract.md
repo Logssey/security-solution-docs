@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
 
-이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·목록·상세 조회와 연결 테스트는 구현됐다. `develop`에 병합된 V7에는 대응 건 개설·목록·상세와 담당자 지정의 기초 경로가 추가됐고, 요약·검토·체크리스트·외부 조치·재검증·스냅샷은 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
+이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·목록·상세 조회와 연결 테스트는 구현됐다. V7은 대응 건·담당자 지정을, V8은 수동 범위 분류와 노출 판정을 추가한다. 요약·검토·체크리스트·외부 조치·재검증·스냅샷은 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
 
 ## 1. 공통 계약
 
@@ -26,12 +26,18 @@
 | V7 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. 페이지는 0부터, 크기는 1–100. 집계 스냅샷·후속 필터는 아직 없음 |
 | V7 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계, 담당 팀·개인, 버전, 개설 위치 ID·사유, 담당자 변경 이력 |
 | V7 | GET | `/api/v1/secrets/assignees?caseId={caseId}` | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 활성 팀 소속. `SECURITY` 권한 필요 |
+| V8 | GET | `/api/v1/secrets/triage-candidates?page={page}&size={size}` | 연결별 `SECURITY` 권한이 있는 활성 GitHub 범위의 후보 키만 `{items,total,page,size}`로 조회. 항목은 키 ID, 마스킹 이름, 발급자, 유형, 구성 상태, 허용된 위치 수만 반환 |
+| V8 | GET | `/api/v1/secrets/triage-candidates/{secretId}` | 같은 권한 경계의 후보 키와 선택 가능한 발견 위치를 조회. 위치 ID, 연결·범위 ID, 원천 위치, 환경, 노출·존재 상태와 판정·범위 버전 제공 |
+| V8 | GET | `/api/v1/secrets/scopes/{scopeId}/response-origin` | 승인 범위의 `responseOrigin`, `responseOriginVersion`, 서버가 허용한 `allowedOrigins`, 분류 수행자·시각과 추가 전용 분류 이력. 비밀이 될 수 있는 원천 참조는 제외 |
+| V8 | GET | `/api/v1/secrets/occurrences/{occurrenceId}/triage` | 위치의 `secretId`, `scopeId`, 구성·존재·노출 상태, `assessmentVersion`, 범위 구분·버전, 같은 키·구분의 현재 건 `openCaseId`(없으면 null), 해당 위치에 속하는 Finding ID·룰·탐지 시각과 수동 판정 이력. Finding 문맥과 원문은 제외 |
 | 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
 | 후속 확장 | GET | `/api/v1/secrets/cases` | 범위·스냅샷·필터를 갖춘 대응 목록. `scope=history`이면 과거 대응 건 목록. 발견 소스, 심각도, 유효성, 예외, 시각과 근거 추가 |
 | 후속 확장 | GET | `/api/v1/secrets/cases/{caseId}` | 위치별 근거와 상태, 검사 및 평가 이력, 체크리스트, 외부 조치 및 감사 이력 추가 |
 | 후속 | GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
 
 MVP 인벤토리 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 정확한 AWS 본문에서 키 후보를 탐지해도 그 자원이 외부에 노출됐다는 뜻은 아니며 노출·영향·심각도는 별도 근거로 평가한다. V7은 대응 건의 기초 기록만 제공하며 집계 스냅샷과 실제 단계별 수는 아직 제공하지 않으므로 아래 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
+
+수동 판정 화면은 기존 `ADMIN` 전용 인벤토리 API를 권한 우회용으로 확장하지 않는다. V8의 후보 목록·상세 API가 활성 GitHub 연결·승인 범위와 현재 사용자의 연결별 `SECURITY` 권한으로 위치를 SQL에서 제한한다. 한 키에 여러 위치가 있어도 권한 밖 위치는 상세 응답에 나타나지 않고, 응답의 위치 수는 허용된 위치의 수다. 원문 키·보호키 식별값은 반환하지 않는다.
 
 실행 이력 목록의 각 `items[]`는 `runId`, `connectionId`, `provider`, 현재 연결 `displayName`, `triggerType`, `status`, `collectionStatus`, `detectionStatus`, `validationStatus`, `scopeCount`, `completedScopeCount`, `incompleteScopeCount`, `collectedObjectCount`, `requestedAt`, `startedAt`, `finishedAt`, `failureCode`만 포함한다. 전체·단계 상태와 시각은 상세 API와 같은 의미다. `failureCode`는 허용된 코드만 노출하고 알 수 없는 내부 문구는 `UNSPECIFIED_FAILURE`로 바꾼다. 계정 번호, `auth_ref`, `approved_ref`, 자원 이름·ARN, 원문 값, 공급자 오류 본문과 범위별 상세는 목록에 넣지 않는다. `collectedObjectCount`는 확인한 원천 항목 수이며 **새로 발견한 키 수가 아니다**. 스캔 이력은 `secret_scan_runs` 단위이고 `/cases?scope=history`의 과거 대응 건과 다르다. 현재 `displayName`은 실행 당시 이름의 스냅샷이 아니라 연결의 현행 표시 이름이다.
 
@@ -74,12 +80,21 @@ AWS 연결은 활성 승인 범위가 단일 계정을 가리키는지 검사한
 
 ### 대응 건 변경과 재검증
 
-V7의 `POST /api/v1/secrets/{secretId}/cases`는 `{ "occurrenceId", "reason": "ASSESSED_EXPOSURE" }`를 받아 201과 현재 건 상세를 반환한다. 서버는 저장된 `CONFIRMED` 키, `ABNORMAL`·`PRESENT` 위치, 활성 GitHub 연결·범위, 분류된 범위 대응 구분, 해당 연결의 `SECURITY` 권한을 확인한다. 클라이언트는 `caseOrigin`을 정할 수 없다. 기존 범위는 `UNCLASSIFIED`, 현재 수집 위치는 `UNKNOWN`이므로 별도의 승인된 노출 판정과 범위 분류 없이는 실데이터 건을 열 수 없다. IAM `METADATA_ONLY`, 불완전 후보, AWS 저장소의 값 존재나 검증 `UNKNOWN`·`UNCHECKED`만으로 개설하지 않는다. 이 개설은 노출 평가 절차 자체가 아니며 평가 근거·승인 이력은 후속 과제다.
+V8의 수동 판정은 해당 연결의 `SECURITY` 권한을 요구하며 현재 활성 GitHub 범위에 한정한다. `PATCH /api/v1/secrets/scopes/{scopeId}/response-origin`은 `{ "origin": "TEST|PRODUCTION", "reasonCode", "expectedVersion" }`를 받는다. 허용 조합은 `TEST`와 `APPROVED_TEST_FIXTURE`, `PRODUCTION`과 `APPROVED_PRODUCTION_SOURCE`다. 처음에는 `UNCLASSIFIED`이고 한 번만 분류할 수 있으며 공급자·환경·저장소 이름에서 자동으로 운영 분류를 만들지 않는다. 알려진 `github://Logssey/test-find-key/...` 합성 표본 범위는 서버가 `PRODUCTION` 선택을 거부하고 `allowedOrigins`에 `TEST`만 제공한다. 그 밖의 범위도 보안 담당자의 명시적 선택이 필요하다. 버전 충돌은 409다. 분류 전후, 사유 코드, 수행자, 시각과 버전은 추가 전용 이력에 보존한다.
+
+`POST /api/v1/secrets/occurrences/{occurrenceId}/assessments`는 `{ "decision": "ABNORMAL|NORMAL", "reasonCode", "findingId", "expectedVersion" }`를 받는다. `ABNORMAL` 사유는 `UNAPPROVED_SOURCE_LOCATION`, 시험 범위에서만 `SIMULATED_EXPOSURE`다. `NORMAL` 사유는 `AUTHORIZED_LOCATION`이다. `findingId`는 같은 위치의 형식 탐지 기록이어야 하며, 노출 판단의 자동 증명이 아니라 담당자가 검토한 자료를 가리킨다. 활성 GitHub 연결·분류된 범위, `CONFIRMED` 키, `PRESENT` 위치에서만 판정한다. 수동 판정의 변경 전후 상태·사유·Finding ID·수행자·시각·버전을 이력으로 저장하고 최신 판정을 위치에 반영한다. 근거가 부족하면 `UNKNOWN`을 유지한다. 원문 키나 자유 형식 메모는 요청·응답·감사에 담지 않는다.
+
+V8 이후 `POST /api/v1/secrets/{secretId}/cases`는 `{ "occurrenceId", "reason": "ASSESSED_EXPOSURE", "expectedAssessmentVersion", "expectedScopeOriginVersion" }`를 받아 201과 현재 건 상세를 반환한다. 서버는 저장된 최신 수동 판정이 `ABNORMAL`인지, 두 버전이 일치하는지, `CONFIRMED` 키와 `PRESENT` 위치, 활성 GitHub 연결·범위, 해당 연결의 `SECURITY` 권한을 다시 확인한다. 클라이언트는 `caseOrigin`을 정할 수 없고 서버가 분류된 범위에서 결정한다. `UNCLASSIFIED`, `UNKNOWN`, IAM `METADATA_ONLY`, 불완전 후보, AWS 저장소의 값 존재나 검증 `UNKNOWN`·`UNCHECKED`만으로 개설하지 않는다. 판정 저장만으로 대응 건을 자동 생성하지 않으며, 재스캔은 수동 판정을 덮어쓰지 않는다.
+
+같은 키·구분에 현재 대응 건이 이미 있으면 새 건 개설은 409다. V8은 그 건의 `openCaseId`를 보여주지만 다른 비정상 노출 위치를 기존 건에 추가 연결하는 API는 아직 제공하지 않는다. 여러 위치를 한 건으로 묶는 목표 계약과 현재 구현의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 남긴다.
 
 V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeUserId", "reason", "expectedVersion" }`를 받는다. 사유는 `INITIAL_ASSIGNMENT`, `OWNERSHIP_CHANGE`, `TEAM_TRANSFER`, `UNASSIGNED`, `OTHER` 중 하나다. 권한 있는 기존 조치 담당자와 팀 소속만 지정하며, 비밀 원문이 들어갈 수 있는 자유 형식 사유를 저장하지 않는다. 같은 트랜잭션에서 담당자, 버전, 변경 전후 이력과 안전한 감사 이벤트를 저장한다. 잘못된 버전은 409이며 검토·조치 단계는 담당자 지정만으로 바뀌지 않는다. 아래 다른 변경 경로는 후속 목표다.
 
 | Method | 경로 | 요청과 불변 조건 |
 |---|---|---|
+| PATCH (V8) | `/api/v1/secrets/scopes/{scopeId}/response-origin` | 허용된 시험·운영 분류와 사유 코드, `expectedVersion`. `UNCLASSIFIED`에서 한 번만 전이, 수행자·시각·변경 전후 감사 |
+| POST (V8) | `/api/v1/secrets/occurrences/{occurrenceId}/assessments` | 해당 위치의 Finding ID, 노출 판정·사유 코드, `expectedVersion`. `UNKNOWN`은 근거 부족 시 유지, 판정 이력 보존 |
+| POST (V8 적용) | `/api/v1/secrets/{secretId}/cases` | `occurrenceId`, `ASSESSED_EXPOSURE`, 두 최신 판정·범위 버전. 서버가 분류와 비정상 노출을 재확인하고 운영·시험 구분을 파생 |
 | PATCH (V7) | `/api/v1/secrets/cases/{caseId}/assignment` | 팀과 개인, 허용된 사유 코드, `expectedVersion`. 수행자, 변경 전후, 시각 감사 |
 | POST | `/api/v1/secrets/cases/{caseId}/review` | 검토 결과와 사유, `expectedVersion`. 검토만으로 RESOLVED 전이 금지 |
 | POST | `/api/v1/secrets/cases/{caseId}/actions` | 외부 수행 종류, 대상 위치, 실제 수행 시각, 비밀 제거 증거 참조, `expectedVersion`. 공급자 키 변경 호출 없음 |
@@ -95,7 +110,7 @@ V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeU
 
 보안 담당자는 검토, 심각도 근거 확인, 예외 승인을 수행한다. 인프라 및 개발 담당자는 할당된 대응 건의 외부 조치 기록, 체크리스트와 재검증 요청을 수행한다. 운영 관리자는 연결 범위와 실행 상태를 관리한다. 담당자 지정과 해결은 보안 담당자 또는 명시적으로 위임된 역할에 한정한다. 서버는 대상 범위까지 검사하며 화면 숨김만으로 권한을 구현하지 않는다.
 
-계정 인증은 기존 `dashboard_users`와 세션을 사용한다. `ADMIN`이라는 값만으로 Secret의 `SECURITY`, `REMEDIATOR`, `OPERATIONS` 권한을 자동 부여하지 않고 V7의 `secret_role_grants`와 연결 범위를 확인한다. V7은 개발 환경에서 명시적으로 지정한 기존 계정에 전역 Secret 역할을 한 번 부여하는 선택적 초기화 경로를 제공한다. 빈 설정은 권한을 주지 않고, 취소된 부여를 재시작으로 복구하지 않는다. 운영 환경의 승인된 역할 부여·취소, 연결별 범위 관리, 새 담당자 계정 생성·비활성화와 그 감사 절차는 후속이다. 현재 자동 등록 관리자 1개와 이름 문자열만으로 여러 개인 담당자가 준비됐다고 표시하지 않는다. 공개 회원가입이나 새로운 로그인 방식은 이 문서에서 도입하지 않는다.
+계정 인증은 기존 `dashboard_users`와 세션을 사용한다. `ADMIN`이라는 값만으로 Secret의 `SECURITY`, `REMEDIATOR`, `OPERATIONS` 권한을 자동 부여하지 않고 V7의 `secret_role_grants`와 연결 범위를 확인한다. V7은 개발 환경에서 명시적으로 지정한 기존 계정에 전역 Secret 역할을 한 번 부여하는 선택적 초기화 경로를 제공한다. 빈 설정은 권한을 주지 않고, 취소된 부여를 재시작으로 복구하지 않는다. V8의 수동 판정 후보는 연결별 `SECURITY` 범위로 제한하며 기존 `ADMIN` 인벤토리를 판정 접근 경계로 사용하지 않는다. 운영 환경의 승인된 역할 부여·취소, 범위별 역할 관리, 잘못 분류한 범위의 교정, 새 담당자 계정 생성·비활성화와 그 감사 절차는 후속이다. 현재 자동 등록 관리자 1개와 이름 문자열만으로 여러 개인 담당자가 준비됐다고 표시하지 않는다. 공개 회원가입이나 새로운 로그인 방식은 이 문서에서 도입하지 않는다.
 
 기존 `/overview` 응답의 숫자 점수는 새 Secret 요약의 근거가 아니다. 기존 클라이언트 호환을 위해 기존 필드를 즉시 재해석하지 않고 새 Secret 응답을 연결한 뒤 화면을 단계적으로 전환한다. 100점 표시 제거 시 해당 필드의 사용처와 계약 테스트를 확인하고 버전 변경 또는 사용 중단을 기록한다. 실제 전환 대상 코드와 순서는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)에 둔다.
 
