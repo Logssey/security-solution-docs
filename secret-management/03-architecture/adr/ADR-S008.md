@@ -2,6 +2,7 @@
 
 - 상태: **Accepted — Java API와 워커 분리, PostgreSQL 데이터 경계**
 - 결정일: 2026-10-09
+- 보완일: 2026-10-15 — `TEST` 시뮬레이션 범위를 운영 조회와 분리
 - 기준: [PRD v0.4](../../01-requirements/PRD.md), FR-04부터 FR-15, NFR-03, NFR-05, SEC-02, SEC-05
 
 ## 이슈
@@ -16,7 +17,7 @@ Connection/ScanRun, CredentialSet/Occurrence, ValidationAttempt, Assessment, Res
 
 ## 구현 계약
 
-기존 detection_events는 일반 탐지 이력으로 유지하고 Secret 전용 모델을 별도 논리 기록으로 연결한다. 한 CredentialSet의 현재 ResponseCase는 최대 한 건이며 발생 위치별 판정과 조치 근거를 보존한다. [데이터 계약](../data-contract.md)과 [API 계약](../api-contract.md)에 필드, 집계와 변경 경계를 정의한다. 실제 테이블 배치와 기존 저장소 통합은 코드 확인 후 새 마이그레이션으로 구현하며 기존 저장소 배치 ADR의 상태를 이 문서가 변경하지 않는다.
+기존 detection_events는 일반 탐지 이력으로 유지하고 Secret 전용 모델을 별도 논리 기록으로 연결한다. 운영 범위에서 한 CredentialSet의 현재 ResponseCase는 최대 한 건이고 발생 위치별 판정과 조치 근거를 보존한다. 합성 시험은 `TEST` 시뮬레이션 범위에 분리해 동일 키의 시험 건이 운영 건과 동시에 존재할 수 있지만 운영 화면·집계에는 포함하지 않는다. [데이터 계약](../data-contract.md)과 [API 계약](../api-contract.md)에 필드, 집계와 변경 경계를 정의한다. 실제 테이블 배치와 기존 저장소 통합은 코드 확인 후 새 마이그레이션으로 구현하며 기존 저장소 배치 ADR의 상태를 이 문서가 변경하지 않는다.
 
 새 Secret 기능은 기존 기술 기반을 따른다. 화면은 **React와 TypeScript**, 인증 및 대시보드 API는 **Java 21과 Spring Boot**, 메타데이터와 영속 작업 대기열은 **PostgreSQL**, 스키마 변경은 **Flyway**로 구현한다. 수집, 탐지 도구 실행, 정규화와 공급자 검증은 API와 분리된 Java 워커 프로세스에서 수행한다. MVP 후보 탐지 도구는 [ADR-S001](ADR-S001.md)에 따라 Gitleaks 8.30.1을 사용한다. API와 워커는 필요한 도메인 계약을 공유할 수 있지만 실행 계정, 연결 권한과 네트워크 접근은 분리한다. Python을 제품의 기본 실행 언어나 별도 작업 계층으로 도입하지 않는다.
 

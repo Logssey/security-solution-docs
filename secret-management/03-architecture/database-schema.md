@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [API 계약](api-contract.md), [심각도 정책](../02-functional-design/severity-policy.md), [대응 정책](../02-functional-design/response-policy.md), [ADR-S002](adr/ADR-S002.md), [ADR-S003](adr/ADR-S003.md), [ADR-S005](adr/ADR-S005.md), [ADR-S008](adr/ADR-S008.md).
 
-이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-14 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop` `9ebb4a8`이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업 테이블 5개, V4는 키·위치·탐지 테이블 4개, V5는 검증 시도 테이블 1개, V6은 AWS IAM 접근키 메타데이터 관측 테이블 1개와 고유 인덱스를 추가했다. Secrets Manager·SSM·S3의 개수 수집과 정확한 AWS 단일 값 수집 경로는 기존 V3–V5 테이블을 사용하며 추가 마이그레이션은 없다. 아래의 평가·대응·역할·집계 스냅샷 테이블은 아직 구현되지 않은 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
+이 문서는 PostgreSQL의 Secret 물리 스키마와 후속 확장 목표를 구분한다. 2026-10-15 확인 기준은 [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `develop`에 반영된 V1–V6과 10/15 대응 건 구현 브랜치의 `96245c2` V7이다. V1의 `dashboard_users`, `assets`, `detection_events`와 공유 V2의 기존 단일 `credentials`는 유지한다. V3은 연결·작업, V4는 키·위치·탐지, V5는 검증 시도, V6은 AWS IAM 접근키 메타데이터 관측을 추가했다. Secrets Manager·SSM·S3의 개수 수집과 정확한 AWS 단일 값 수집 경로는 기존 V3–V5를 사용한다. V7은 대응 건·담당자·권한의 기초를 추가하며 평가·검토·체크리스트·외부 조치·재검증·집계 스냅샷은 아직 목표다. 현재 상태와 전환 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 기록한다.
 
 | 마이그레이션 | 현재 구현된 테이블 | 아직 포함하지 않는 범위 |
 |---|---|---|
@@ -10,6 +10,7 @@
 | V4 | `secret_credential_sets`, `secret_occurrences`, `secret_tool_runs`, `secret_findings` | 평가·대응·사용 근거 |
 | V5 | `secret_validation_attempts` | 공급자별 영향 평가와 수동 재검증 API |
 | V6 | `secret_aws_access_key_observations`, IAM 메타데이터 식별 고유 인덱스 | IAM 비밀 키 원문, 유효성·노출·권한·심각도 평가, Secrets Manager·SSM·S3 목록의 자원별 개별 기록 |
+| V7 (구현 브랜치) | `secret_response_cases`, `secret_case_occurrences`, `secret_assignment_history`, `secret_audit_events`, `secret_role_grants`, `secret_team_memberships`; 승인 범위의 대응 구분 | 기존 발견의 자동 대응 건 생성, 노출 판정 API·근거 이력, 검토·체크리스트·외부 조치·재검증, 평가·스냅샷 |
 
 로컬 개발 DB는 기존 대시보드 ADR-D004를 사용하며 별도 개발용 ADR을 만들지 않는다. 운영 저장 위치는 ADR-D005가 별도로 결정한다. 이 문서는 테이블·논리 접근 경계를 정의하며 운영 DB 서버나 배포 위치를 확정하지 않는다.
 
@@ -17,7 +18,7 @@
 
 | 기존 테이블 | 이 설계의 사용 방식 |
 |---|---|
-| `dashboard_users` | 담당자, 승인자, 요청자, 감사 행위자의 FK 대상이다. 현재 DB의 역할은 `ADMIN` 하나이므로 세부 권한은 서버 정책과 후속 역할 확장으로 구현한다. `ADMIN`이라는 값만으로 보안 담당자 승인 권한이 검증됐다고 간주하지 않는다. |
+| `dashboard_users` | 담당자, 승인자, 요청자, 감사 행위자의 FK 대상이다. 기존 로그인 역할은 `ADMIN` 하나지만 V7 대응 API는 별도 `secret_role_grants`의 Secret 역할과 연결 범위를 검사한다. `ADMIN`이라는 값만으로 보안 담당자 권한을 부여하지 않는다. 운영용 계정 생성·비활성화와 권한 부여 절차는 후속이다. |
 | `assets` | AWS, K8s, GitHub에서 기존 자산과 명확히 대응할 때만 선택적으로 연결한다. 현재 `provider`는 `NOTION`을, `environment`는 `UNKNOWN`을 허용하지 않는다. Notion 위치와 환경 미확인 위치를 `PROD`로 바꾸거나 가짜 자산을 만들지 않는다. |
 | `detection_events` | 현재 일반 탐지와 기존 `/api/v1/overview` 조회용으로 유지한다. 필수 심각도와 환경, 네 가지 조치 상태로는 Secret의 미평가, UNKNOWN 환경, 재검증 대기, 위치별 예외를 표현할 수 없다. Secret 사실의 원본 테이블로 사용하지 않는다. 새 통합 현황은 API에서 두 출처의 조회 결과를 합성한다. |
 
@@ -40,14 +41,14 @@ Secret 전용 테이블 이름은 `secret_` 접두사를 쓴다. 기본 키는 �
 
 ## 3. 테이블 명세
 
-V3–V6에 포함된 테이블은 현재 적용된 제약을, 그 밖의 테이블은 후속 목표를 적는다. `NOT NULL`을 적지 않은 현재 컬럼은 NULL을 허용한다. 목표 표에서 연속으로 적은 시각 컬럼은 각각 `TIMESTAMPTZ`이며, 연속으로 적은 사용자 ID는 각각 `BIGINT FK`다. 코드형 값은 `VARCHAR`와 `CHECK`를 쓰되 공급자별 키 유형과 룰 ID는 버전 관리하는 애플리케이션 등록부에서 검증한다.
+V3–V6은 `develop`에 반영된 제약, V7은 10/15 구현 브랜치의 제약이다. 후속 목표는 별도로 표시한다. `NOT NULL`을 적지 않은 현재 컬럼은 NULL을 허용한다. 목표 표에서 연속으로 적은 시각 컬럼은 각각 `TIMESTAMPTZ`이며, 연속으로 적은 사용자 ID는 각각 `BIGINT FK`다. 코드형 값은 `VARCHAR`와 `CHECK`를 쓰되 공급자별 키 유형과 룰 ID는 버전 관리하는 애플리케이션 등록부에서 검증한다.
 
 ### 3.1. 연결, 범위, 실행
 
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
 | `secret_connections` | `connection_id BIGINT PK`, `provider VARCHAR(20) NOT NULL`, `display_name VARCHAR(200) NOT NULL`, `auth_ref VARCHAR(300) NOT NULL`, `status VARCHAR(20) NOT NULL`, `scope_version BIGINT NOT NULL`, `next_due_at TIMESTAMPTZ`, `last_collection_success_at TIMESTAMPTZ`, `created_at`, `updated_at TIMESTAMPTZ NOT NULL` | `provider`는 `AWS`, `KUBERNETES`, `GITHUB`, `NOTION`; `status`는 `ACTIVE`, `PAUSED`, `ERROR`. `auth_ref`는 비밀 저장소의 불투명 참조이며 값 자체는 넣지 않는다. 범위 변경 때 `scope_version`을 증가시킨다. |
-| `secret_connection_scopes` | `scope_id BIGINT PK`, `connection_id BIGINT NOT NULL FK`, `scope_key VARCHAR(300) NOT NULL`, `revision BIGINT NOT NULL`, `content_type VARCHAR(80) NOT NULL`, `approved_ref VARCHAR(500) NOT NULL`, `history_limit VARCHAR(100)`, `enabled BOOLEAN NOT NULL`, `classification_version VARCHAR(80)`, `created_at`, `updated_at TIMESTAMPTZ NOT NULL` | `UQ(connection_id, scope_key, revision)`. 범위 정의는 실행 이력의 근거이므로 승인 대상과 이력 한도를 제자리에서 바꾸지 않고 새 revision 행을 만든다. 저장소, 브랜치, 페이지, AWS 계정과 리전, K8s 네임스페이스처럼 승인된 단위를 표현한다. |
+| `secret_connection_scopes` | `scope_id BIGINT PK`, `connection_id BIGINT NOT NULL FK`, `scope_key VARCHAR(300) NOT NULL`, `revision BIGINT NOT NULL`, `content_type VARCHAR(80) NOT NULL`, `approved_ref VARCHAR(500) NOT NULL`, `history_limit VARCHAR(100)`, `enabled BOOLEAN NOT NULL`, `classification_version VARCHAR(80)`, `created_at`, `updated_at TIMESTAMPTZ NOT NULL`; V7의 `response_origin VARCHAR(20) NOT NULL`, `response_origin_set_by_user_id BIGINT FK`, `response_origin_set_at TIMESTAMPTZ` | `UQ(connection_id, scope_key, revision)`. 범위 정의는 실행 이력의 근거이므로 승인 대상과 이력 한도를 제자리에서 바꾸지 않고 새 revision 행을 만든다. 저장소, 브랜치, 페이지, AWS 계정과 리전, K8s 네임스페이스처럼 승인된 단위를 표현한다. V7의 대응 구분은 `UNCLASSIFIED`가 기본이고 `PRODUCTION`·`TEST`로 분류할 때 기록자·시각이 필요하다. 현재 분류 변경 API와 불변 이력은 없다. |
 | `secret_asset_classifications` | `classification_id BIGINT PK`, `scope_id BIGINT NOT NULL FK`, `resource_ref VARCHAR(500) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `criticality VARCHAR(20) NOT NULL`, `sensitive_data BOOLEAN`, `version BIGINT NOT NULL`, `evidence_ref VARCHAR(500)`, `classified_at TIMESTAMPTZ NOT NULL`, `classified_by_user_id BIGINT FK` | `UQ(scope_id, resource_ref, version)`. 환경은 `PROD`, `DEV`, `UNKNOWN`; 중요도는 `CRITICAL`, `IMPORTANT`, `LIMITED`, `MINIMAL`, `UNKNOWN`. 이름만 보고 분류하지 않는다. 과거 버전을 보존한다. |
 | `secret_jobs` | `job_id BIGINT PK`, `kind VARCHAR(20) NOT NULL`, `connection_id BIGINT NOT NULL FK`, `requested_by_user_id BIGINT FK`, `idempotency_key VARCHAR(120)`, `scheduled_at TIMESTAMPTZ NOT NULL`, `available_at TIMESTAMPTZ NOT NULL`, `attempt_no INTEGER NOT NULL`, `max_attempts INTEGER NOT NULL`, `status VARCHAR(20) NOT NULL`, `lease_owner VARCHAR(120)`, `lease_until TIMESTAMPTZ`, `last_error_code VARCHAR(80)`, `created_at`, `finished_at TIMESTAMPTZ` | V3은 `FULL_SCAN`만 허용한다. `REVALIDATE`와 `credential_set_id`는 후속 마이그레이션 대상이다. 상태는 `PENDING`, `LEASED`, `SUCCEEDED`, `FAILED`, `CANCELLED`. 정기 예약·수동 멱등·연결별 활성 작업 중복은 별도 고유 인덱스로 막는다. |
 | `secret_scan_runs` | `run_id BIGINT PK`, `job_id BIGINT NOT NULL UQ FK`, `connection_id BIGINT NOT NULL FK`, `trigger_type VARCHAR(20) NOT NULL`, `scope_version BIGINT NOT NULL`, `scheduled_at`, `requested_at TIMESTAMPTZ NOT NULL`, `started_at`, `finished_at TIMESTAMPTZ`, `collection_status`, `detection_status`, `validation_status VARCHAR(20) NOT NULL`, `result_status VARCHAR(20) NOT NULL`, `failure_code VARCHAR(80)`, `created_at TIMESTAMPTZ NOT NULL` | V3에서 `scheduled_at`도 `TIMESTAMPTZ NOT NULL`이다. 단계 상태는 `PENDING`, `RUNNING`, `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED`; 전체 결과도 같은 범위다. `trigger_type`은 `SCHEDULED`, `MANUAL`. 수동 재검증은 별도 작업과 검사 시도로 추적하며 전체 범위 스캔으로 꾸미지 않는다. |
@@ -77,19 +78,21 @@ AWS의 Secrets Manager·SSM·S3 메타데이터 범위는 `secret_connection_sco
 
 ### 3.3. 대응과 변경 이력
 
+V7에서 구현된 테이블은 `secret_response_cases`, `secret_case_occurrences`, `secret_assignment_history`, `secret_role_grants`, `secret_team_memberships`, `secret_audit_events`다. 아래 표의 나머지 대응·평가·예외 테이블과 V7 행에 적은 후속 필드는 아직 목표다. V7은 기존 발견을 대응 건으로 소급 생성하지 않는다. 현재 수집 위치의 노출은 `UNKNOWN`, 기존 범위의 대응 구분은 `UNCLASSIFIED`이므로 별도의 판정·분류 전에는 실데이터 대응 건을 열 수 없다.
+
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
-| `secret_response_cases` | `case_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `previous_case_id BIGINT FK`, `is_current BOOLEAN NOT NULL`, `disposition VARCHAR(20) NOT NULL`, `action_status VARCHAR(30) NOT NULL`, `review_status VARCHAR(20) NOT NULL`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT FK`, `version BIGINT NOT NULL`, `opened_at`, `updated_at TIMESTAMPTZ NOT NULL`, `resolved_at`, `closed_at TIMESTAMPTZ` | `disposition`은 `IN_SCOPE`, `FALSE_POSITIVE`, `OUT_OF_SCOPE`. 조치는 `OPEN`, `IN_PROGRESS`, `REVALIDATION_PENDING`, `RESOLVED`; 검토는 `UNREVIEWED`, `REVIEWED`. `RISK_ACCEPTED`는 조치 상태가 아니라 아래 예외에서 계산한다. 키마다 `is_current=true` 최대 한 건. 재발 시 이전 건을 false로 바꾸고 새 건을 연다. |
-| `secret_case_occurrences` | `case_id BIGINT NOT NULL FK`, `occurrence_id BIGINT NOT NULL FK`, `response_status VARCHAR(30) NOT NULL`, `linked_at TIMESTAMPTZ NOT NULL`, `action_evidence_id BIGINT FK`, `revalidation_evidence_id BIGINT FK`, `resolved_at TIMESTAMPTZ`, 복합 PK | 위치 상태는 `OPEN`, `IN_PROGRESS`, `REVALIDATION_PENDING`, `RESOLVED`. 위치가 해당 건의 키에 속해야 한다. 일부 위치 해결이 다른 위치를 해결하지 않는다. |
-| `secret_assignment_history` | `assignment_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `from_team`, `to_team VARCHAR(100)`, `from_user_id`, `to_user_id BIGINT FK`, `reason VARCHAR(500) NOT NULL`, `changed_by_user_id BIGINT NOT NULL FK`, `changed_at TIMESTAMPTZ NOT NULL`, `case_version BIGINT NOT NULL` | 현재 담당자는 `secret_response_cases`에 두고 변경 이력을 추가 기록한다. 서버가 인증 사용자 ID를 채운다. |
+| `secret_response_cases` | `case_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `previous_case_id BIGINT FK`, `opening_occurrence_id BIGINT NOT NULL FK`, `opened_by_user_id BIGINT NOT NULL FK`, `opening_reason VARCHAR(80) NOT NULL`, `case_origin VARCHAR(20) NOT NULL`, `is_current BOOLEAN NOT NULL`, `disposition VARCHAR(20) NOT NULL`, `action_status VARCHAR(30) NOT NULL`, `review_status VARCHAR(20) NOT NULL`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT FK`, `version BIGINT NOT NULL`, `opened_at`, `updated_at TIMESTAMPTZ NOT NULL`, `resolved_at`, `closed_at TIMESTAMPTZ` | V7은 `case_origin`을 `PRODUCTION`·`TEST`로 분리하고 `(credential_set_id, case_origin)`마다 현재 건을 최대 하나 허용한다. 개설 위치는 같은 키에 속해야 한다. 현재 개설 단계는 `OPEN`, 검토는 `UNREVIEWED`다. 조치·검토의 이후 전이, 해결·재발은 후속 구현이다. `RISK_ACCEPTED`는 조치 상태가 아니라 후속 예외에서 계산한다. |
+| `secret_case_occurrences` | `case_id`, `occurrence_id`, `credential_set_id BIGINT NOT NULL FK`, `response_status VARCHAR(30) NOT NULL`, `linked_at TIMESTAMPTZ NOT NULL`, `resolved_at TIMESTAMPTZ`, 복합 PK `(case_id, occurrence_id)` | V7은 복합 FK로 위치가 대응 건과 같은 키에 속하는지 확인한다. 현재 개설 위치의 상태는 `OPEN`이다. 위치별 조치·재검증 증거 FK는 후속이다. 일부 위치 해결이 다른 위치를 해결하지 않는다. |
+| `secret_assignment_history` | `assignment_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `from_team`, `to_team VARCHAR(100)`, `from_user_id`, `to_user_id BIGINT FK`, `reason VARCHAR(80) NOT NULL`, `changed_by_user_id BIGINT NOT NULL FK`, `changed_at TIMESTAMPTZ NOT NULL`, `case_version BIGINT NOT NULL` | V7은 허용된 사유 코드만 받는다. 현재 담당자는 `secret_response_cases`에 두고 버전 변경, 이력, 감사 행을 한 트랜잭션에 추가한다. 서버가 인증 사용자 ID를 채운다. |
 | `secret_case_reviews` | `review_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `occurrence_id BIGINT FK`, `decision VARCHAR(30) NOT NULL`, `reason VARCHAR(500) NOT NULL`, `reviewed_by_user_id BIGINT NOT NULL FK`, `reviewed_at TIMESTAMPTZ NOT NULL`, `case_version BIGINT NOT NULL` | 결정은 `CONFIRMED`, `FALSE_POSITIVE`, `OUT_OF_SCOPE`, `NEEDS_MORE_INFO`. 위치별 판단을 연결한다. 오탐과 대상 제외는 위험 수용과 구분한다. |
 | `secret_action_records` | `action_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `occurrence_id BIGINT FK`, `action_type VARCHAR(40) NOT NULL`, `performed_at TIMESTAMPTZ NOT NULL`, `recorded_at TIMESTAMPTZ NOT NULL`, `performed_by_label VARCHAR(200) NOT NULL`, `recorded_by_user_id BIGINT NOT NULL FK`, `evidence_ref VARCHAR(500)`, `safe_note TEXT` | 실제 외부 작업을 사람이 기록한다. `performed_at`은 서버 기록 시각과 다르다. 제품이 교체나 폐기를 실행했다는 플래그는 두지 않는다. |
 | `secret_checklist_items` | `item_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `guide_version VARCHAR(80) NOT NULL`, `item_code VARCHAR(80) NOT NULL`, `status VARCHAR(20) NOT NULL`, `completed_at TIMESTAMPTZ`, `completed_by_user_id BIGINT FK`, `evidence_ref VARCHAR(500)`, `updated_at TIMESTAMPTZ NOT NULL` | `UQ(case_id, guide_version, item_code)`. `status`는 `TODO`, `DONE`, `NOT_APPLICABLE`. 체크 완료만으로 대응 건을 해결하지 않는다. |
 | `secret_exceptions` | `exception_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `reason VARCHAR(1000) NOT NULL`, `approved_by_user_id BIGINT NOT NULL FK`, `approved_at TIMESTAMPTZ NOT NULL`, `expires_at TIMESTAMPTZ NOT NULL`, `revoked_at TIMESTAMPTZ`, `revoked_by_user_id BIGINT FK`, `revoke_reason VARCHAR(500)` | `CHECK(expires_at > approved_at)`. 취소와 만료를 삭제 대신 상태로 보존한다. 승인 권한은 서버가 검사한다. |
 | `secret_exception_occurrences` | `exception_id BIGINT NOT NULL FK`, `occurrence_id BIGINT NOT NULL FK`, 복합 PK | 승인 당시의 위치 범위를 고정한다. 나중에 새 위치가 발견돼도 예외 범위에 자동 포함되지 않는다. |
-| `secret_role_grants` | `grant_id BIGINT PK`, `user_id BIGINT NOT NULL FK`, `role VARCHAR(30) NOT NULL`, `connection_id BIGINT FK`, `granted_by_user_id BIGINT NOT NULL FK`, `granted_at TIMESTAMPTZ NOT NULL`, `revoked_at TIMESTAMPTZ` | 역할은 `SECURITY`, `REMEDIATOR`, `OPERATIONS`. 연결 범위를 비우면 전체 범위다. 기존 `dashboard_users.role=ADMIN`과 별도로 서버가 대상 연결 범위까지 검사한다. 활성 중복 권한 부여를 막는다. |
+| `secret_role_grants` | `grant_id BIGINT PK`, `user_id BIGINT NOT NULL FK`, `role VARCHAR(30) NOT NULL`, `connection_id BIGINT FK`, `granted_by_user_id BIGINT NOT NULL FK`, `grant_source VARCHAR(20) NOT NULL`, `granted_at TIMESTAMPTZ NOT NULL`, `revoked_at TIMESTAMPTZ` | V7의 역할은 `SECURITY`, `REMEDIATOR`, `OPERATIONS`이고 부여 출처는 `BOOTSTRAP`, `MANUAL`이다. 연결 범위를 비우면 전체 범위다. 기존 `dashboard_users.role=ADMIN`과 별도로 서버가 대상 연결 범위까지 검사한다. 활성 중복 권한 부여를 막는다. |
 | `secret_team_memberships` | `membership_id BIGINT PK`, `user_id BIGINT NOT NULL FK`, `team_name VARCHAR(100) NOT NULL`, `added_by_user_id BIGINT NOT NULL FK`, `added_at TIMESTAMPTZ NOT NULL`, `removed_at TIMESTAMPTZ` | 팀 담당자 지정 권한 확인에 사용한다. 팀 문자열만으로 소속을 추정하지 않는다. 활성 중복 소속을 막는다. |
-| `secret_audit_events` | `audit_id BIGINT PK`, `request_id VARCHAR(100)`, `run_id BIGINT FK`, `actor_user_id BIGINT FK`, `actor_kind VARCHAR(20) NOT NULL`, `entity_type VARCHAR(50) NOT NULL`, `entity_id BIGINT NOT NULL`, `event_type VARCHAR(80) NOT NULL`, `before_safe JSONB`, `after_safe JSONB`, `occurred_at TIMESTAMPTZ NOT NULL` | API 변경, 워커 상태, 실패와 승인 근거를 추가 전용으로 남긴다. 비밀, 인증 헤더, 전체 도구 출력을 JSON에 복사하지 않는다. 보존 및 접근 권한은 별도 설정한다. |
+| `secret_audit_events` | V7: `audit_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `event_type VARCHAR(30) NOT NULL`, `actor_user_id BIGINT NOT NULL FK`, `case_version BIGINT NOT NULL`, `occurred_at TIMESTAMPTZ NOT NULL` | V7은 `CASE_OPENED`, `ASSIGNMENT_CHANGED`만 추가 기록한다. 비밀이나 자유 형식 원문을 담지 않는다. 요청 ID, 변경 전후 안전한 값, 다른 종류의 감사와 보존·접근 정책은 후속이다. |
 
 `expectedVersion` 변경 요청은 `UPDATE secret_response_cases ... WHERE case_id=:id AND version=:expectedVersion`의 영향 행 수가 1인지 확인하고 같은 트랜잭션에서 버전 증가, 자식 기록, 감사 이벤트를 저장한다. 0행이면 409를 반환한다. 해결 전이는 모든 `ABNORMAL` 위치의 해결 증거와 외부 조치 이후 재확인 증거를 검사한다. 검증 실패, 체크리스트 완료, 예외 승인만으로 `RESOLVED`로 바꾸지 않는다.
 
@@ -101,15 +104,15 @@ AWS의 Secrets Manager·SSM·S3 메타데이터 범위는 `secret_connection_sco
 
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
-| `secret_query_snapshots` | `snapshot_id UUID PK`, `scope VARCHAR(20) NOT NULL`, `as_of TIMESTAMPTZ NOT NULL`, `scope_version_digest VARCHAR(100) NOT NULL`, `partial_coverage BOOLEAN NOT NULL`, `missing_sources JSONB NOT NULL`, `created_at TIMESTAMPTZ NOT NULL`, `expires_at TIMESTAMPTZ NOT NULL` | `scope`는 `CURRENT_CASES`, `INVENTORY`, `HISTORY`. 하나의 DB 반복 읽기 트랜잭션에서 아래 행과 함께 생성한다. 누락 범위와 사유도 스냅샷에 고정한다. 만료된 ID는 409다. |
-| `secret_snapshot_rows` | `snapshot_id UUID NOT NULL FK`, `subject_id BIGINT NOT NULL`, `credential_set_id BIGINT NOT NULL`, `action_bucket VARCHAR(30)`, `disposition VARCHAR(20)`, `review_status VARCHAR(20)`, `severity VARCHAR(10)`, `validity VARCHAR(10) NOT NULL`, `lifecycle_status VARCHAR(20) NOT NULL`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT`, `issuer VARCHAR(40) NOT NULL`, `credential_type VARCHAR(80) NOT NULL`, `inventory_source_provider VARCHAR(20)`, `first_detected_at TIMESTAMPTZ`, 복합 PK `(snapshot_id, subject_id)` | `subject_id`는 범위에 따라 대응 건 또는 키 ID다. 네 조치 단계와 별도 예외 중 하나를 `action_bucket`에 확정한다. 인벤토리의 만료와 폐기, 이력의 오탐과 대상 제외도 구분한다. 같은 키가 여러 소스에 있어도 행은 하나다. 목록, 카드, 매트릭스가 이 행만 읽는다. |
+| `secret_query_snapshots` | `snapshot_id UUID PK`, `scope VARCHAR(20) NOT NULL`, 대응 조회의 `case_origin VARCHAR(20)`, `as_of TIMESTAMPTZ NOT NULL`, `scope_version_digest VARCHAR(100) NOT NULL`, `partial_coverage BOOLEAN NOT NULL`, `missing_sources JSONB NOT NULL`, `created_at TIMESTAMPTZ NOT NULL`, `expires_at TIMESTAMPTZ NOT NULL` | `scope`는 `CURRENT_CASES`, `INVENTORY`, `HISTORY`. 대응 조회는 `PRODUCTION` 또는 명시적 `TEST` 구분을 스냅샷에 고정하고, 인벤토리는 키 기준 범위로 둔다. 하나의 DB 반복 읽기 트랜잭션에서 아래 행과 함께 생성한다. 누락 범위와 사유도 고정한다. 만료된 ID는 409다. |
+| `secret_snapshot_rows` | `snapshot_id UUID NOT NULL FK`, `subject_id BIGINT NOT NULL`, `credential_set_id BIGINT NOT NULL`, `action_bucket VARCHAR(30)`, `disposition VARCHAR(20)`, `review_status VARCHAR(20)`, `severity VARCHAR(10)`, `validity VARCHAR(10) NOT NULL`, `lifecycle_status VARCHAR(20) NOT NULL`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT`, `issuer VARCHAR(40) NOT NULL`, `credential_type VARCHAR(80) NOT NULL`, `inventory_source_provider VARCHAR(20)`, `first_detected_at TIMESTAMPTZ`, 복합 PK `(snapshot_id, subject_id)` | `subject_id`는 범위에 따라 대응 건 또는 키 ID다. 네 조치 단계와 별도 예외 중 하나를 `action_bucket`에 확정한다. 인벤토리의 만료와 폐기, 이력의 오탐과 대상 제외도 구분한다. 같은 대응 구분에서 키가 여러 소스에 있어도 행은 하나다. 목록, 카드, 매트릭스가 이 행만 읽는다. |
 | `secret_snapshot_row_locations` | `snapshot_id UUID NOT NULL`, `subject_id BIGINT NOT NULL`, `occurrence_id BIGINT NOT NULL FK`, `source_provider VARCHAR(20) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `linked_at TIMESTAMPTZ NOT NULL`, 복합 PK `(snapshot_id, subject_id, occurrence_id)` | 복합 FK `(snapshot_id, subject_id)`가 `secret_snapshot_rows`를 참조한다. 소스와 환경은 같은 위치 행에서 함께 필터한다. 위치가 여러 개여도 대상 행을 한 번만 센다. |
 
-`CURRENT_CASES`는 `is_current=true`이고 `disposition=IN_SCOPE`인 대응 건마다 한 행을 만든다. `INVENTORY`는 키마다 한 행이다. `HISTORY`는 각 과거 대응 건을 따로 만든다. 범위, 소스, 환경, 발급자, 유효성, 심각도, 담당자 필터를 먼저 동일하게 적용한 행 집합에서 카드, 매트릭스, 목록을 계산한다. 소스와 환경을 동시에 고른 경우에는 `secret_snapshot_row_locations`의 같은 위치가 두 조건을 모두 만족해야 한다. 위치가 전혀 없는 발급처 목록 키는 인벤토리에서만 `inventory_source_provider`로 필터하며 환경은 UNKNOWN이다. 한 건에 해당하는 미해결 위치가 모두 유효한 승인 예외 범위 안에 있을 때만 `action_bucket=RISK_ACCEPTED`다. 대표 심각도는 미해결 위치의 최신 확인 등급 중 최고 등급이며 전부 미평가이면 `UNASSESSED`다. 미평가 위치 수는 상세와 요약의 별도 필드로 제공한다. 지난 `VALID` 뒤에 외부 조치가 있으면 스냅샷의 유효성은 최신 시도 결과와 조치 이후 재검증 대기를 함께 설명할 수 있도록 API가 마지막 성공 시각과 조치 시각을 별도 조회한다.
+목표 `CURRENT_CASES`는 기본 `PRODUCTION` 구분에서 `is_current=true`이고 `disposition=IN_SCOPE`인 대응 건마다 한 행을 만든다. 명시적 `TEST` 조회는 별도 스냅샷으로 분리하고 운영 카드·매트릭스·통합 현황에 합치지 않는다. `INVENTORY`는 키마다 한 행이다. `HISTORY`는 각 과거 대응 건을 따로 만든다. 구분, 범위, 소스, 환경, 발급자, 유효성, 심각도, 담당자 필터를 먼저 동일하게 적용한 행 집합에서 카드, 매트릭스, 목록을 계산한다. 소스와 환경을 동시에 고른 경우에는 `secret_snapshot_row_locations`의 같은 위치가 두 조건을 모두 만족해야 한다. 위치가 전혀 없는 발급처 목록 키는 인벤토리에서만 `inventory_source_provider`로 필터하며 환경은 UNKNOWN이다. 한 건에 해당하는 미해결 위치가 모두 유효한 승인 예외 범위 안에 있을 때만 `action_bucket=RISK_ACCEPTED`다. 대표 심각도는 미해결 위치의 최신 확인 등급 중 최고 등급이며 전부 미평가이면 `UNASSESSED`다. 미평가 위치 수는 상세와 요약의 별도 필드로 제공한다. 지난 `VALID` 뒤에 외부 조치가 있으면 스냅샷의 유효성은 최신 시도 결과와 조치 이후 재검증 대기를 함께 설명할 수 있도록 API가 마지막 성공 시각과 조치 시각을 별도 조회한다.
 
 ## 4. 인덱스와 제약 구현
 
-다음은 V3–V6에 적용된 대표 인덱스다. 아래에 없는 평가·대응·스냅샷 인덱스와 CHECK는 해당 기능의 후속 마이그레이션에서 적용한다. 현재 FK에는 별도 삭제 연쇄 정책을 두지 않는다.
+다음은 V3–V6에 적용된 대표 인덱스다. V7은 `(credential_set_id, case_origin) WHERE is_current`의 고유 인덱스로 구분별 현재 건 중복을 막고, 개설·연결 위치가 해당 키에 속하도록 복합 FK를 둔다. 평가·예외·스냅샷 인덱스와 CHECK는 해당 기능의 후속 마이그레이션에서 적용한다. 현재 FK에는 별도 삭제 연쇄 정책을 두지 않는다.
 
 ```sql
 CREATE UNIQUE INDEX uq_secret_fingerprint
@@ -144,7 +147,7 @@ CREATE UNIQUE INDEX uq_secret_enabled_scope
 
 V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candidate_locator`, `METADATA_ONLY`의 자격 증명 지문 부재를 강제한다. `expiry_policy='FIXED'`에는 `expires_at`이 필요하다. V5는 결과 코드, 사유 코드 형식, 시각 순서와 `VALID`·`INVALID`의 실제 확인 시각을 검사한다. V6은 같은 AWS 연결·유형·보호 참조의 IAM 메타데이터 항목을 하나로 묶고 실행마다 관측을 추가한다. 평가의 `severity='UNASSESSED'`와 `missing_reason`, 대응 해결 시각, 예외 기간 등은 해당 후속 테이블을 만들 때 적용할 목표다. `scope_id`와 `connection_id` 및 실행과 작업의 연결은 현재 복합 FK로 강제한다. 연결된 `assets`의 provider와 환경을 무조건 복사하지 않는다.
 
-아래 FK 목록은 현재 V3–V6과 후속 목표 테이블을 함께 나타낸다. 후속 테이블의 FK는 아직 DB에 없다.
+아래 FK 목록은 현재 V3–V7과 후속 목표 테이블을 함께 나타낸다. 평가·예외·스냅샷 등 후속 테이블의 FK는 아직 DB에 없다.
 
 | FK 열 | 참조 대상 |
 |---|---|
@@ -158,7 +161,7 @@ V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candid
 
 ## 5. 적재와 상태 변경 규칙
 
-다음은 전체 설계의 적재 순서다. 현재 V3–V6과 GitHub·AWS 메타데이터 및 정확한 값 워커가 수행하는 부분은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 구분한다.
+다음은 전체 설계의 적재 순서다. 현재 V3–V7과 GitHub·AWS 메타데이터 및 정확한 값 워커가 수행하는 부분은 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에서 구분한다.
 
 1. 연결과 승인 범위를 등록할 때 범위 버전, 수집 가능한 콘텐츠, 분류 근거와 비밀 저장소 참조를 기록한다.
 2. 정기 작업을 예약하고 워커가 선점한 뒤 `secret_scan_runs`를 만든다. 범위별 성공, 실패, 미지원과 엔진별 성공, 실패를 독립적으로 확정한다.
@@ -175,8 +178,8 @@ V4의 구성요소 CHECK는 `CONFIRMED`의 `fingerprint`, `CANDIDATE`의 `candid
 
 API DB 계정은 Secret 조회 및 대응 변경 테이블에 필요한 권한만 갖고, 워커 DB 계정은 작업 선점과 탐지 및 검사 적재 권한을 갖는다. 연결용 비밀은 DB 밖의 비밀 저장소에 두며 `auth_ref`만 저장한다. HMAC 보호키는 DB 밖에서 관리하고 버전 교체 시 이전 버전 지문을 안전하게 재계산할 수 있는 시점까지 병행 조회한다. 원천에서 키를 다시 읽을 수 없으면 키 동일성 재계산과 재검증이 불가능하므로 임의 병합하지 않는다. 데이터, 백업, 감사 로그의 접근 권한과 보존 기간은 범주별 운영 설정으로 확정한다. 보존 기간이 정해지지 않은 범주는 자동 삭제하지 않는다.
 
-현재 마이그레이션 순서는 V3 연결·작업, V4 키·위치·탐지, V5 검증 이력, V6 IAM 메타데이터 관측이다. 기존 V1 데이터는 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 서버 시작 시 외부 Notion 스캔을 호출하던 동작은 제거했고 새 Secret 화면은 비동기 실행 API를 사용한다. 전환 기간의 `/api/v1/credentials/scan` 직접 실행은 다른 사용처를 확인한 뒤 정리한다. 통합 현황의 새 버전은 위의 API 합성 규칙을 사용하고 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
+마이그레이션 순서는 V3 연결·작업, V4 키·위치·탐지, V5 검증 이력, V6 IAM 메타데이터 관측, V7 대응 건·담당자 기초다. V7은 기존 범위를 `UNCLASSIFIED`로 두고 기존 인벤토리에서 대응 건을 자동 생성하지 않는다. 기존 V1 데이터도 신규 Secret 테이블로 일괄 이관하지 않는다. 샘플 `detection_events`를 실탐지로 간주할 수 없고 필수 환경과 심각도를 Secret의 UNKNOWN 또는 UNASSESSED에 안전하게 대응시킬 수 없기 때문이다. 서버 시작 시 외부 Notion 스캔을 호출하던 동작은 제거했고 새 Secret 화면은 비동기 실행 API를 사용한다. 전환 기간의 `/api/v1/credentials/scan` 직접 실행은 다른 사용처를 확인한 뒤 정리한다. 통합 현황의 새 버전은 위의 API 합성 규칙을 사용하고 기존 점수의 제거와 응답 필드 전환은 [API 계약](api-contract.md)에 맞춰 클라이언트와 함께 배포한다.
 
-공유 `V2__create_credentials.sql`은 유지하고 충돌했던 미공유 스케줄러 마이그레이션은 V3로 반영했다. V4부터 V6도 `develop`에 순서대로 반영됐다. 기존 개발 DB의 적용 이력은 보존하며 파일 이름만 바꿔 재실행하지 않는다. 별도 개발 DB에서는 V1–V6과 GitHub·AWS IAM 작업 실행을 확인했다. 원래 DB의 필요한 데이터 이전은 아직 수행하지 않았다. 이전 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행한다. 후속 마이그레이션 번호는 공통 DB 담당자가 조율한다.
+공유 `V2__create_credentials.sql`은 유지하고 충돌했던 미공유 스케줄러 마이그레이션은 V3로 반영했다. V4부터 V6도 `develop`에 순서대로 반영됐다. 10/15 대응 구현 브랜치의 V7은 Testcontainers의 새 PostgreSQL에서 V1부터 전체 적용과 대상 테스트를 통과했으며 아직 공유 `develop` 병합 전이다. 기존 개발 DB의 적용 이력은 보존하며 파일 이름만 바꿔 재실행하지 않는다. 별도 개발 DB에서는 V1–V6과 GitHub·AWS IAM 작업 실행을 확인했다. 원래 DB의 필요한 데이터 이전은 아직 수행하지 않았다. 이전 대상, 적용 순서, 동일성·FK·시퀀스 검증과 전환 절차를 정한 뒤 실행한다. 후속 마이그레이션 번호는 공통 DB 담당자가 조율한다.
 
 구현 검증은 Flyway 빈 DB 적용과 기존 V1 위 적용, 잘못된 FK와 중복 현재 건 및 중복 작업의 거부, 6시간 정기와 수동 실행의 독립성, 부분 실패 후 위치 유지, 동일 키의 다중 위치와 다중 엔진 중복 제거, 최신 실패와 지난 성공 보존, 부분 예외 집계, 스냅샷의 카드 및 목록 수 일치, 원문이 DB와 로그에 남지 않는지를 확인한다.
