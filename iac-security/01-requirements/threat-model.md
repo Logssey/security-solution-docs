@@ -61,7 +61,7 @@
 
 | ID | 위협 | 예방 (이 솔루션) | 피해 한정 | 탐지 | 남는 한계 |
 |---|---|---|---|---|---|
-| TM-1 | 오염된 원격 모듈 (Coder형) | 2b: `terraform get` 후 내려받은 모듈에 Conftest, 실행 구문이면 plan 전 차단. 같은 버전·다른 내용이면 경고 + 보안 리뷰 | ② 통과 전 자격 증명 없음, plan 역할 읽기 전용·시크릿 거부, 로컬은 컨테이너 | PR 코멘트·대시보드 ② 영역 | 규칙에 없는 새 실행 수법 |
+| TM-1 | 오염된 원격 모듈 (Coder형) | 2b: init 후 내려받은 모듈에 Conftest, 실행 구문이면 plan 전 차단. 같은 버전·다른 내용이면 경고 + 보안 리뷰 | ② 통과 전 자격 증명 없음, plan 역할 읽기 전용·시크릿 거부, 로컬은 컨테이너 | PR 코멘트·대시보드 ② 영역 | 규칙에 없는 새 실행 수법 |
 | TM-2 | 악성 PR 코드 (외부 기여자, 탈취된 팀원 GitHub 계정) | ② 관문 2: `data "external"`·`http`·`dns`, provisioner, Lambda 호출, 허용 안 된 프로바이더 차단 | 같음. 포크 PR에는 자격 증명 미제공 | ② 결과, 차단 이력 | 새 실행 수법 |
 | TM-3 | CI 공급망 (Trivy형: Action·도구 변조) | Action·이미지 커밋 SHA·버전 고정, `pull_request_target` 금지, 워크플로 변경은 보안 리뷰 필수, lock 파일 해시 검증 | 러너 자격 증명 최소화(레포 범위 토큰, 읽기 전용 plan 역할) | `gate.workflow_changed`, `gate.lock_changed` | 고정한 버전 자체가 이미 오염된 경우 |
 | TM-4 | 위험한 인프라 변경 (실수나 의도로 경로를 여는 PR) | ① 1등급 데이터까지 새 경로면 병합 차단(시뮬레이터 확인) | 리뷰 필수 | 대시보드 열린 경로 | 그래프에 없는 관계로 생기는 경로, 그래프 최신성(24시간) |
@@ -74,21 +74,22 @@
 
 **로컬 plan은 허용하되 `make plan` 래퍼를 기본 경로로 둠.** 로컬 plan을 막으면 확인할 때마다 CI를 거쳐야 해서 느리고, 실무에서도 plan은 허용하고 apply만 막는 경우가 많음(ADR-12).
 
-래퍼가 하는 일:
+래퍼가 하는 일 (`infrastructure`의 `Makefile`, 10/15 실제 plan까지 확인):
 
-1. ② 관문 1·2: 변경 감지, Conftest(CI와 같은 `policy/`와 같은 버전)
-2. `terraform get`으로 모듈만 내려받고 2b: `.terraform/modules`에 Conftest + 모듈 해시 비교
-3. SSO 세션에서 읽기 전용 임시 키만 꺼냄 (`aws configure export-credentials`). `~/.aws`와 SSO 캐시는 넘기지 않음(넘기면 다른 권한을 새로 발급 가능)
-4. 버전을 고정한 Terraform 컨테이너에서 `init -lockfile=readonly -backend-config=backend.hcl` → `plan -lock=false`
+1. ② 관문 2: Conftest(CI와 같은 `policy/`와 같은 버전). 관문 0·1(변경 감지)은 CI에서만
+2. 관문 3·2b: `init -backend=false -lockfile=readonly`로 모듈·프로바이더만 받고, 내려받은 모듈에 Conftest + 모듈 해시 비교. 결과는 `.terraform-gate`에 둠
+3. 내 IAM 사용자로 plan-ro 역할을 assume해 1시간짜리 읽기 전용 임시 키를 받음 (세션 이름 = 사용자 이름). ADR-12로 SSO에 옮기면 SSO 세션에서 꺼냄
+4. 이미지 digest로 고정한 Terraform 컨테이너에서 `init -lockfile=readonly` → `plan -lock=false`. 2번에서 검사한 모듈·프로바이더를 그대로 씀
 
 | 컨테이너에 넣는 것 | 넣지 않는 것 |
 |---|---|
-| 레포 코드, 프로바이더 캐시 볼륨, 읽기 전용 임시 키(최대 1시간) | 홈 디렉터리 전체: `~/.aws`(장기 키, SSO 캐시), `~/.ssh`, GitHub 토큰, Docker 자격 증명, 셸 기록 |
+| 레포의 `terraform/`(읽기 전용, 검사한 모듈·프로바이더 포함), 읽기 전용 임시 키(최대 1시간) | 홈 디렉터리 전체: `~/.aws`(장기 키, SSO 캐시), `~/.ssh`, GitHub 토큰, Docker 자격 증명, 셸 기록 |
 
-- **backend 분리**: State 버킷 정보는 코드에서 빼고 래퍼만 `-backend-config`로 넘김. 그냥 `terraform plan`을 치면 State에 못 붙어서 습관적인 우회를 막음(보안 강제는 아님)
+- **컨테이너 제한**: 루트 파일 시스템 읽기 전용, capability 모두 제거, 권한 상승 금지. backend 초기화는 컨테이너 안 임시 디렉터리에서 해서 사람이 쓰는 `.terraform`은 건드리지 않음
+- **backend는 분리하지 않음**: 처음엔 State 버킷 정보를 코드에서 빼고 래퍼만 `-backend-config`로 넘기려 했음. 모두가 init을 다시 해야 하는 데 비해 얻는 게 습관 방지뿐이라 뺌. backend 블록 변경은 관문 1이 차단
 - **남의 PR**: 로컬에서 plan하지 않고 CI plan 결과로 리뷰
-- **래퍼를 빼고 돌리면**: 내 읽기 전용 임시 키와 PC의 다른 비밀이 노출될 수 있음. 피해자는 본인이라 래퍼를 쓸 이유가 분명함
-- **편의성**: 명령은 `make plan` 하나, SSO 로그인 하루 한 번, 프로바이더 캐시로 두 번째 실행부터 속도 차이 거의 없음
+- **래퍼를 빼고 돌리면**: 지금은 PC의 장기 키(쓰기 권한)로 plan이 돌아 실행 코드가 그 키를 가져갈 수 있음. ADR-12 적용 뒤에도 읽기 전용 키와 PC의 다른 비밀이 노출될 수 있음. 피해자는 본인이라 래퍼를 쓸 이유가 분명함
+- **편의성**: 명령은 `make plan` 하나. 도구는 첫 실행 때 `.tools/bin`에 받고, 프로바이더는 gate가 받은 것을 재사용해 두 번째 실행부터 속도 차이 거의 없음
 
 ## 한계
 
@@ -134,4 +135,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-13 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-10-15 |

@@ -15,7 +15,7 @@
 | [ADR-09](#adr-09) | 규칙 도구 선택 | KICS 주력 + Conftest 보완 규칙. Checkov·Trivy는 선택. MVP는 Conftest만, KICS 연동은 다음 단계 | 결정 |
 | [ADR-10](#adr-10) | 그래프·결과 저장소 | 그래프는 전용 Neo4j, 결과는 대시보드 PostgreSQL의 `iac_` 테이블 | 결정 |
 | [ADR-11](#adr-11) | 어디에, 무슨 언어로 구현하나 | dashboard-backend(Spring Boot)에 `iac` 모듈로 통합, 분석은 별도 Java 워커 | 결정 |
-| [ADR-12](#adr-12) | 사람의 AWS·State 권한 | 사람은 읽기 전용(plan-ro와 같은 정책), 로컬 plan은 래퍼로 허용, apply는 CI apply 역할만, 비상시 break-glass | 결정 (적용은 팀 일정) |
+| [ADR-12](#adr-12) | 사람의 AWS·State 권한 | 사람은 읽기 전용(plan-ro와 같은 정책), 로컬 plan은 래퍼로 허용, apply는 CI apply 역할만, 비상시 break-glass | 결정 (적용은 팀 일정, 로컬 래퍼는 10/15 적용) |
 
 **상태 값**
 
@@ -159,7 +159,8 @@
 
 - **결정**
     - 사람은 IAM Identity Center 읽기 전용 권한만 가짐(plan-ro와 같은 정책)
-    - 로컬 plan은 래퍼(`make plan`)로 허용: ② 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`, backend 설정은 래퍼가 넘김
+    - 로컬 plan은 래퍼(`make plan`)로 허용: ② 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`
+        - 10/15 적용: SSO 전환 전까지는 IAM 사용자가 plan-ro 역할을 assume (`iac_plan_local_users`, 세션 이름 = 사용자 이름)
     - 남의 PR은 로컬에서 plan하지 않고 CI plan 결과로 리뷰
     - apply는 CI apply 역할만(GitHub OIDC, main + environment `prod`)
     - 비상시 break-glass 역할(MFA, 사용 즉시 알림)
