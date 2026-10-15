@@ -42,27 +42,30 @@
 
 | ID | 엔진 | 조건 | 강도 | 심각도 | 상태 |
 |---|---|---|---|---|---|
-| `gate.exec_data_source` | Conftest (hcl2) | `data "external"`·`"http"`·`"dns"` 존재 | 차단 | CRITICAL | 10/8 검증 |
-| `gate.provisioner` | Conftest | `local-exec`·`remote-exec` provisioner | 차단 | CRITICAL | 10/8 검증 |
-| `gate.lambda_invocation` | Conftest | `data "aws_lambda_invocation"` (plan 중 Lambda 호출) | 차단 | HIGH | 미구현 |
-| `gate.provider_not_allowed` | Conftest | 허용 목록(`hashicorp/aws`) 밖 프로바이더 | 차단 | HIGH | 10/8은 namespace 단위로 검증. 프로바이더 단위로 수정 필요 |
-| `gate.provider_unpinned` | Conftest | 프로바이더 `version` 없음 | 경고 | MEDIUM | 10/8 검증 |
-| `gate.module_unpinned` | Conftest | git 모듈 `?ref=` 없음, 레지스트리 모듈 `version` 없음 | 경고 | MEDIUM | 10/8 검증 |
-| `gate.backend_changed` | git diff | `backend` 블록 변경 | 차단 (plan 중단) | HIGH | 설계 |
-| `gate.lock_changed` | git diff | `.terraform.lock.hcl` 변경 | 경고 + 보안 리뷰 필수 | MEDIUM | 설계 |
-| `gate.workflow_changed` | git diff + CODEOWNERS | `.github/workflows/` 변경 | 경고 + 보안 리뷰 필수 | HIGH | 설계 |
-| `gate.lock_mismatch` | `terraform init -lockfile=readonly` | 해시·버전이 lock 파일과 다름 | 차단 | HIGH | 설계 (공식 옵션 확인함) |
-| `gate.module_content_changed` | 해시 비교 | 같은 버전인데 내려받은 모듈 내용이 다름 | 경고 | HIGH | 설계 (CI·래퍼에 처음부터 포함, 원격 모듈이 생기면 작동) |
-| `gate.plan_failed` | terraform plan | plan 실패·시간 초과 | 차단 (fail-closed) | 없음 (실행 오류) | 설계 |
+| `gate.exec_data_source` | Conftest (hcl2) | `data "external"`·`"http"`·`"dns"` 존재 | 차단 | CRITICAL | 10/14 구현, CI 검증 (테스트 PR) |
+| `gate.provisioner` | Conftest | `local-exec`·`remote-exec` provisioner | 차단 | CRITICAL | 10/14 구현 (단위 테스트) |
+| `gate.lambda_invocation` | Conftest | `data "aws_lambda_invocation"` (plan 중 Lambda 호출) | 차단 | HIGH | 10/14 구현, CI 검증 (원격 모듈 안, 2b) |
+| `gate.provider_not_allowed` | Conftest | 허용 목록(`hashicorp/aws`) 밖 프로바이더 | 차단 | HIGH | 10/14 프로바이더 단위로 구현 (단위 테스트) |
+| `gate.provider_unpinned` | Conftest | 프로바이더 `version` 없음 | 경고 | MEDIUM | 10/14 구현 (단위 테스트) |
+| `gate.module_unpinned` | Conftest | git 모듈 `?ref=` 없음, 레지스트리 모듈 `version` 없음 | 경고 | MEDIUM | 10/14 구현 (단위 테스트) |
+| `gate.backend_changed` | git diff + hcl2 파싱 | `backend`·`cloud` 블록 변경 (같은 파일의 다른 설정 변경은 제외) | 차단 (plan 중단) | HIGH | 10/14 구현, CI 검증 (테스트 PR) |
+| `gate.lock_changed` | git diff | `.terraform.lock.hcl` 변경 | 경고 + 보안 리뷰 필수 | MEDIUM | 10/14 구현 (로컬 시나리오) |
+| `gate.workflow_changed` | git diff + CODEOWNERS | `.github/workflows/` 변경 | 경고 + 보안 리뷰 필수 | HIGH | 10/14 구현 (로컬 시나리오) |
+| `gate.lock_mismatch` | `terraform init -lockfile=readonly` | 해시·버전이 lock 파일과 다름 | 차단 | HIGH | 10/14 구현 (로컬 시나리오: lock 해시 변조) |
+| `gate.module_content_changed` | 해시 비교 | 같은 버전인데 내려받은 모듈 내용이 다름 | 경고 | HIGH | 10/14 구현 (로컬 시나리오: 같은 태그 내용 바꿔치기). 기준 해시는 `policy/module-hashes.txt` |
+| `gate.unscanned_file` | git ls-files | `.tf.json` 파일, 커밋된 `.terraform/`, 원격 모듈 안 `.tf.json` (Terraform은 읽지만 hcl2 검사가 못 보는 파일) | 차단 | HIGH | 10/14 구현 (로컬 시나리오) |
+| `gate.plan_failed` | terraform plan | plan 실패·시간 초과 | 차단 (fail-closed) | 없음 (실행 오류) | 설계 (S2 plan job) |
 
 - 판정 대상은 PR에서 새로 들어온 것만. 기존 코드에 있던 것은 허용 목록으로 관리.
+- 구현: `infrastructure`의 `policy/gate.rego`(규칙), `policy/gate.sh`(관문 순서). CI는 `iac-gate` 워크플로, 로컬은 `make plan`이 같은 스크립트를 씀
+- 관문 0·1(변경 감지)은 CI에서만 돎. 로컬 래퍼는 관문 2부터
 - 화면 S-01 E의 관문 번호 대응:
 
 | 관문 번호 | 규칙 |
 |---|---|
 | 0 | `workflow_changed` |
 | 1 | `backend_changed`·`lock_changed` |
-| 2 | `exec_data_source`·`provisioner`·`lambda_invocation`·`provider_*`·`module_unpinned` |
+| 2 | `exec_data_source`·`provisioner`·`lambda_invocation`·`provider_*`·`module_unpinned`·`unscanned_file` |
 | 2b | `module_content_changed` (+ 내려받은 모듈에 2번 규칙 다시 적용) |
 | 3 | `lock_mismatch` |
 | 4 | `plan_failed` |
@@ -115,10 +118,14 @@
 - 같은 `policy/`를 CI와 로컬 래퍼(`make plan`)가 함께 씀. CI는 필수 검사로 강제, 로컬은 기본 경로
 - 남의 PR 코드는 로컬에서 plan하지 않고 CI plan 결과로 리뷰
 - 2b(내려받은 모듈 재검사·해시 비교)는 원격 모듈이 없어도 CI·래퍼에 처음부터 둔다. 도입 시점에 빠뜨리지 않기 위함 ([위협 모델·범위](../01-requirements/threat-model.md) TM-1)
-- 도구 버전 고정: Conftest는 10/8에 v0.56.0으로 검증함. 구축 때 최신 버전(10/12 기준 v0.71.1)으로 같은 테스트를 다시 돌리고 고정. KICS·Terraform도 같은 방식. Cartography는 10/13 재수집에 쓴 0.143.0으로 고정
+- 도구 버전 고정 (CI·래퍼 같은 값, 체크섬 확인)
+    - Conftest v0.71.1: 10/8 v0.56.0 테스트를 10/14에 다시 돌린 뒤 고정
+    - Terraform 1.16.5: 배포 1주 이상 지난 최신 패치. 당일 배포된 1.16.6은 제외. HashiCorp 서명·체크섬, 래퍼 이미지 digest 확인
+    - Cartography 0.143.0: 10/13 재수집에 쓴 버전
+    - KICS: 도입 때 같은 방식
 
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-10-15 |
