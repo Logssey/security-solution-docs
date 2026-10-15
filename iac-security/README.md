@@ -42,10 +42,11 @@
 | 분석 | API와 분리된 Java 워커. PostgreSQL 대기열 `iac_jobs`에서 작업을 가져감 |
 | 결과 DB | 대시보드 PostgreSQL에 `iac_` 테이블 추가 (Flyway 후속 마이그레이션). `dashboard_users`·`assets`와 FK 연결 |
 | 자산 그래프 | 별도 Neo4j (Cartography) |
+| ② plan 전 검사 | [infrastructure](https://github.com/Logssey/infrastructure)의 `policy/`(규칙·`gate.sh`), `iac-gate` 워크플로, 로컬 `make plan` |
 | 외부 도구 | Cartography, KICS, Conftest, Terraform (실행 파일) |
 
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-10-15 |
