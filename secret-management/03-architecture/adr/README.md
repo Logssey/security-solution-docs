@@ -26,6 +26,7 @@
 | [ADR-S006](ADR-S006.md) | 소스별 수집 경계와 K8s | Java 수집 어댑터와 배치 조건 Accepted |
 | [ADR-S007](ADR-S007.md) | 등급 기반 위험 판단 | 네 등급, 미평가와 순서가 정해진 판정 규칙 Accepted |
 | [ADR-S008](ADR-S008.md) | 대시보드와 논리 데이터 경계 | Java API, 워커 분리와 PostgreSQL 경계 Accepted |
+| [ADR-S009](ADR-S009.md) | 스프린트 2 AI 대응 가이드 시험 | 제한된 enum 입력과 기본 가이드, GroqCloud Free 시험 Accepted |
 
 ## 후속 검토
 

@@ -1,8 +1,8 @@
 # Secret API 계약
 
-기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
+기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [ADR-S009](adr/ADR-S009.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
 
-이 문서는 Secret 기능의 목표 계약과 현재 제공하는 MVP 경로를 구분한다. `GET /api/v1/secrets`, `/{id}`, `/connections`, 실행 등록·목록·상세 조회와 연결 테스트는 구현됐다. V7은 대응 건·담당자 지정을, V8은 수동 범위 분류와 노출 판정을 추가한다. 요약·검토·체크리스트·외부 조치·재검증·스냅샷은 후속 설계다. 현재 구현 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
+이 문서는 Secret 기능의 목표 계약과 개발 구현을 구분한다. 인벤토리·연결·실행 조회, V7 대응 건·담당자, V8 수동 범위 분류·노출 판정에 이어 V9는 검토·체크리스트·외부 조치 기록을 제공한다. V10은 승인된 GitHub 위치의 비동기 재검증과 근거가 충족된 해결을 연결한다. AI 가이드는 별도 선택 기능이며 기본 안내는 외부 API 없이 동작한다. 심각도·영향 평가, 실제 단계별 요약·스냅샷, 예외와 다른 원천의 재검증은 목표 계약이다. 브랜치별 검증·병합 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
 
 ## 1. 공통 계약
 
@@ -24,18 +24,19 @@
 | MVP | GET | `/api/v1/secrets/runs?page={page}&size={size}` | 0부터 시작하는 페이지, 크기 1–100(기본 20). `requestedAt` 최신순, 같은 시각이면 `runId` 내림차순. `{items,total,page,size}`를 반환하며 종료된 실행과 대기 중인 실행, 현재 일시중지된 연결의 과거 실행을 함께 조회 |
 | MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드. `scopeResults`에 범위별 내부 ID·지원 콘텐츠 유형·리전·수집 상태·항목 수·안전한 누락 코드만 포함 |
 | V7 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. 페이지는 0부터, 크기는 1–100. 집계 스냅샷·후속 필터는 아직 없음 |
-| V7 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계, 담당 팀·개인, 버전, 개설 위치 ID·사유, 담당자 변경 이력 |
+| V7–V10 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계·검토 상태, 담당자, 버전, 개설 위치와 연결된 위치의 ID·조치 상태, 담당자·검토·체크리스트·외부 조치·단계 변경 이력 및 호출자별 `capabilities`. V10은 `occurrences[]`에 `canRequestRevalidation`·`canResume`, 건 `capabilities`에 `canRequestRevalidation`·`canResolve`·`canResume`을 추가. 키 원문·원천 본문 제외 |
 | V7 | GET | `/api/v1/secrets/assignees?caseId={caseId}` | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 활성 팀 소속. `SECURITY` 권한 필요 |
 | V8 | GET | `/api/v1/secrets/triage-candidates?page={page}&size={size}` | 연결별 `SECURITY` 권한이 있는 활성 GitHub 범위의 후보 키만 `{items,total,page,size}`로 조회. 항목은 키 ID, 마스킹 이름, 발급자, 유형, 구성 상태, 허용된 위치 수만 반환 |
 | V8 | GET | `/api/v1/secrets/triage-candidates/{secretId}` | 같은 권한 경계의 후보 키와 선택 가능한 발견 위치를 조회. 위치 ID, 연결·범위 ID, 원천 위치, 환경, 노출·존재 상태와 판정·범위 버전 제공 |
 | V8 | GET | `/api/v1/secrets/scopes/{scopeId}/response-origin` | 승인 범위의 `responseOrigin`, `responseOriginVersion`, 서버가 허용한 `allowedOrigins`, 분류 수행자·시각과 추가 전용 분류 이력. 비밀이 될 수 있는 원천 참조는 제외 |
 | V8 | GET | `/api/v1/secrets/occurrences/{occurrenceId}/triage` | 위치의 `secretId`, `scopeId`, 구성·존재·노출 상태, `assessmentVersion`, 범위 구분·버전, 같은 키·구분의 현재 건 `openCaseId`(없으면 null), 해당 위치에 속하는 Finding ID·룰·탐지 시각과 수동 판정 이력. Finding 문맥과 원문은 제외 |
+| V10 | GET | `/api/v1/secrets/cases/{caseId}/revalidations` | 해당 건의 위치별 재검증 요청·작업·결과 이력. 항목은 `revalidationId`, `occurrenceId`, `runId`, `jobStatus`, `result`, `failureCode`, `requestedAt`, `finishedAt`의 안전한 정보만 제공 |
 | 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
 | 후속 확장 | GET | `/api/v1/secrets/cases` | 범위·스냅샷·필터를 갖춘 대응 목록. `scope=history`이면 과거 대응 건 목록. 발견 소스, 심각도, 유효성, 예외, 시각과 근거 추가 |
-| 후속 확장 | GET | `/api/v1/secrets/cases/{caseId}` | 위치별 근거와 상태, 검사 및 평가 이력, 체크리스트, 외부 조치 및 감사 이력 추가 |
+| 후속 확장 | GET | `/api/v1/secrets/cases/{caseId}` | 아직 없는 위치별 심각도·영향 근거, 예외, 실행 스냅샷과 과거 건 상세를 추가 |
 | 후속 | GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
 
-MVP 인벤토리 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 정확한 AWS 본문에서 키 후보를 탐지해도 그 자원이 외부에 노출됐다는 뜻은 아니며 노출·영향·심각도는 별도 근거로 평가한다. V7은 대응 건의 기초 기록만 제공하며 집계 스냅샷과 실제 단계별 수는 아직 제공하지 않으므로 아래 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
+MVP 인벤토리 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 정확한 AWS 본문에서 키 후보를 탐지해도 그 자원이 외부에 노출됐다는 뜻은 아니며 노출·영향·심각도는 별도 근거로 평가한다. V7–V9는 대응 건의 개설·담당·검토·외부 조치 이력을 제공하지만 집계 스냅샷과 실제 단계별 수는 아직 제공하지 않으므로 아래 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
 
 수동 판정 화면은 기존 `ADMIN` 전용 인벤토리 API를 권한 우회용으로 확장하지 않는다. V8의 후보 목록·상세 API가 활성 GitHub 연결·승인 범위와 현재 사용자의 연결별 `SECURITY` 권한으로 위치를 SQL에서 제한한다. 한 키에 여러 위치가 있어도 권한 밖 위치는 상세 응답에 나타나지 않고, 응답의 위치 수는 허용된 위치의 수다. 원문 키·보호키 식별값은 반환하지 않는다.
 
@@ -88,7 +89,7 @@ V8 이후 `POST /api/v1/secrets/{secretId}/cases`는 `{ "occurrenceId", "reason"
 
 같은 키·구분에 현재 대응 건이 이미 있으면 새 건 개설은 409다. V8은 그 건의 `openCaseId`를 보여주지만 다른 비정상 노출 위치를 기존 건에 추가 연결하는 API는 아직 제공하지 않는다. 여러 위치를 한 건으로 묶는 목표 계약과 현재 구현의 차이는 [구현 연동 현황](../04-integration/current-implementation-and-gaps.md)에 남긴다.
 
-V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeUserId", "reason", "expectedVersion" }`를 받는다. 사유는 `INITIAL_ASSIGNMENT`, `OWNERSHIP_CHANGE`, `TEAM_TRANSFER`, `UNASSIGNED`, `OTHER` 중 하나다. 권한 있는 기존 조치 담당자와 팀 소속만 지정하며, 비밀 원문이 들어갈 수 있는 자유 형식 사유를 저장하지 않는다. 같은 트랜잭션에서 담당자, 버전, 변경 전후 이력과 안전한 감사 이벤트를 저장한다. 잘못된 버전은 409이며 검토·조치 단계는 담당자 지정만으로 바뀌지 않는다. 아래 다른 변경 경로는 후속 목표다.
+V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeUserId", "reason", "expectedVersion" }`를 받는다. 사유는 `INITIAL_ASSIGNMENT`, `OWNERSHIP_CHANGE`, `TEAM_TRANSFER`, `UNASSIGNED`, `OTHER` 중 하나다. 권한 있는 기존 조치 담당자와 팀 소속만 지정하며, 비밀 원문이 들어갈 수 있는 자유 형식 사유를 저장하지 않는다. 같은 트랜잭션에서 담당자, 버전, 변경 전후 이력과 안전한 감사 이벤트를 저장한다. 잘못된 버전은 409이며 검토·조치 단계는 담당자 지정만으로 바뀌지 않는다.
 
 | Method | 경로 | 요청과 불변 조건 |
 |---|---|---|
@@ -96,15 +97,24 @@ V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeU
 | POST (V8) | `/api/v1/secrets/occurrences/{occurrenceId}/assessments` | 해당 위치의 Finding ID, 노출 판정·사유 코드, `expectedVersion`. `UNKNOWN`은 근거 부족 시 유지, 판정 이력 보존 |
 | POST (V8 적용) | `/api/v1/secrets/{secretId}/cases` | `occurrenceId`, `ASSESSED_EXPOSURE`, 두 최신 판정·범위 버전. 서버가 분류와 비정상 노출을 재확인하고 운영·시험 구분을 파생 |
 | PATCH (V7) | `/api/v1/secrets/cases/{caseId}/assignment` | 팀과 개인, 허용된 사유 코드, `expectedVersion`. 수행자, 변경 전후, 시각 감사 |
-| POST | `/api/v1/secrets/cases/{caseId}/review` | 검토 결과와 사유, `expectedVersion`. 검토만으로 RESOLVED 전이 금지 |
-| POST | `/api/v1/secrets/cases/{caseId}/actions` | 외부 수행 종류, 대상 위치, 실제 수행 시각, 비밀 제거 증거 참조, `expectedVersion`. 공급자 키 변경 호출 없음 |
-| PATCH | `/api/v1/secrets/cases/{caseId}/checklist/{itemId}` | 완료 여부, 가이드 버전, 근거, `expectedVersion`. 체크만으로 해결 금지 |
-| POST | `/api/v1/secrets/cases/{caseId}/revalidations` | 요청 사유, `idempotencyKey`, `expectedVersion`. 작업 ID를 반환하고 원문은 받지 않음 |
-| POST | `/api/v1/secrets/cases/{caseId}/resolve` | 위치별 해결 근거, 조치 이후 재확인 근거, `expectedVersion`. 서버가 전이 조건 검증 |
-| POST | `/api/v1/secrets/cases/{caseId}/exceptions` | 승인 범위, 사유, 만료 시각, 승인자 권한, `expectedVersion`. 전체 예외와 일부 위치 예외 구분 |
-| POST | `/api/v1/secrets/cases/{caseId}/exceptions/revoke` | 취소 사유, `expectedVersion`. 남은 위험에 따라 단계 재개 |
+| POST (V9) | `/api/v1/secrets/cases/{caseId}/review` | `{decision,reasonCode,expectedVersion}`. `CONFIRMED/EVIDENCE_CONFIRMED`이면 `REVIEWED`, `NEEDS_MORE_INFO/INSUFFICIENT_EVIDENCE`이면 이력만 추가하고 `UNREVIEWED` 유지. `SECURITY` 권한 필요, 조치 단계·해결 상태는 자동 변경하지 않음 |
+| POST (V9) | `/api/v1/secrets/cases/{caseId}/start` | `{reasonCode:"RESPONSE_STARTED",expectedVersion}`. 해당 건에 지정된 개인이면서 모든 연결에 `REMEDIATOR` 권한이 있어야 하며, 검토 확정 뒤 `OPEN`에서 `IN_PROGRESS`로 명시적 전이 |
+| PATCH (V9) | `/api/v1/secrets/cases/{caseId}/checklist/{itemId}` | `{completed,guideVersion:"S2_V1",evidenceRef,expectedVersion}`. 지정된 `REMEDIATOR`만 변경, `DONE`에는 제한된 티켓/변경 참조 필요. 체크만으로 해결 금지 |
+| POST (V9) | `/api/v1/secrets/cases/{caseId}/actions` | `{actionType,occurrenceId,performedAt,evidenceRef,expectedVersion}`. 검토 확정 뒤 지정된 `REMEDIATOR`가 연결 위치에 외부에서 수행한 조치를 기록. 공급자 키 변경 호출 없음. 조치한 위치는 `REVALIDATION_PENDING`; 모든 연결 위치가 그 상태일 때 건도 대기로 전이 |
+| POST (V10) | `/api/v1/secrets/cases/{caseId}/revalidations` | `{occurrenceId,expectedVersion,idempotencyKey}`. 조치 기록이 있는 승인된 단일 GitHub 위치의 비동기 작업을 등록하고 재검증 식별자·작업 상태를 반환. 원문은 받지 않음 |
+| POST (V10) | `/api/v1/secrets/cases/{caseId}/revalidation-resume` | `{occurrenceId,expectedVersion,reasonCode:"REVALIDATION_PRESENT"}`. 조치 후 재검증에서도 키가 계속 발견된 위치를 다시 `IN_PROGRESS`로 전환해 추가 외부 조치를 받음 |
+| POST (V10) | `/api/v1/secrets/cases/{caseId}/resolve` | `{expectedVersion,reasonCode:"POST_ACTION_REVALIDATION"}`. `SECURITY` 권한과 모든 관련 위치의 조치 이후 최신 `MISSING` 근거·범위 버전 등 서버 조건을 검사한 후 `RESOLVED`로 전이 |
+| POST (선택) | `/api/v1/secrets/cases/{caseId}/guide` | 본문 없음. `SECURITY` 또는 지정된 `REMEDIATOR`에게 버전 고정 기본 가이드를 반환하고, 별도 활성화·키·합성 `TEST` 범위 조건이 모두 맞을 때만 Groq 호출. 호출 실패는 기본 가이드로 처리; 상태·DB 변경 없음 |
+| POST (후속) | `/api/v1/secrets/cases/{caseId}/exceptions` | 승인 범위, 사유, 만료 시각, 승인자 권한, `expectedVersion`. 전체 예외와 일부 위치 예외 구분 |
+| POST (후속) | `/api/v1/secrets/cases/{caseId}/exceptions/revoke` | 취소 사유, `expectedVersion`. 남은 위험에 따라 단계 재개 |
 
-모든 변경은 서버가 인증된 사용자 ID를 감사 기록에 넣는다. 클라이언트가 보낸 수행자 ID를 신뢰하지 않는다. `expectedVersion`이 다르면 409를 반환하고 저장된 현재 상태를 다시 조회하게 한다. 재검증 요청은 `idempotencyKey`로 중복 작업을 막고 이전 요청의 작업 ID를 반환한다. 변경 결과는 저장 완료 후의 버전과 상태를 반환한다.
+V9의 체크리스트는 `IDENTIFY_OWNER`, `ROTATE_OR_REVOKE`, `REMOVE_EXPOSURE`, `CHECK_ACCESS_LOGS` 네 코드이며 `TODO`·`DONE`을 저장한다. 외부 조치 종류는 `ROTATED`, `REVOKED`, `REMOVED_FROM_SOURCE`, `PERMISSION_REDUCED`다. 증거 참조는 `TICKET:SEC-123`처럼 `TICKET|CHANGE:대문자 프로젝트 코드-숫자`만 허용한다. 임의 URL·자유 문장·키 원문은 저장하지 않는다. 외부 수행 시각은 최근 30일에서 요청 시각보다 최대 5분 뒤까지만 허용한다. `NEEDS_MORE_INFO`는 검토 확정이 아니며 조치 시작·기록 권한을 열지 않는다. 한 건에 여러 위치가 연결되면 각 위치의 조치를 따로 기록하고 미조치 위치가 남은 건은 `IN_PROGRESS`로 둔다. 현재 개설 API는 위치 하나만 연결하며 추가 위치 연결은 후속이다.
+
+V10의 재검증 결과는 `PENDING`, `PRESENT`, `MISSING`, `UNKNOWN`으로 구분한다. `MISSING`은 해당 위치의 **단일 승인 GitHub 범위**를 조치 이후 정상 수집하고 Gitleaks 실행이 성공했으며, 탐지 설정·버전과 HMAC 키 버전이 비교 가능한 상태에서 해당 키를 찾지 못했을 때만 인정한다. 일부 실패나 비교 불가를 `MISSING`으로 바꾸지 않고 `UNKNOWN`과 안전한 실패 코드로 기록한다. `PRESENT`를 추가 조치 없이 해결 근거로 사용하지 않는다. 다른 수집원·과거 Git 이력의 잔여 노출까지 확인한 것으로 표시하지 않는다.
+
+V10의 `POST /cases/{caseId}/revalidations`는 `202 Accepted`와 `{revalidationId,occurrenceId,runId,jobStatus,result,failureCode,requestedAt,finishedAt}`를 반환한다. `GET`은 같은 형태의 이력 배열이다. 작업 상태는 `PENDING`, `LEASED`, `SUCCEEDED`, `FAILED`, `CANCELLED`이고 결과는 별도 필드다. 실행 중 결과는 `PENDING`, 실패·불완전 비교는 `UNKNOWN` 및 `REVALIDATION_INCOMPLETE` 또는 안전한 워커 실패 코드를 사용한다. 해결·재조치 변경은 최신 버전의 대응 건 상세를 반환한다. 최신 외부 조치 뒤의 근거, 동일한 현재 범위 버전 및 같은 키·대응 구분에 남은 다른 비정상·잔여·확인 불가 위치를 서버가 확인한다.
+
+모든 변경은 서버가 인증된 사용자 ID를 감사 기록에 넣는다. 클라이언트가 보낸 수행자 ID를 신뢰하지 않는다. `expectedVersion`이 다르면 409를 반환하고 저장된 현재 상태를 다시 조회하게 한다. 재검증 요청은 `idempotencyKey`로 중복 작업을 막고 기존 요청을 다시 연결한다. 변경 결과는 저장 완료 후의 버전과 상태를 반환한다. 가이드 응답은 `{version:"secret-response-guide-v1",source:"DEFAULT|GROQ",title,steps:[{code,title,description}],notice}`이며 키 원문, 마스킹 끝자리, 지문, 저장소·계정·경로와 임의 메모를 외부 AI에 전송하지 않는다.
 
 ## 4. 권한과 전환
 
