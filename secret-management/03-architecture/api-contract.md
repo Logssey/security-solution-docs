@@ -23,7 +23,7 @@
 | MVP | GET | `/api/v1/secrets/connections` | 수동 실행용 활성 GitHub 연결과 지원 형식의 AWS 메타데이터 또는 단일 자원 값 범위가 있는 활성 AWS 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외. 값 범위가 보여도 워커의 별도 값 읽기 설정이 활성이라는 뜻은 아님 |
 | MVP | GET | `/api/v1/secrets/runs?page={page}&size={size}` | 0부터 시작하는 페이지, 크기 1–100(기본 20). `requestedAt` 최신순, 같은 시각이면 `runId` 내림차순. `{items,total,page,size}`를 반환하며 종료된 실행과 대기 중인 실행, 현재 일시중지된 연결의 과거 실행을 함께 조회 |
 | MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드. `scopeResults`에 범위별 내부 ID·지원 콘텐츠 유형·리전·수집 상태·항목 수·안전한 누락 코드만 포함 |
-| V7 + UX 변경 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. API 페이지는 0부터, 크기는 1–100. UX 변경에서 항목에 `reviewStatus`를 추가. 집계 스냅샷·전체 범위 필터·탭별 건수는 아직 없음 |
+| V7 + UX·목록 필터 변경 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 권한 있는 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. API 페이지는 0부터(기본 0), 크기는 1–100(기본 20). 선택 필터 `stage`, `reviewStatus`, `assignmentStatus`, `changedSince`를 서버에서 적용. 항목에는 `reviewStatus`, `latestReviewDecision`을 추가하며 사유·티켓은 제외. 집계 스냅샷·심각도 등 확장 필터는 아직 없음 |
 | V7–V10 + UX·V12 변경 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계·검토 상태, 담당자, 버전, 개설 위치와 연결된 위치의 ID·조치 상태, 담당자·검토·체크리스트·외부 조치·단계 변경 이력 및 호출자별 `capabilities`. V10은 `occurrences[]`에 `canRequestRevalidation`·`canResume`, 건 `capabilities`에 `canRequestRevalidation`·`canResolve`·`canResume`을 추가. UX 변경에서 위치별 `sourceType`, `safeLocationLabel`, `canCompleteActions` 및 건 `capabilities.canAssign`을 추가. V12는 검토 이력 `reviews[]`에 제한된 근거 참조와 후속 담당자 정보를 추가. `safeLocationLabel`은 호출자의 승인 범위에 맞는 GitHub `owner/repo · 위치 #ID` 또는 제한 표시만 제공하며 파일 경로·줄 번호·키 원문·수집 본문은 제외 |
 | V7 | GET | `/api/v1/secrets/assignees?caseId={caseId}` | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 활성 팀 소속. `SECURITY` 권한 필요 |
 | V8 | GET | `/api/v1/secrets/triage-candidates?page={page}&size={size}` | 연결별 `SECURITY` 권한이 있는 활성 GitHub 범위의 후보 키만 `{items,total,page,size}`로 조회. 항목은 키 ID, 마스킹 이름, 발급자, 유형, 구성 상태, 허용된 위치 수만 반환 |
@@ -32,11 +32,13 @@
 | V8 | GET | `/api/v1/secrets/occurrences/{occurrenceId}/triage` | 위치의 `secretId`, `scopeId`, 구성·존재·노출 상태, `assessmentVersion`, 범위 구분·버전, 같은 키·구분의 현재 건 `openCaseId`(없으면 null), 해당 위치에 속하는 Finding ID·룰·탐지 시각과 수동 판정 이력. Finding 문맥과 원문은 제외 |
 | V10 | GET | `/api/v1/secrets/cases/{caseId}/revalidations` | 해당 건의 위치별 재검증 요청·작업·결과 이력. 항목은 `revalidationId`, `occurrenceId`, `runId`, `jobStatus`, `result`, `failureCode`, `requestedAt`, `finishedAt`의 안전한 정보만 제공 |
 | 후속 | GET | `/api/v1/secrets/summary` | 심각도 분포와 미평가, 조치 네 단계와 별도 예외, 유효성 분포, 미지정, 수집 및 검사 최신성, 집계 기준 |
-| 후속 확장 | GET | `/api/v1/secrets/cases` | 범위·스냅샷·필터를 갖춘 대응 목록. `scope=history`이면 과거 대응 건 목록. 발견 소스, 심각도, 유효성, 예외, 시각과 근거 추가 |
+| 후속 확장 | GET | `/api/v1/secrets/cases` | 현재 단계·검토·담당·시각 필터 외에 범위·스냅샷 필터를 갖춘 대응 목록. `scope=history`이면 과거 대응 건 목록. 발견 소스, 심각도, 유효성, 예외와 근거 추가 |
 | 후속 확장 | GET | `/api/v1/secrets/cases/{caseId}` | 아직 없는 위치별 심각도·영향 근거, 예외, 실행 스냅샷과 과거 건 상세를 추가 |
 | 후속 | GET | `/api/v1/secrets/matrix` | 심각도와 유효성의 교차 건수, 미평가 행, 동일 필터와 기준시점 |
 
 MVP 인벤토리 목록은 고유 `CredentialSet` 단위 페이지네이션이며 `UNASSESSED`와 환경 `UNKNOWN`을 임의 값으로 치환하지 않는다. 최신 검증 시도가 없으면 `UNCHECKED`로 표시한다. AWS IAM의 `METADATA_ONLY`는 키의 존재 정보이지 비밀 값의 발견·노출·유효성 증거가 아니다. `iamMetadata.keyStatus`의 `ACTIVE`도 STS 검증 결과 `VALID`와 다르며 최근 사용 기록 부재는 미사용의 증명이 아니다. 정확한 AWS 본문에서 키 후보를 탐지해도 그 자원이 외부에 노출됐다는 뜻은 아니며 노출·영향·심각도는 별도 근거로 평가한다. V7–V9는 대응 건의 개설·담당·검토·외부 조치 이력을 제공하지만 집계 스냅샷과 실제 단계별 수는 아직 제공하지 않으므로 아래 목표 요약 예시를 현행 목록 응답으로 사용하지 않는다.
+
+대응 목록의 `stage`는 `OPEN|IN_PROGRESS|REVALIDATION_PENDING|RESOLVED`, `reviewStatus`는 `UNREVIEWED|REVIEWED`, `assignmentStatus`는 `UNASSIGNED|TEAM_ONLY|PERSONAL` 중 하나다. `UNASSIGNED`는 팀·개인 모두 없음, `TEAM_ONLY`는 팀만 있음, `PERSONAL`은 개인 지정이다. `changedSince`는 시차를 포함한 ISO 8601 시각이며 `updated_at >= changedSince`로 경계를 포함한다. 네 필터를 함께 보내면 AND로 결합하고 권한·`origin` 범위를 먼저 제한한다. `items`와 `total`은 동일한 조건을 사용하므로 `total`은 현재 페이지의 길이가 아닌 필터 결과 전체 건수다. 잘못된 enum·날짜·`origin`은 400이며 데이터베이스에는 입력값을 바인딩한다. `latestReviewDecision`은 `CONFIRMED`, `NEEDS_MORE_INFO`, 검토 이력이 없으면 null이고 부족 사유·근거 참조는 목록에 포함하지 않는다. 운영·시험 탭의 필터와 무관한 건수는 각 `origin`에 필터 없이 별도 조회한 `total`로 표시하며 두 구분을 합산하지 않는다. 집계 스냅샷은 아직 없다.
 
 수동 판정 화면은 기존 `ADMIN` 전용 인벤토리 API를 권한 우회용으로 확장하지 않는다. V8의 후보 목록·상세 API가 활성 GitHub 연결·승인 범위와 현재 사용자의 연결별 `SECURITY` 권한으로 위치를 SQL에서 제한한다. 한 키에 여러 위치가 있어도 권한 밖 위치는 상세 응답에 나타나지 않고, 응답의 위치 수는 허용된 위치의 수다. 원문 키·보호키 식별값은 반환하지 않는다.
 
