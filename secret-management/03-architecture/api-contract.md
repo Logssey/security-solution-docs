@@ -2,7 +2,7 @@
 
 기준: [PRD](../01-requirements/PRD.md), [ADR-S008](adr/ADR-S008.md), [ADR-S009](adr/ADR-S009.md), [데이터 계약](data-contract.md), [대응 정책](../02-functional-design/response-policy.md)
 
-이 문서는 Secret 기능의 목표 계약과 개발 구현을 구분한다. 인벤토리·연결·실행 조회, V7 대응 건·담당자, V8 수동 범위 분류·노출 판정에 이어 V9는 검토·체크리스트·외부 조치 기록을 제공한다. V10은 승인된 GitHub 위치의 비동기 재검증과 근거가 충족된 해결을 연결한다. AI 가이드는 별도 선택 기능이며 기본 안내는 외부 API 없이 동작한다. 심각도·영향 평가, 실제 단계별 요약·스냅샷, 예외와 다른 원천의 재검증은 목표 계약이다. 브랜치별 검증·병합 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
+이 문서는 Secret 기능의 목표 계약과 개발 구현을 구분한다. 인벤토리·연결·실행 조회, V7 대응 건·담당자, V8 수동 범위 분류·노출 판정에 이어 V9는 검토·체크리스트·외부 조치 기록을 제공한다. V10은 승인된 GitHub 위치의 비동기 재검증과 근거가 충족된 해결을 연결한다. 이번 대응 UX 변경은 조치 시작을 필수로 하고, 한 위치의 외부 조치를 여러 건 기록한 뒤 명시적으로 재검증 대기로 넘기는 계약을 추가한다. AI 가이드는 별도 선택 기능이며 기본 안내는 외부 API 없이 동작한다. 심각도·영향 평가, 실제 단계별 요약·스냅샷, 예외와 다른 원천의 재검증은 목표 계약이다. 브랜치별 검증·병합 상태는 [구현 연동 문서](../04-integration/current-implementation-and-gaps.md)를 따른다.
 
 ## 1. 공통 계약
 
@@ -23,8 +23,8 @@
 | MVP | GET | `/api/v1/secrets/connections` | 수동 실행용 활성 GitHub 연결과 지원 형식의 AWS 메타데이터 또는 단일 자원 값 범위가 있는 활성 AWS 연결의 ID·표시 이름·상태·승인 범위 수. 연결 비밀 제외. 값 범위가 보여도 워커의 별도 값 읽기 설정이 활성이라는 뜻은 아님 |
 | MVP | GET | `/api/v1/secrets/runs?page={page}&size={size}` | 0부터 시작하는 페이지, 크기 1–100(기본 20). `requestedAt` 최신순, 같은 시각이면 `runId` 내림차순. `{items,total,page,size}`를 반환하며 종료된 실행과 대기 중인 실행, 현재 일시중지된 연결의 과거 실행을 함께 조회 |
 | MVP | GET | `/api/v1/secrets/runs/{runId}` | 실행 전체·단계별 상태, 범위와 객체 수, 시각·재시도·안전한 실패 코드. `scopeResults`에 범위별 내부 ID·지원 콘텐츠 유형·리전·수집 상태·항목 수·안전한 누락 코드만 포함 |
-| V7 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. 페이지는 0부터, 크기는 1–100. 집계 스냅샷·후속 필터는 아직 없음 |
-| V7–V10 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계·검토 상태, 담당자, 버전, 개설 위치와 연결된 위치의 ID·조치 상태, 담당자·검토·체크리스트·외부 조치·단계 변경 이력 및 호출자별 `capabilities`. V10은 `occurrences[]`에 `canRequestRevalidation`·`canResume`, 건 `capabilities`에 `canRequestRevalidation`·`canResolve`·`canResume`을 추가. 키 원문·원천 본문 제외 |
+| V7 + UX 변경 | GET | `/api/v1/secrets/cases?page={page}&size={size}&origin=PRODUCTION` | 현재 대응 건의 마스킹 목록 `{items,total,page,size}`. `origin`은 `PRODUCTION` 또는 `TEST`, 기본은 `PRODUCTION`. API 페이지는 0부터, 크기는 1–100. UX 변경에서 항목에 `reviewStatus`를 추가. 집계 스냅샷·전체 범위 필터·탭별 건수는 아직 없음 |
+| V7–V10 + UX 변경 | GET | `/api/v1/secrets/cases/{caseId}` | 현재 대응 건의 마스킹 키, `caseOrigin`, 단계·검토 상태, 담당자, 버전, 개설 위치와 연결된 위치의 ID·조치 상태, 담당자·검토·체크리스트·외부 조치·단계 변경 이력 및 호출자별 `capabilities`. V10은 `occurrences[]`에 `canRequestRevalidation`·`canResume`, 건 `capabilities`에 `canRequestRevalidation`·`canResolve`·`canResume`을 추가. UX 변경에서 위치별 `sourceType`, `safeLocationLabel`, `canCompleteActions`를 추가. `safeLocationLabel`은 호출자의 승인 범위에 맞게 서버가 안전하게 구성하며 키 원문·수집 본문은 제외 |
 | V7 | GET | `/api/v1/secrets/assignees?caseId={caseId}` | 해당 건의 모든 연결 범위에 `REMEDIATOR` 권한이 있는 기존 계정과 활성 팀 소속. `SECURITY` 권한 필요 |
 | V8 | GET | `/api/v1/secrets/triage-candidates?page={page}&size={size}` | 연결별 `SECURITY` 권한이 있는 활성 GitHub 범위의 후보 키만 `{items,total,page,size}`로 조회. 항목은 키 ID, 마스킹 이름, 발급자, 유형, 구성 상태, 허용된 위치 수만 반환 |
 | V8 | GET | `/api/v1/secrets/triage-candidates/{secretId}` | 같은 권한 경계의 후보 키와 선택 가능한 발견 위치를 조회. 위치 ID, 연결·범위 ID, 원천 위치, 환경, 노출·존재 상태와 판정·범위 버전 제공 |
@@ -98,17 +98,18 @@ V7의 `PATCH /api/v1/secrets/cases/{caseId}/assignment`는 `{ "team", "assigneeU
 | POST (V8 적용) | `/api/v1/secrets/{secretId}/cases` | `occurrenceId`, `ASSESSED_EXPOSURE`, 두 최신 판정·범위 버전. 서버가 분류와 비정상 노출을 재확인하고 운영·시험 구분을 파생 |
 | PATCH (V7) | `/api/v1/secrets/cases/{caseId}/assignment` | 팀과 개인, 허용된 사유 코드, `expectedVersion`. 수행자, 변경 전후, 시각 감사 |
 | POST (V9) | `/api/v1/secrets/cases/{caseId}/review` | `{decision,reasonCode,expectedVersion}`. `CONFIRMED/EVIDENCE_CONFIRMED`이면 `REVIEWED`, `NEEDS_MORE_INFO/INSUFFICIENT_EVIDENCE`이면 이력만 추가하고 `UNREVIEWED` 유지. `SECURITY` 권한 필요, 조치 단계·해결 상태는 자동 변경하지 않음 |
-| POST (V9) | `/api/v1/secrets/cases/{caseId}/start` | `{reasonCode:"RESPONSE_STARTED",expectedVersion}`. 해당 건에 지정된 개인이면서 모든 연결에 `REMEDIATOR` 권한이 있어야 하며, 검토 확정 뒤 `OPEN`에서 `IN_PROGRESS`로 명시적 전이 |
+| POST (V9, UX 규칙 강화) | `/api/v1/secrets/cases/{caseId}/start` | `{reasonCode:"RESPONSE_STARTED",expectedVersion}`. 해당 건에 지정된 개인이면서 모든 연결에 `REMEDIATOR` 권한이 있어야 하며, 검토 확정 뒤 `OPEN`에서 `IN_PROGRESS`로 명시적 전이. 조치 기록의 필수 선행 단계 |
 | PATCH (V9) | `/api/v1/secrets/cases/{caseId}/checklist/{itemId}` | `{completed,guideVersion:"S2_V1",evidenceRef,expectedVersion}`. 지정된 `REMEDIATOR`만 변경, `DONE`에는 제한된 티켓/변경 참조 필요. 체크만으로 해결 금지 |
-| POST (V9) | `/api/v1/secrets/cases/{caseId}/actions` | `{actionType,occurrenceId,performedAt,evidenceRef,expectedVersion}`. 검토 확정 뒤 지정된 `REMEDIATOR`가 연결 위치에 외부에서 수행한 조치를 기록. 공급자 키 변경 호출 없음. 조치한 위치는 `REVALIDATION_PENDING`; 모든 연결 위치가 그 상태일 때 건도 대기로 전이 |
-| POST (V10) | `/api/v1/secrets/cases/{caseId}/revalidations` | `{occurrenceId,expectedVersion,idempotencyKey}`. 조치 기록이 있는 승인된 단일 GitHub 위치의 비동기 작업을 등록하고 재검증 식별자·작업 상태를 반환. 원문은 받지 않음 |
+| POST (V9, UX 규칙 변경) | `/api/v1/secrets/cases/{caseId}/actions` | `{actionType,occurrenceId,performedAt,evidenceRef,expectedVersion}`. 검토 확정과 `start` 이후 지정된 `REMEDIATOR`가 `IN_PROGRESS` 위치에 외부에서 수행한 조치를 추가 전용으로 기록. 같은 위치에 여러 건을 남겨도 상태는 `IN_PROGRESS` 유지. 공급자 키 변경 호출 없음 |
+| POST (UX 변경) | `/api/v1/secrets/cases/{caseId}/occurrences/{occurrenceId}/complete-actions` | `{expectedVersion}`. 지정된 `REMEDIATOR`가 위치별 기록을 마침. 마지막 `start` 또는 재조치 재개 이후 `ROTATED`·`REVOKED`·`REMOVED_FROM_SOURCE` 중 하나 이상이 있어야 해당 위치를 `REVALIDATION_PENDING`으로 전이. `PERMISSION_REDUCED`만 있으면 409. 모든 위치가 대기면 건도 대기. 저장 후 최신 대응 건 상세 반환 |
+| POST (V10) | `/api/v1/secrets/cases/{caseId}/revalidations` | `{occurrenceId,expectedVersion,idempotencyKey}`. 조치 기록을 마쳐 `REVALIDATION_PENDING`인 승인된 단일 GitHub 위치의 비동기 작업을 등록하고 재검증 식별자·작업 상태를 반환. 원문은 받지 않음 |
 | POST (V10) | `/api/v1/secrets/cases/{caseId}/revalidation-resume` | `{occurrenceId,expectedVersion,reasonCode:"REVALIDATION_PRESENT"}`. 조치 후 재검증에서도 키가 계속 발견된 위치를 다시 `IN_PROGRESS`로 전환해 추가 외부 조치를 받음 |
 | POST (V10) | `/api/v1/secrets/cases/{caseId}/resolve` | `{expectedVersion,reasonCode:"POST_ACTION_REVALIDATION"}`. `SECURITY` 권한과 모든 관련 위치의 조치 이후 최신 `MISSING` 근거·범위 버전 등 서버 조건을 검사한 후 `RESOLVED`로 전이 |
 | POST (선택) | `/api/v1/secrets/cases/{caseId}/guide` | 본문 없음. `SECURITY` 또는 지정된 `REMEDIATOR`에게 버전 고정 기본 가이드를 반환하고, 별도 활성화·키·합성 `TEST` 범위 조건이 모두 맞을 때만 Groq 호출. 호출 실패는 기본 가이드로 처리; 상태·DB 변경 없음 |
 | POST (후속) | `/api/v1/secrets/cases/{caseId}/exceptions` | 승인 범위, 사유, 만료 시각, 승인자 권한, `expectedVersion`. 전체 예외와 일부 위치 예외 구분 |
 | POST (후속) | `/api/v1/secrets/cases/{caseId}/exceptions/revoke` | 취소 사유, `expectedVersion`. 남은 위험에 따라 단계 재개 |
 
-V9의 체크리스트는 `IDENTIFY_OWNER`, `ROTATE_OR_REVOKE`, `REMOVE_EXPOSURE`, `CHECK_ACCESS_LOGS` 네 코드이며 `TODO`·`DONE`을 저장한다. 외부 조치 종류는 `ROTATED`, `REVOKED`, `REMOVED_FROM_SOURCE`, `PERMISSION_REDUCED`다. 증거 참조는 `TICKET:SEC-123`처럼 `TICKET|CHANGE:대문자 프로젝트 코드-숫자`만 허용한다. 임의 URL·자유 문장·키 원문은 저장하지 않는다. 외부 수행 시각은 최근 30일에서 요청 시각보다 최대 5분 뒤까지만 허용한다. `NEEDS_MORE_INFO`는 검토 확정이 아니며 조치 시작·기록 권한을 열지 않는다. 한 건에 여러 위치가 연결되면 각 위치의 조치를 따로 기록하고 미조치 위치가 남은 건은 `IN_PROGRESS`로 둔다. 현재 개설 API는 위치 하나만 연결하며 추가 위치 연결은 후속이다.
+V9의 체크리스트는 `IDENTIFY_OWNER`, `ROTATE_OR_REVOKE`, `REMOVE_EXPOSURE`, `CHECK_ACCESS_LOGS` 네 코드이며 `TODO`·`DONE`을 저장한다. 체크리스트는 보조 기록이며 4/4 완료는 위치별 기록 마침·재검증·해결의 서버 조건이 아니다. 외부 조치 종류는 `ROTATED`, `REVOKED`, `REMOVED_FROM_SOURCE`, `PERMISSION_REDUCED`다. `PERMISSION_REDUCED`는 임시 위험 완화로 기록하지만 현재 GitHub 현재 파일 미발견의 근거를 대체하지 않는다. 증거 참조는 `TICKET:SEC-123`처럼 `TICKET|CHANGE:대문자 프로젝트 코드-숫자`만 허용한다. 임의 URL·자유 문장·키 원문은 저장하지 않는다. 외부 수행 시각은 최근 30일에서 요청 시각보다 최대 5분 뒤까지만 허용한다. `NEEDS_MORE_INFO`는 검토 확정이 아니며 조치 시작·기록 권한을 열지 않는다. 한 건에 여러 위치가 연결되면 각 위치의 조치를 따로 기록하고 미완료 위치가 남은 건은 `IN_PROGRESS`로 둔다. 현재 개설 API는 위치 하나만 연결하며 추가 위치 연결은 후속이다. 부족 근거의 세부 코드·후속 담당자·대표 티켓, 통합 시간순 이력 페이지 나눔은 후속 계약이다.
 
 V10의 재검증 결과는 `PENDING`, `PRESENT`, `MISSING`, `UNKNOWN`으로 구분한다. `MISSING`은 해당 위치의 **단일 승인 GitHub 범위**를 조치 이후 정상 수집하고 Gitleaks 실행이 성공했으며, 탐지 설정·버전과 HMAC 키 버전이 비교 가능한 상태에서 해당 키를 찾지 못했을 때만 인정한다. 일부 실패나 비교 불가를 `MISSING`으로 바꾸지 않고 `UNKNOWN`과 안전한 실패 코드로 기록한다. `PRESENT`를 추가 조치 없이 해결 근거로 사용하지 않는다. 다른 수집원·과거 Git 이력의 잔여 노출까지 확인한 것으로 표시하지 않는다.
 
