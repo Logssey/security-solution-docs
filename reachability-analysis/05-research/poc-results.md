@@ -1,6 +1,6 @@
 # PoC 결과 (10/7~10/11)
 
-**PRD에서 옮긴 PoC 실측과 실험 근거.** 요구사항은 [PRD](../01-requirements/PRD.md)가 정하고, 이 문서는 그 요구사항이 어떤 관찰과 측정에서 나왔는지를 보존한다. 진행 과정 전체는 Notion의 PoC 작업 기록에 있다.
+**PRD에서 옮긴 PoC 실측과 실험 근거.** 요구사항은 [PRD](../01-requirements/PRD.md)가 정하고, 이 문서는 그 요구사항이 어떤 관찰과 측정에서 나왔는지를 보존한다. 진행 과정 전체는 Notion의 PoC 작업 기록에 있다. 판정 값은 PoC 당시 CLI 출력 그대로 소문자(`unreachable`, `not_analyzed` 등)로 적었다. 설계 문서와 API는 대문자(`UNREACHABLE`)를 쓰며 뜻은 같다(PRD 1절).
 
 ## 1. 기준 실행
 

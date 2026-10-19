@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-코드 의존성과 컨테이너 이미지에서 알려진 CVE를 찾고, 그 CVE의 취약 코드가 우리 서비스에서 실제로 실행될 수 있는지 판정한다. 판정은 `reachable`(도달 가능) / `unreachable`(도달 불가) / `unknown`(미확인) / `not_analyzed`(분석 대상 아님) 중 하나다. 모든 판정에는 방식과 근거를 남기고, 확신이 없으면 `unreachable`이 아니라 `unknown`이다.
+코드 의존성과 컨테이너 이미지에서 알려진 CVE를 찾고, 그 CVE의 취약 코드가 우리 서비스에서 실제로 실행될 수 있는지 판정한다. 판정은 `REACHABLE`(도달 가능) / `UNREACHABLE`(도달 불가) / `UNKNOWN`(미확인) / `NOT_ANALYZED`(분석 대상 아님) 중 하나다. 모든 판정에는 방식과 근거를 남기고, 확신이 없으면 `UNREACHABLE`이 아니라 `UNKNOWN`이다.
 
 ### 용어와 공통 열거값 (다섯 산출물 공통)
 
@@ -18,7 +18,7 @@
 | 용어 | 뜻 |
 |---|---|
 | 스캔(Scan) | 대상 하나에 SBOM 생성 → CVE 대조 → 판정까지 한 번 실행한 것 |
-| 대상(Target) | 레포 커밋(`repo`, 커밋 SHA) 또는 컨테이너 이미지(`image`, digest) |
+| 대상(Target) | 레포 커밋(`REPO`, 커밋 SHA) 또는 컨테이너 이미지(`IMAGE`, digest) |
 | 서비스(Service) | 레포 · ECR 리포지토리 · 클러스터 워크로드를 묶은 등록 단위. 매일 스캔과 L1의 기준 목록(FR-15) |
 | 구성 요소(Component) | SBOM의 패키지 하나. 키는 purl |
 | 취약점(Vulnerability) | CVE 하나와 심각도, 수정 버전 |
@@ -27,25 +27,26 @@
 | 근거(Evidence) | 앱 코드의 사실(파일·줄), 호출 경로, 적용한 규칙, 메모 |
 | 사실(Fact), 규칙(Rule) | 앱 코드에서 수집한 관찰값, 사실과 호출 그래프 결과로 상태를 정하는 CVE별 조건(규칙명세서) |
 | 취약 함수 | 수정으로 바뀐 메서드. 호출 그래프 판정의 목표 지점(FR-09) |
-| 진입점, 약한 경로 | 탐색 시작점(1단계 Spring 진입점, 2단계 모든 앱 메서드), Object 메서드·JDK 콜백처럼 근거로 약한 간선. 약한 경로로만 닿으면 `unknown` |
+| 진입점, 약한 경로 | 탐색 시작점(1단계 Spring 진입점, 2단계 모든 앱 메서드), Object 메서드·JDK 콜백처럼 근거로 약한 간선. 약한 경로로만 닿으면 `UNKNOWN` |
 | 워크로드 | 운영 클러스터에서 실행 중인 파드·디플로이먼트와 그 imageID(digest) |
 | L1 / L2 / L3 | 배포 여부 / 호출 경로 / 실제 실행(1-1) |
-| 정답지, 검증 세트 | 도구와 독립적으로 만든 사람 판정(M-03), 샘플 앱·대조군·회귀 테스트 묶음(ARD C-14). 운영 사람 검토(`review_state`)와 다르다 |
-| 게이트 | 조건에 걸리면 PR 머지를 막는 필수 검사. `report_only`로 시작한다(FR-11) |
-| 제안(확정 대기) | 사람이 조사한 판정 제안이 있지만 확정 전인 상태. `status`·`review_state`는 그대로 두고 제안을 함께 보인다(FR-08 수용 기준 6) |
-| 참고 사실 | 판정에 쓰지 않고 참고로만 보이는 사실. `rules.json`의 `info`, API의 `info_facts`·`informational` |
+| 정답지, 검증 세트 | 도구와 독립적으로 만든 사람 판정(M-03), 샘플 앱·대조군·회귀 테스트 묶음(ARD C-14). 운영 사람 검토(`reviewState`)와 다르다 |
+| 게이트 | 조건에 걸리면 PR 머지를 막는 필수 검사. `REPORT_ONLY`로 시작한다(FR-11) |
+| 제안(확정 대기) | 사람이 조사한 판정 제안이 있지만 확정 전인 상태. `status`·`reviewState`는 그대로 두고 제안을 함께 보인다(FR-08 수용 기준 6) |
+| 참고 사실 | 판정에 쓰지 않고 참고로만 보이는 사실. `rules.json`의 `info`, API의 `infoFacts`·`informational` |
 
 | 필드 | 값 |
 |---|---|
-| `status` | `reachable` / `unreachable` / `unknown` / `not_analyzed` |
-| `not_analyzed_reason` | `no_vuln_function_data` / `os_package` / `unanalyzed_copy` / `unsupported_ecosystem` / `analysis_timeout`(NFR-03) |
-| `method` | `callgraph`(호출 그래프) / `rule`(설정·타입 규칙) / `manual`(사람) |
-| `review_state` | `unreviewed` / `provisional` / `confirmed`. 되돌린 이유 `reset_reason`: `verdict_changed` / `evidence_changed` |
-| `deployment` | `running` / `not_running` / `unknown` |
+| `status` | `REACHABLE` / `UNREACHABLE` / `UNKNOWN` / `NOT_ANALYZED` |
+| `notAnalyzedReason` | `NO_VULN_FUNCTION_DATA` / `OS_PACKAGE` / `UNANALYZED_COPY` / `UNSUPPORTED_ECOSYSTEM` / `ANALYSIS_TIMEOUT`(NFR-03) |
+| `method` | `CALLGRAPH`(호출 그래프) / `RULE`(설정·타입 규칙) / `MANUAL`(사람) |
+| `reviewState` | `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED`. 되돌린 이유 `resetReason`: `VERDICT_CHANGED` / `EVIDENCE_CHANGED` |
+| `deployment` | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `UNKNOWN` (스캐너 값 그대로) |
-| `scan_status` | `queued` / `running` / `succeeded` / `failed` |
+| `scanStatus` | `QUEUED` / `RUNNING` / `SUCCEEDED` / `FAILED` |
 
-권한(`viewer`·`reviewer`·`admin`)과 API에서만 쓰는 값은 API 명세서 2-2·3-11을 따른다.
+- 표기는 대시보드 공통 규약을 따른다: 필드 이름은 camelCase, 열거값은 대문자다(ADR-D008). 지금 CLI 출력(`verdicts.json`, `verdicts.md`)과 [PoC 결과](../05-research/poc-results.md)는 PoC 때의 소문자 값(`unreachable` 등)을 쓴다. 뜻은 같고, 서버가 저장할 때 대문자로 바꾼다(ARD AD-18).
+- 권한과 API에서만 쓰는 값은 API 명세서 2-2·3-11을 따른다.
 
 ### 1-1 판정 단계
 
@@ -53,7 +54,7 @@
 |---|---|---|
 | L1 배포 여부 | 이 이미지가 운영에서 실행 중인가 | 실행 중 파드의 imageID(digest)와 스캔 digest를 조인하고, 이미지 revision 라벨로 커밋을 확인 |
 | L2 호출 경로 | 우리 코드에서 취약 코드까지 닿나 | ① 호출 그래프: 우리 코드가 라이브러리를 부를 때<br>② 규칙: 프레임워크·컨테이너가 스스로 실행할 때(Tomcat 인증 설정, Spring MVC의 Jackson 역직렬화) |
-| L3 실제 실행 | 실제로 실행되나 | 능동 관측(MVP): 스테이징·로컬·CI에서 Java는 커버리지 에이전트, 네이티브는 maps·uprobe로 확인. 관측되면 `reachable` 근거, 관측되지 않았다는 것만으로 `unreachable`을 만들지 않는다(FR-14). 운영 상시 관측은 비목표(3-2) |
+| L3 실제 실행 | 실제로 실행되나 | 능동 관측(MVP): 스테이징·로컬·CI에서 Java는 커버리지 에이전트, 네이티브는 maps·uprobe로 확인. 관측되면 `REACHABLE` 근거, 관측되지 않았다는 것만으로 `UNREACHABLE`을 만들지 않는다(FR-14). 운영 상시 관측은 비목표(3-2) |
 
 ### 1-2 실행 시점
 
@@ -86,7 +87,7 @@ Endor Labs 수치는 회사 자체 조사 기준이다.
 
 ### 2-2. 우리 데이터: 운영 api 이미지
 
-운영 api 이미지를 스캔하면 23행이 나온다. 판정한 Java CVE 14개는 모두 `unreachable`이었고, 나머지 9행(Jackson 2 사본 7행, OS 패키지 2행)은 `not_analyzed`다. 상세는 [PoC 결과](../05-research/poc-results.md) 2절에 있다. 이 데이터에서 나온 요구사항은 다음과 같다.
+운영 api 이미지를 스캔하면 23행이 나온다. 판정한 Java CVE 14개는 모두 `UNREACHABLE`이었고, 나머지 9행(Jackson 2 사본 7행, OS 패키지 2행)은 `NOT_ANALYZED`다. 상세는 [PoC 결과](../05-research/poc-results.md) 2절에 있다. 이 데이터에서 나온 요구사항은 다음과 같다.
 
 | 관찰 | 요구사항 |
 |---|---|
@@ -105,7 +106,7 @@ Endor Labs 수치는 회사 자체 조사 기준이다.
 | 목표 | 뜻 | 지표 |
 |---|---|---|
 | **1. 닿는 것부터 가려내기** | Finding마다 네 상태 중 하나를 정한다. 닿는 것을 먼저, 판단 못 한 것을 따로 다룬다. 닿지 않는 것은 지우지 않고 보류한다 | M-01, M-02 |
-| **2. 근거 있는 판정** | 모든 판정에 방식과 근거를 남기고, 앱 코드 사실은 파일·줄까지 보인다. 사람이 확정하거나 잠정으로 기록한다. 거짓 `unreachable`을 만들지 않는다 | M-03, M-04, M-05, M-07, M-08 |
+| **2. 근거 있는 판정** | 모든 판정에 방식과 근거를 남기고, 앱 코드 사실은 파일·줄까지 보인다. 사람이 확정하거나 잠정으로 기록한다. 거짓 `UNREACHABLE`을 만들지 않는다 | M-03, M-04, M-05, M-07, M-08 |
 | **3. 실제 배포물 기준** | 판정을 실행 중인 이미지 digest와 커밋에 연결한다 | M-09 |
 
 PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 제약이다. NFR-03이 정한다.
@@ -118,7 +119,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 | 우리 코드 자체의 취약점 분석(SAST) | 이미 도구가 많다 | 확장 단계에서 Semgrep CE 같은 결과를 공통 Finding으로 받는 것을 검토한다 |
 | 자동 수정, 자동 PR | 적용은 팀이 결정하고 호환성 확인이 필요하다 | 최소 수정 버전, 패치, 실험용 clone 테스트 결과를 제안까지만 한다(FR-13) |
 | 최종 판정에 AI 사용 | 규칙이 더 정확하고 AI 결과는 재현할 수 없다 | AI는 취약 함수 후보, 구성요소 식별 후보(FR-02), 판정 설명에만 쓴다. 보내는 데이터 범위는 ARD SR-11(NFR-04) |
-| 결과에서 CVE 지우기 | 도달 불가 판정도 틀릴 수 있다 | `unreachable`·`not_analyzed`도 남긴다. 도달 불가는 삭제가 아니라 보류다 |
+| 결과에서 CVE 지우기 | 도달 불가 판정도 틀릴 수 있다 | `UNREACHABLE`·`NOT_ANALYZED`도 남긴다. 도달 불가는 삭제가 아니라 보류다 |
 | Logssey의 다른 모듈(시크릿, IaC, CSPM, IAM, 런타임 탐지) | 다른 담당의 범위다 | 공통 Finding과 자산 연결 키(digest, 레포·커밋, purl)로 접점만 맞춘다 |
 | L3 상시 관측(운영 트래픽 감시) | 운영 부하·비용이 크고, 관찰 기간에 안 쓰인 코드를 "안 쓰임"으로 오판할 수 있다 | L3 능동 관측(FR-14) |
 | 대용량 DB에 기대는 패키지 수준 도구 | 실행 환경에서 돌지 않고, bcprov 같은 경우를 위험으로 남긴다 | 함수 수준 판정을 직접 조립한다(NFR-06) |
@@ -138,10 +139,10 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 
 | 시나리오 | 흐름 | 관련 US |
 |---|---|---|
-| **A. PR에 새 CVE가 들어올 때** | 의존성을 바꾼 PR → SBOM 생성·CVE 대조 → 새 Finding 판정 → PR 결과에 상태별 개수와 상세 링크(리포트 전용) → `reachable`·`unknown`이면 보안 담당자가 검토 | US-04, 02, 03 |
+| **A. PR에 새 CVE가 들어올 때** | 의존성을 바꾼 PR → SBOM 생성·CVE 대조 → 새 Finding 판정 → PR 결과에 상태별 개수와 상세 링크(리포트 전용) → `REACHABLE`·`UNKNOWN`이면 보안 담당자가 검토 | US-04, 02, 03 |
 | **B. 운영 이미지 정기 점검** | 하루 1번 → 실행 중 digest 조회(L1) → 저장된 SBOM을 최신 DB로 재대조 → 새 Finding 판정 → 요약 갱신, 새 Finding 표시 | US-06, 10, 09 |
-| **C. 판정 근거 검토와 확정** | `unreviewed` Finding을 거름 → 사실(파일·줄), 적용 규칙, 후보 경로 확인 → `confirmed`·`provisional`과 메모 기록 | US-02, 03, 11 |
-| **D. 업그레이드 우선순위 결정** | 기본 정렬(`reachable` → `unknown` → `unreachable` → `not_analyzed`, 같은 상태 안에서는 심각도 → CVE)과 `deployment`를 함께 봄 → 라이브러리별 최소 수정 버전과 시험 결과 확인 → 팀이 적용 결정. Reach는 PR을 만들지 않는다 | US-05, 01 |
+| **C. 판정 근거 검토와 확정** | `UNREVIEWED` Finding을 거름 → 사실(파일·줄), 적용 규칙, 후보 경로 확인 → `CONFIRMED`·`PROVISIONAL`과 메모 기록 | US-02, 03, 11 |
+| **D. 업그레이드 우선순위 결정** | 기본 정렬(`REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED`, 같은 상태 안에서는 심각도 → CVE)과 `deployment`를 함께 봄 → 라이브러리별 최소 수정 버전과 시험 결과 확인 → 팀이 적용 결정. Reach는 PR을 만들지 않는다 | US-05, 01 |
 | **E. 새 CVE 규칙 추가** | diff에서 취약 함수 결정 → 조사 파일과 생성 스크립트로 데이터 생성 → 필요하면 규칙 추가 → 대조군과 회귀 테스트 통과 후 반영 | US-08 |
 
 업계 공통 원칙(Sonatype): 도달 가능은 우선 처리, 도달 불가는 삭제가 아니라 보류, 판단 불가는 따로 조사한다.
@@ -163,7 +164,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 | US-09 | 보안 담당자 | 요약에서 상태별·심각도별 개수와 M-01·M-02를 본다 (한 번에 보고) | FR-12 |
 | US-10 | 보안 담당자 | 하루 1번 저장된 SBOM을 재대조하고 새 Finding을 구분한다 (새 CVE를 놓치지 않음) | FR-02, 11, 12 |
 | US-11 | 보안 담당자 | 같은 CVE라도 사본마다 따로 본다 (판정 안 한 사본이 숨지 않음) | FR-03, 07 |
-| US-12 | 보안 담당자 | 능동 관측 결과를 L2 판정과 나란히 본다 (`unknown` 해소, 후보 경로 검증) | FR-14 |
+| US-12 | 보안 담당자 | 능동 관측 결과를 L2 판정과 나란히 본다 (`UNKNOWN` 해소, 후보 경로 검증) | FR-14 |
 
 ## 6. 기능 요구사항
 
@@ -189,12 +190,12 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 
 ### FR-01 스캔 실행
 
-대상은 레포 커밋(`repo`, 커밋 SHA) 또는 컨테이너 이미지(`image`, digest)다. 스캔 한 번은 SBOM 생성 → CVE 대조 → 판정까지 실행한다. 어떤 서비스를 스캔할지는 FR-15의 등록 목록이 정한다.
+대상은 레포 커밋(`REPO`, 커밋 SHA) 또는 컨테이너 이미지(`IMAGE`, digest)다. 스캔 한 번은 SBOM 생성 → CVE 대조 → 판정까지 실행한다. 어떤 서비스를 스캔할지는 FR-15의 등록 목록이 정한다.
 
 #### 수용 기준
 
 1. 이미지 대상은 digest로 기록한다. 태그로 요청하면 digest로 확정한 뒤 기록한다(ECR 태그는 MUTABLE).
-2. `scan_status`를 `queued` → `running` → `succeeded` 또는 `failed`로 남긴다. 실패하면 실패한 단계와 이유를 남긴다.
+2. `scanStatus`를 `QUEUED` → `RUNNING` → `SUCCEEDED` 또는 `FAILED`로 남긴다. 실패하면 실패한 단계와 이유를 남긴다.
 3. 스캔 결과에 대상, 분석한 jar의 sha256, 스캐너 버전, 취약점 DB 날짜를 남긴다.
 4. 같은 대상의 스캔 이력을 남기고, 이전 스캔과 Finding 차이를 비교할 수 있다.
 
@@ -208,7 +209,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 2. 레포 SBOM은 `gradle.lockfile`이 없어도 Gradle `runtimeClasspath`의 간접 의존성을 모두 포함한다.
 3. 이미지 SBOM과 레포 SBOM의 좌표가 다르면 레포 SBOM을 우선하고, 차이를 결과에 기록한다.
 4. 버전이 범위로만 적힌 경우(`≥`, `^`, `1.+` 등)는 잠금 파일이나 의존성 해석기로 먼저 확정한다. 못 하면 "버전 미확정"으로 두고 범위 전체로 대조한다.
-5. 결정적 방법(`pom.properties`, MANIFEST, SHA-1 조회, 레포 SBOM 교차 확인)으로 식별하지 못한 구성요소만 AI로 후보를 만든다. 후보에는 출처와 신뢰도를 남기고(CycloneDX `evidence.identity` 또는 `properties`), 사람이 확인하기 전에는 "구성요소 추정"으로 표시한다. 추정 구성요소의 Finding은 `unreachable`로 확정하지 않는다(NFR-01). AI에 보내는 데이터는 ARD SR-11을 따른다.
+5. 결정적 방법(`pom.properties`, MANIFEST, SHA-1 조회, 레포 SBOM 교차 확인)으로 식별하지 못한 구성요소만 AI로 후보를 만든다. 후보에는 출처와 신뢰도를 남기고(CycloneDX `evidence.identity` 또는 `properties`), 사람이 확인하기 전에는 "구성요소 추정"으로 표시한다. 추정 구성요소의 Finding은 `UNREACHABLE`로 확정하지 않는다(NFR-01). AI에 보내는 데이터는 ARD SR-11을 따른다.
 6. SBOM에 만든 도구와 버전을 남긴다. AI 후보는 입력(jar SHA-1 등) 기준으로 저장해 재사용하고, 모델·프롬프트 버전을 남긴다(NFR-04, NFR-05).
 7. SBOM을 대상과 함께 저장해 재빌드 없이 다시 대조할 수 있게 한다(FR-11, ARD C-13).
 8. 못 보는 범위를 결과에 한계로 적는다: 프론트 번들 안의 JS 라이브러리, relocation된 shading 코드, JRE 안에 정적으로 포함된 네이티브 라이브러리. 앞의 두 가지는 수용 기준 5의 AI 후보 대상이다.
@@ -231,7 +232,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 #### 수용 기준
 
 1. 실행 중 워크로드마다 digest, 파드 수, 연결된 스캔을 보여준다.
-2. Finding마다 `deployment`를 `running` / `not_running` / `unknown`으로 표시한다. 조회하지 못하면 `unknown`이고, `not_running`으로 추정하지 않는다.
+2. Finding마다 `deployment`를 `RUNNING` / `NOT_RUNNING` / `UNKNOWN`으로 표시한다. 조회하지 못하면 `UNKNOWN`이고, `NOT_RUNNING`으로 추정하지 않는다.
 3. 배포 커밋과 분석 커밋이 다르면 소스 트리가 같은지 비교해 결과를 남긴다.
 4. 클러스터 조회는 읽기 전용 권한만 쓴다(NFR-05).
 
@@ -243,8 +244,8 @@ bootJar 바이트코드로 RTA 호출 그래프를 만든다. 진입점은 1단�
 
 1. 취약 함수 데이터가 있는 Finding마다 진입점에서 취약 함수까지 경로 유무를 판정한다.
 2. 1단계 진입점에서 닿으면 그 진입점부터의 경로를 근거로 보여준다.
-3. 약한 경로로만 닿으면 `unknown`이다.
-4. 취약 메서드가 분석한 jar에 없으면 `unknown`이다. 못 찾았다고 `unreachable`로 판정하지 않는다.
+3. 약한 경로로만 닿으면 `UNKNOWN`이다.
+4. 취약 메서드가 분석한 jar에 없으면 `UNKNOWN`이다. 못 찾았다고 `UNREACHABLE`로 판정하지 않는다.
 5. 호출 경로에는 "가장 짧은 후보 경로이며 실제 경로와 다를 수 있다"를 표시한다.
 
 ### FR-06 L2 규칙 판정
@@ -265,26 +266,26 @@ bootJar 바이트코드로 RTA 호출 그래프를 만든다. 진입점은 1단�
 
 #### 수용 기준
 
-1. Finding마다 `status`, `method`, 근거(적용 규칙 ID 포함), `review_state`를 출력한다.
-2. `unreachable`과 `not_analyzed`도 지우지 않는다. `not_analyzed`에는 이유를 붙인다.
+1. Finding마다 `status`, `method`, 근거(적용 규칙 ID 포함), `reviewState`를 출력한다.
+2. `UNREACHABLE`과 `NOT_ANALYZED`도 지우지 않는다. `NOT_ANALYZED`에는 이유를 붙인다.
 3. 판정 행은 판정한 패키지의 설치·수정 버전을 쓴다.
-4. `unreachable` 근거에는 확인했지만 없던 것을 적는다(예: FORM 인증 설정 없음).
+4. `UNREACHABLE` 근거에는 확인했지만 없던 것을 적는다(예: FORM 인증 설정 없음).
 5. 보고서 머리말에 대상, 분석한 jar, 상태별 개수를 쓴다.
 
 ### FR-08 사람 검토
 
-보안 담당자가 도구 판정의 근거를 보고 Finding마다 검토 상태와 메모를 남긴다. `unreachable`은 보류라 같은 Finding이 매일 다시 나오므로, 검토는 다음 스캔으로 이어받고 근거가 바뀌면 다시 검토한다. 도구 정확도는 운영 검토가 아니라 독립적으로 만든 정답지와 검증 세트로 잰다(M-03, M-04). 운영 검토는 도구 근거를 보고 판단해 도구 쪽으로 치우치기 쉽기 때문이다.
+보안 담당자가 도구 판정의 근거를 보고 Finding마다 검토 상태와 메모를 남긴다. `UNREACHABLE`은 보류라 같은 Finding이 매일 다시 나오므로, 검토는 다음 스캔으로 이어받고 근거가 바뀌면 다시 검토한다. 도구 정확도는 운영 검토가 아니라 독립적으로 만든 정답지와 검증 세트로 잰다(M-03, M-04). 운영 검토는 도구 근거를 보고 판단해 도구 쪽으로 치우치기 쉽기 때문이다.
 
 #### 수용 기준
 
-1. `review_state`는 `unreviewed` / `provisional` / `confirmed`다. 새 Finding은 `unreviewed`로 시작한다.
+1. `reviewState`는 `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED`다. 새 Finding은 `UNREVIEWED`로 시작한다.
 2. 검토 기록에 검토자, 시각, 사람 판정, 메모를 남긴다.
 3. 사람 판정이 도구 판정과 다르면 두 판정을 모두 남기고 불일치로 표시한다. 불일치 Finding을 따로 거를 수 있다.
-4. 도구가 판정하지 못한 Finding(`not_analyzed`)을 사람이 판정하면 `method`는 `manual`이다.
-5. 검토 기록은 `reviewer` 권한이 있어야 쓸 수 있다.
-6. 확정 전 판정 제안은 `status`와 `review_state`를 바꾸지 않는다. "제안(확정 대기)"과 제안 내용을 함께 보인다.
+4. 도구가 판정하지 못한 Finding(`NOT_ANALYZED`)을 사람이 판정하면 `method`는 `MANUAL`이다.
+5. 검토 기록은 대시보드에 로그인한 사람만 쓸 수 있다(MVP는 `ADMIN`). CI 토큰으로는 쓸 수 없다.
+6. 확정 전 판정 제안은 `status`와 `reviewState`를 바꾸지 않는다. "제안(확정 대기)"과 제안 내용을 함께 보인다.
 7. 같은 Finding(같은 서비스의 같은 purl·CVE)이 다음 스캔에 다시 나오면 검토 상태와 메모를 이어받는다.
-8. 도구 판정(`status`)이나 판정 근거(사실, 호출 경로, 적용 규칙)가 바뀌면 이어받은 검토를 `unreviewed`로 되돌리고, 이전 기록은 이력으로 남긴다.
+8. 도구 판정(`status`)이나 판정 근거(사실, 호출 경로, 적용 규칙)가 바뀌면 이어받은 검토를 `UNREVIEWED`로 되돌리고, 이전 기록은 이력으로 남긴다.
 9. 사람 판정이 도구 판정과 다른 Finding은 검증 세트(ARD C-14) 추가 후보로 표시한다.
 
 ### FR-09 취약 함수 데이터 관리
@@ -296,9 +297,9 @@ bootJar 바이트코드로 RTA 호출 그래프를 만든다. 진입점은 1단�
 1. 취약 함수마다 출처(수정 커밋 diff 또는 버전 diff)와 확인 방법(취약 버전 jar에서 `javap`로 시그니처 확인)을 남긴다.
 2. 데이터 파일은 조사 파일에서 생성 스크립트로만 만들고 직접 고치지 않는다.
 3. 넣으면 오탐이 나는 메서드는 빼고 이유를 남긴다(예: 13506에서 일반 파싱과 공유하는 `ASN1InputStream.buildObject`).
-4. 취약 함수 데이터가 없는 CVE의 Finding은 `not_analyzed`로 남기고 `unreachable`로 판정하지 않는다.
+4. 취약 함수 데이터가 없는 CVE의 Finding은 `NOT_ANALYZED`로 남기고 `UNREACHABLE`로 판정하지 않는다.
 5. AI는 후보를 만드는 데만 쓰고 사람이 확인한 것만 넣는다. AI에는 공개 공지와 수정 커밋만 보내고 앱 소스 코드는 보내지 않는다(ARD SR-11).
-6. 새 취약 함수·규칙은 대조군에서 `reachable` 또는 `unknown`이 나오고 기존 회귀 테스트가 모두 통과해야 반영한다(US-08).
+6. 새 취약 함수·규칙은 대조군에서 `REACHABLE` 또는 `UNKNOWN`이 나오고 기존 회귀 테스트가 모두 통과해야 반영한다(US-08).
 
 ### FR-10 공통 Finding 내보내기 (OCSF)
 
@@ -307,7 +308,7 @@ Finding을 Logssey 공통 Finding(OCSF)으로 내보낸다. 형식은 팀 합의
 #### 수용 기준
 
 1. 스캔 하나의 Finding을 OCSF 형식으로 내보낸다(API-11).
-2. `status`, `method`, `review_state`, `deployment`, 근거 요약이 빠지지 않는다.
+2. `status`, `method`, `reviewState`, `deployment`, 근거 요약이 빠지지 않는다.
 3. 자산 연결 키로 이미지 digest, 레포·커밋, purl을 넣는다.
 4. 내보낸 결과에 스키마 버전을 적는다.
 
@@ -317,12 +318,12 @@ GitHub Actions의 `pull_request`(PR마다 빠른 대조), `schedule`(하루 1번
 
 **게이트 전환** (ARD Q-07, AD-17)
 
-처음부터 막으면 오탐 하나가 개발을 멈추므로 리포트 전용(`report_only`)으로 시작해 아래 기준을 만족하면 게이트(`gate`)로 바꾼다.
+처음부터 막으면 오탐 하나가 개발을 멈추므로 리포트 전용(`REPORT_ONLY`)으로 시작해 아래 기준을 만족하면 게이트(`GATE`)로 바꾼다.
 
 - 대상: PR에서 새로 생긴 Finding(기준 스캔에 없던 purl × CVE)만 본다. 이미 있던 Finding 때문에 PR을 막지 않는다.
-- 조건: API 명세서 6-2를 따른다. `reachable` CRITICAL·HIGH는 실패, `reachable` MEDIUM 이하·`unknown`·CRITICAL·HIGH인 `not_analyzed`는 경고, 나머지는 통과다. `unreachable`은 막지 않는다(보류 원칙).
-- 전환 기준(제안): 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `reachable` 오탐 0건, 경고 Finding 모두 검토.
-- 예외: `reviewer`가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 검토 기록에 남고 만료되면 다시 게이트 대상이다.
+- 조건: API 명세서 6-2를 따른다. `REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고, 나머지는 통과다. `UNREACHABLE`은 막지 않는다(보류 원칙).
+- 전환 기준(제안): 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `REACHABLE` 오탐 0건, 경고 Finding 모두 검토.
+- 예외: 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 검토 기록에 남고 만료되면 다시 게이트 대상이다.
 - 되돌리기: 전환 뒤 오탐으로 막히면 그 조건만 경고로 내리고 사례를 검증 세트에 추가한다.
 
 #### 수용 기준
@@ -342,8 +343,8 @@ GitHub Actions의 `pull_request`(PR마다 빠른 대조), `schedule`(하루 1번
 #### 수용 기준
 
 1. 요약에 상태별·심각도별 개수와 M-01, M-02를 분수로 보여준다.
-2. Finding 목록은 `status`, `severity`, 대상, `deployment`, `review_state`, 패키지로 거를 수 있다. 도구·사람 판정 불일치(FR-08)와 새 Finding도 따로 거를 수 있다.
-3. 기본 목록에서 `unreachable`과 `not_analyzed`를 숨기지 않는다.
+2. Finding 목록은 `status`, `severity`, 대상, `deployment`, `reviewState`, 패키지로 거를 수 있다. 도구·사람 판정 불일치(FR-08)와 새 Finding도 따로 거를 수 있다.
+3. 기본 목록에서 `UNREACHABLE`과 `NOT_ANALYZED`를 숨기지 않는다.
 4. 상태·방식·검토 표시는 1절의 공통 열거값을 그대로 쓴다.
 5. 요약 숫자는 목록을 같은 조건으로 거른 개수와 같다.
 
@@ -357,7 +358,7 @@ Finding마다 최소 수정 버전을 보여주고, 라이브러리 단위로 �
 2. 같은 라이브러리의 Finding을 모두 없애는 최소 버전을 계산한다.
 3. 버전을 정하는 위치를 알려준다(예: Spring Boot가 관리하는 버전은 관리 버전을 덮어써야 한다).
 4. 패치와 테스트 결과는 실험용 clone에서 만든 것만 첨부한다. 실제 레포에는 쓰지 않는다.
-5. `unreachable`이어도 일반 유지보수 일정에 넣도록 표시한다.
+5. `UNREACHABLE`이어도 일반 유지보수 일정에 넣도록 표시한다.
 
 ### FR-14 L3 능동 관측
 
@@ -366,13 +367,13 @@ Finding마다 최소 수정 버전을 보여주고, 라이브러리 단위로 �
 - Java: 커버리지 에이전트(예: JaCoCo)로 라이브러리 패키지까지 계측해 취약 메서드(`vuln-functions.json`) 실행을 메서드 단위로 본다.
 - 네이티브(OS 패키지): ① `/proc/<pid>/maps`로 .so 로드를 확인하고, ② 함수 호출까지 볼 때만 uprobe(bpftrace·perf)로 공개 함수에 건다. uprobe는 root 권한이 필요하다.
 - Java 메서드 실행은 커널 수준 도구(Tetragon)로 볼 수 없다. 운영 상시 관측과 Tetragon은 확장 단계로 보류한다(3-2).
-- 실행 시점: 이미지 빌드 때 백엔드 테스트에 에이전트를 붙여 실행하는 것이 기본이다(FR-11). `unknown`이 생기거나 후보 경로를 검증할 때 수동으로 직접 호출한다. PR마다, 운영에서는 돌리지 않는다.
-- 목적: `unknown` 해소, L2 후보 경로 검증, 규칙의 '도달 가능' 대조군 실행 확인.
+- 실행 시점: 이미지 빌드 때 백엔드 테스트에 에이전트를 붙여 실행하는 것이 기본이다(FR-11). `UNKNOWN`이 생기거나 후보 경로를 검증할 때 수동으로 직접 호출한다. PR마다, 운영에서는 돌리지 않는다.
+- 목적: `UNKNOWN` 해소, L2 후보 경로 검증, 규칙의 '도달 가능' 대조군 실행 확인.
 
 #### 수용 기준
 
-1. 실행이 관측되면 `reachable` 근거로 쓴다. Java는 메서드 단위 커버리지, 네이티브는 라이브러리 로드나 공개 함수 호출로 본다.
-2. 관찰 기간에 로드·호출되지 않았다는 것만으로 `unreachable`을 만들지 않는다.
+1. 실행이 관측되면 `REACHABLE` 근거로 쓴다. Java는 메서드 단위 커버리지, 네이티브는 라이브러리 로드나 공개 함수 호출로 본다.
+2. 관찰 기간에 로드·호출되지 않았다는 것만으로 `UNREACHABLE`을 만들지 않는다.
 3. 관측 근거에 빌드(jar sha256 또는 이미지 digest), 설정(키 이름과 켜짐 여부, 값은 기록하지 않음), 호출한 API·테스트 목록, 확인 방법(coverage / maps / uprobe), 관측 시각을 기록한다. 스테이징 설정이 운영과 다르면 결과가 달라질 수 있다.
 
 ### FR-15 대상(서비스) 관리
@@ -392,9 +393,9 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 
 | ID | 요구 | 기준 | 측정 방법 |
 |---|---|---|---|
-| NFR-01 | **거짓 unreachable 금지** | 확신이 없으면 `unknown`. 대조군에 넣은 취약 조건은 모두 `reachable` 또는 `unknown` | 실제 앱 사본 주입 실험, 샘플 앱 회귀 테스트(기대값은 실행 전 고정), 정답지 대조 |
+| NFR-01 | **거짓 unreachable 금지** | 확신이 없으면 `UNKNOWN`. 대조군에 넣은 취약 조건은 모두 `REACHABLE` 또는 `UNKNOWN` | 실제 앱 사본 주입 실험, 샘플 앱 회귀 테스트(기대값은 실행 전 고정), 정답지 대조 |
 | NFR-02 | **설명 가능성** | 모든 판정에 방식과 근거. 앱 코드 사실은 파일·줄까지 | 판정 행마다 `method`와 근거가 있는지 검사. 주입 실험에서 근거가 넣은 줄을 가리키는지 확인 |
-| NFR-03 | **성능** | **원칙**: PR 대기 시간을 늘리지 않고, 속도를 위해 정확도를 낮추지 않는다(NFR-01 우선).<br>① Reach 작업은 기존 테스트 작업과 병렬로 돌고 그보다 먼저 끝난다. 예산(제안): SBOM·대조·L2 전체 5분 이내<br>② L2 분석 목표(제안): 최소 실행 환경(NFR-06)에서 60초 이내<br>③ 시간 제한(제안 3분)이나 메모리를 넘으면 PR을 막지 않고 해당 Finding을 `not_analyzed`(`analysis_timeout`)로 남긴다. 메서드 하나를 읽지 못해도 분석을 멈추지 않고, 그 메서드를 거쳐야 하는 Finding은 `unknown`으로 두며 건너뛴 메서드를 근거에 남긴다<br>④ Finding당 근거 경로는 하나(BFS 최단 경로)다<br>⑤ 넘치면 순서대로: 새 Finding이 없으면 L2 생략 → 같은 bootJar sha256이면 그래프 캐시 → PR에서는 대조만 하고 L2는 이미지 빌드 단계로. PR에서 L2를 빼는 것은 요구 변경이라 ARD 결정과 FR-11 수정이 함께 필요하다 | 실행마다 단계별 시간(그래프 생성, 탐색)과 메모리를 앱 클래스 수, jar 수, 도달 메서드 수, 간선 수와 함께 기록(bootJar 빌드 제외). 크기가 다른 앱 3~4개로 증가 곡선을 잰다. RTA는 최악의 경우 크기의 제곱으로 늘 수 있어 선형을 가정하지 않는다 |
+| NFR-03 | **성능** | **원칙**: PR 대기 시간을 늘리지 않고, 속도를 위해 정확도를 낮추지 않는다(NFR-01 우선).<br>① Reach 작업은 기존 테스트 작업과 병렬로 돌고 그보다 먼저 끝난다. 예산(제안): SBOM·대조·L2 전체 5분 이내<br>② L2 분석 목표(제안): 최소 실행 환경(NFR-06)에서 60초 이내<br>③ 시간 제한(제안 3분)이나 메모리를 넘으면 PR을 막지 않고 해당 Finding을 `NOT_ANALYZED`(`ANALYSIS_TIMEOUT`)로 남긴다. 메서드 하나를 읽지 못해도 분석을 멈추지 않고, 그 메서드를 거쳐야 하는 Finding은 `UNKNOWN`으로 두며 건너뛴 메서드를 근거에 남긴다<br>④ Finding당 근거 경로는 하나(BFS 최단 경로)다<br>⑤ 넘치면 순서대로: 새 Finding이 없으면 L2 생략 → 같은 bootJar sha256이면 그래프 캐시 → PR에서는 대조만 하고 L2는 이미지 빌드 단계로. PR에서 L2를 빼는 것은 요구 변경이라 ARD 결정과 FR-11 수정이 함께 필요하다 | 실행마다 단계별 시간(그래프 생성, 탐색)과 메모리를 앱 클래스 수, jar 수, 도달 메서드 수, 간선 수와 함께 기록(bootJar 빌드 제외). 크기가 다른 앱 3~4개로 증가 곡선을 잰다. RTA는 최악의 경우 크기의 제곱으로 늘 수 있어 선형을 가정하지 않는다 |
 | NFR-04 | **재현성** | 같은 입력이면 같은 판정. AI는 후보 생성·설명에만 쓴다. AI 후보는 입력 기준으로 저장해 재사용하고 모델·프롬프트 버전을 기록한다 | 같은 입력 반복 실행 비교, 회귀 테스트, 판정 경로에 AI 호출이 없는지 점검 |
 | NFR-05 | **최소 권한과 도구 무결성** | 클러스터는 읽기 전용. 스캐너·DB 버전 고정과 무결성 확인. 위협과 통제 전체는 ARD 11-1·11-2 | 권한 목록 점검, 스캐너 버전·DB 날짜 기록 여부, 설치 파일 체크섬·서명 확인 여부 |
 | NFR-06 | **실행 환경** | **원칙**: 정해 둔 최소 실행 환경에서 별도 서버나 전용 인프라 없이 돈다.<br>① 최소 실행 환경은 CI 표준 러너 사양(코어, 메모리, 디스크)으로 정의하고 기록한다<br>② 모든 단계가 그 메모리·디스크 안에서 돈다. L2 힙 상한도 여기서 정한다<br>③ 상주 서버나 전용 DB가 필요한 도구는 쓰지 않는다. 쓰려면 ARD 결정으로 남긴다<br>④ 외부 자원(취약점 DB 등)은 버전과 크기를 결과에 남긴다<br>⑤ 같은 입력이면 노트북과 CI 러너에서 같은 판정을 낸다 | 환경별 성공 여부와 판정 일치, 단계별 최대 메모리·디스크·다운로드 크기 |
@@ -406,13 +407,13 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 
 | ID | 지표 | 정의 | 목표(제안) | 관련 |
 |---|---|---|---|---|
-| M-01 | **노이즈 감소율** | `unreachable` ÷ (`reachable` + `unreachable` + `unknown`). `not_analyzed`는 분모에서 뺀다 | 목표값 없이 측정·보고만 한다. 이 값을 높이려고 기준을 느슨하게 하지 않는다 | FR-12, API-08 `noise_reduction` |
-| M-02 | **판정 범위** | 판정한 Finding(`status`가 `not_analyzed`가 아닌 것) ÷ 전체 Finding | `not_analyzed`는 모두 이유 표시(100%). 범위는 단계마다 넓힌다 | FR-07, 09, 12, API-08 `coverage` |
-| M-03 | **정답지 일치율** | 독립적으로 만든 정답지·검증 세트에서 확정 판정과 도구 판정이 같은 비율. 도구·규칙을 고칠 때마다 다시 잰다. 운영 검토로는 재지 않는다 | 100%. 불일치는 `unknown` 쪽이어야 한다 | FR-08, NFR-01 |
-| M-04 | **대조군 탐지율** | 대조군에 넣은 취약 조건 중 `reachable` 또는 `unknown`으로 나온 비율 | 문서화한 사각지대를 빼고 100% | NFR-01 |
-| M-05 | **거짓 unreachable 건수** | 취약 조건이 있는데 `unreachable`로 나온 건수 | 사각지대 밖에서 0건. 사각지대는 보고서에 한계로 적는다 | NFR-01 |
-| M-07 | **unknown 비율** | 판정한 Finding 중 `unknown` 비율 | 목표값 없음. 늘면 규칙 보강 후보 | FR-05, 06 |
-| M-08 | **사람 확정률** | 판정한 Finding 중 `review_state`가 `confirmed`인 비율 | 최종 보고와 업그레이드 결정에 쓰는 판정은 100% | FR-08 |
+| M-01 | **노이즈 감소율** | `UNREACHABLE` ÷ (`REACHABLE` + `UNREACHABLE` + `UNKNOWN`). `NOT_ANALYZED`는 분모에서 뺀다 | 목표값 없이 측정·보고만 한다. 이 값을 높이려고 기준을 느슨하게 하지 않는다 | FR-12, API-08 `noiseReduction` |
+| M-02 | **판정 범위** | 판정한 Finding(`status`가 `NOT_ANALYZED`가 아닌 것) ÷ 전체 Finding | `NOT_ANALYZED`는 모두 이유 표시(100%). 범위는 단계마다 넓힌다 | FR-07, 09, 12, API-08 `coverage` |
+| M-03 | **정답지 일치율** | 독립적으로 만든 정답지·검증 세트에서 확정 판정과 도구 판정이 같은 비율. 도구·규칙을 고칠 때마다 다시 잰다. 운영 검토로는 재지 않는다 | 100%. 불일치는 `UNKNOWN` 쪽이어야 한다 | FR-08, NFR-01 |
+| M-04 | **대조군 탐지율** | 대조군에 넣은 취약 조건 중 `REACHABLE` 또는 `UNKNOWN`으로 나온 비율 | 문서화한 사각지대를 빼고 100% | NFR-01 |
+| M-05 | **거짓 unreachable 건수** | 취약 조건이 있는데 `UNREACHABLE`로 나온 건수 | 사각지대 밖에서 0건. 사각지대는 보고서에 한계로 적는다 | NFR-01 |
+| M-07 | **unknown 비율** | 판정한 Finding 중 `UNKNOWN` 비율 | 목표값 없음. 늘면 규칙 보강 후보 | FR-05, 06 |
+| M-08 | **사람 확정률** | 판정한 Finding 중 `reviewState`가 `CONFIRMED`인 비율 | 최종 보고와 업그레이드 결정에 쓰는 판정은 100% | FR-08 |
 | M-09 | **배포 연결률(L1)** | 실행 중 워크로드 중 스캔과 digest로 연결된 비율 | 앱 3개 자동 연결 100% | FR-04 |
 
 ## 9. 범위와 단계
@@ -420,7 +421,7 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 | 단계 | 대상 | 들어가는 것 | 완료 기준 |
 |---|---|---|---|
 | **PoC** (완료) | api 1개, Java CVE | 찾기(FR-02, 03), L2 판정(FR-05, 06), 보고서(FR-07), 취약 함수 데이터(FR-09), 스크립트 실행, L1 수동 확인, 정답지, 업그레이드 수동 실험 | 완료(10/11). 결과는 [PoC 결과](../05-research/poc-results.md) |
-| **MVP** | api | API 서버(API-01~12), 대시보드(FR-12), CI 연동(FR-11), SBOM 보관(FR-02), Grype 교차 확인과 purl 병합(FR-03), 공통 Finding(FR-10), L1 자동화(FR-04), 사람 검토(FR-08), 수정 버전 표시(FR-13), L3 능동 관측(FR-14), 대상 관리 설정 파일(FR-15) | PR마다 리포트 전용으로 돈다. 하루 1번 재대조·재판정이 돈다. 8절 지표를 잰다 |
+| **MVP** | api | dashboard-backend `reach` 모듈 API(API-01~13), 대시보드(FR-12), CI 연동(FR-11), SBOM 보관(FR-02), Grype 교차 확인과 purl 병합(FR-03), 공통 Finding(FR-10), L1 자동화(FR-04), 사람 검토(FR-08), 수정 버전 표시(FR-13), L3 능동 관측(FR-14), 대상 관리 설정 파일(FR-15) | PR마다 리포트 전용으로 돈다. 하루 1번 재대조·재판정이 돈다. 8절 지표를 잰다 |
 | **확장** | web·chat 이미지, front 레포(npm) | npm 분석기(NFR-07), 업그레이드 패치·테스트 자동화(FR-13), SAST 결과 연동 검토 | 앱 3개 판정 |
 | 선택 | 정밀도와 범위 | OSV-Scanner 세 번째 교차 확인, 리플렉션 보완, SootUp 교체 검토 | - |
 
@@ -444,12 +445,12 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 
 | 위험 | 대응 | 관련 |
 |---|---|---|
-| **리플렉션·의존성 주입**: 런타임에 연결되는 호출이 빠져 거짓 `unreachable`이 나올 수 있다 | 확신이 없으면 `unknown`, 규칙으로 보완. 놓치는 모양은 회귀 테스트(`app-blindspots`)로 고정 | NFR-01, M-05 |
+| **리플렉션·의존성 주입**: 런타임에 연결되는 호출이 빠져 거짓 `UNREACHABLE`이 나올 수 있다 | 확신이 없으면 `UNKNOWN`, 규칙으로 보완. 놓치는 모양은 회귀 테스트(`app-blindspots`)로 고정 | NFR-01, M-05 |
 | **프레임워크가 부르는 라이브러리**: 우리 코드 기준 경로에 나오지 않는다 | 프레임워크 규칙(`@RequestBody` 등)으로 판정 | FR-06 |
-| **취약 함수 데이터 없음**: 최근 CVE는 공개 데이터에 없을 수 있다 | diff에서 직접 뽑고, 못 찾으면 `not_analyzed`로 남긴다 | FR-09 |
+| **취약 함수 데이터 없음**: 최근 CVE는 공개 데이터에 없을 수 있다 | diff에서 직접 뽑고, 못 찾으면 `NOT_ANALYZED`로 남긴다 | FR-09 |
 | **호출 경로 과대근사**: 판정이 맞아도 경로가 실제와 다를 수 있다 | 사실을 먼저 보이고 경로는 후보로 표시 | FR-05, 07 |
 | **스캔 대상과 배포물 차이**: 로컬 빌드 이미지는 내용이 다를 수 있다 | 실행 중 digest 기준으로 확인하고 판정한 jar를 보고서에 적는다 | FR-01, 04 |
-| **같은 CVE의 다른 패키지 사본**: CVE당 한 줄이면 판정 안 한 사본이 가려진다 | 사본별 행과 `not_analyzed` 이유 표시 | FR-07, US-11 |
+| **같은 CVE의 다른 패키지 사본**: CVE당 한 줄이면 판정 안 한 사본이 가려진다 | 사본별 행과 `NOT_ANALYZED` 이유 표시 | FR-07, US-11 |
 | **Jackson 2 사본의 남은 입구**: 앱 변경(Hibernate JSON 속성 추가, SDK 구조화 출력 사용)으로 경로가 생길 수 있다 | 관련 설정 고정 검토(팀 결정), 변경 시 재판정. 상세는 규칙명세서 9-1 | FR-06, 13 |
 | **스캐너 공급망**: OSS 도구가 공급망 공격의 통로가 될 수 있다(2026년 3월 Trivy 사고) | 버전 고정, 무결성 확인, 버전·DB 날짜 기록 | NFR-05 |
 | **어떤 도구로도 못 보는 범위** | 결과에 한계로 적는다 | FR-02 |
@@ -473,7 +474,7 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 | PR 대조의 cdxgen 시간 | Gradle 빌드를 실행하므로 PR마다 돌릴 만큼 빠른지 측정 | 보안 담당자 | FR-02, FR-11 |
 | hibernate-core 좌표 재대조 | 이미지 SBOM에 groupId가 `org.hibernate`로 들어가 있다(실제 `org.hibernate.orm`). 올바른 좌표로 다시 대조해 놓친 CVE가 있는지 확인 필요 | 보안 담당자 | FR-02, FR-03 |
 | 새 Finding 알림 채널, PR 결과 표시 위치 | 미정. SARIF 사용 가능 여부 확인 필요 | 팀 | FR-11, API-12 |
-| API 서버 실행 위치와 인증 연동 | ARD Q-04, Q-14에서 정한다 | 팀 | API-01~12 |
+| 역할 분리 | MVP는 대시보드 공통 `ADMIN` 하나다. 조회 전용·검토자·게이트 예외 승인자를 나눌지는 대시보드 공통 역할 체계와 함께 정한다(API 명세서 1-5). API 위치와 인증은 ARD AD-18로 정했다 | 팀 | FR-08, FR-11 |
 | 선택 과제 | 리플렉션 보완, SootUp 교체, OSV-Scanner 교차 확인 | 규칙 작성자, 보안 담당자 | NFR-01, FR-03, FR-05 |
 | npm(web·chat) 판정 방법 | 확장 단계에서 설계 | 보안 담당자 | NFR-07 |
 
@@ -481,4 +482,4 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 |---|---|
 | 작성자 | 김진섭 |
 | 작성일 | 2026-10-11 |
-| 수정일 | 2026-10-14 |
+| 수정일 | 2026-10-18 |
