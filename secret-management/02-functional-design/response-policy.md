@@ -33,16 +33,16 @@ ResponseCase는 한 CredentialSet의 비정상 노출에 대한 대응 기록이
 | 예외 | 없음, RISK_ACCEPTED | 승인자, 사유, 범위, 만료 시각이 있는 위험 수용 |
 | 최신성 | 최근 시도, 마지막 성공, 다음 예정, 지연, 조치 이후 미검증 | 스케줄과 시점별 실행 이력 |
 
-검토 완료, 체크리스트 완료, 담당자 지정은 유효성이나 조치 상태를 자동으로 바꾸지 않는다. 검증 불가도 위험 수용 예외가 아니다.
+`CONFIRMED` 검토만 `REVIEWED`로 기록한다. `NEEDS_MORE_INFO`는 이력에 남기되 `UNREVIEWED`를 유지하며 대응 시작·외부 조치 권한을 열지 않는다. 검토 완료, 체크리스트 완료, 담당자 지정은 유효성이나 조치 상태를 자동으로 바꾸지 않는다. 검증 불가도 위험 수용 예외가 아니다.
 
 ## 3. 조치 전이
 
 | 현재 | 요청 또는 근거 | 다음 | 허용 조건 |
 |---|---|---|---|
-| OPEN | 담당자가 대응 시작 | IN_PROGRESS | 담당자와 변경 사유 기록 |
-| OPEN, IN_PROGRESS | 외부 조치 기록 | REVALIDATION_PENDING | 수행자, 시각, 대상 위치, 조치 증거 기록. 제품은 외부 키를 변경하지 않음 |
-| REVALIDATION_PENDING | 재검증에서 위험 또는 잔여 노출 확인 | IN_PROGRESS | 검증 결과와 남은 위치를 연결 |
-| REVALIDATION_PENDING | 해결 검토 | RESOLVED | 모든 비정상 노출 위치의 해소와 조치 이후 재확인 증거를 확인. 위험 수용만으로 해결 처리하지 않음 |
+| OPEN | 담당자가 대응 시작 | IN_PROGRESS | 확정 검토 뒤 지정된 `REMEDIATOR`와 사유·버전 기록 |
+| OPEN, IN_PROGRESS | 외부 조치 기록 | 위치는 REVALIDATION_PENDING, 건은 미조치 위치가 있으면 IN_PROGRESS | 수행자, 시각, 대상 위치, 제한된 증거 참조 기록. 모든 연결 위치가 대기일 때만 건 전체도 REVALIDATION_PENDING. 제품은 외부 키를 변경하지 않음 |
+| REVALIDATION_PENDING | 재검증에서 `PRESENT` 확인 후 명시적 재조치 요청 | IN_PROGRESS | 해당 위치의 결과와 변경 이력을 연결. `UNKNOWN`은 해결 근거가 아니며 자동 재조치도 아님 |
+| REVALIDATION_PENDING | 해결 검토 | RESOLVED | 보안 담당자가 모든 연결 위치의 최신 조치 이후 비교 가능한 `MISSING`과 동일한 현재 범위 버전을 확인. 위험 수용만으로 해결 처리하지 않음 |
 | 모든 미해결 단계 | 위험 수용 승인 | RISK_ACCEPTED 별도 예외 | 승인 권한, 위치 범위, 사유, 만료 시각 기록. 남은 미해결 노출이 모두 승인 범위에 있을 때만 대응 건 전체를 예외로 분류 |
 | RISK_ACCEPTED | 만료, 취소, 범위 밖 새 노출 | OPEN 또는 IN_PROGRESS | 남은 위험에 따라 재개하고 이력 보존 |
 | RESOLVED | 새 노출 발견 | 새 대응 건의 OPEN | 이전 건과 연결하고 이전 해결 기록 보존 |
