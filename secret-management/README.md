@@ -10,6 +10,8 @@
 
 현재 구현과 개발 목표는 [구현 차이](04-integration/current-implementation-and-gaps.md)에서 구분한다. 개발용 DB는 기존 ADR-D004를 유지하고 운영 저장 위치는 ADR-D005의 별도 미결정 사항이다. 단계별 제공 범위는 PRD에 기록하며 전체 필수 요구사항을 첫 MVP의 완료 주장으로 바꾸지 않는다.
 
+2026-10-19의 근거 중심 UX 목표는 [후보 판정과 조사 대기열](02-functional-design/triage-policy.md), [대응 정책](02-functional-design/response-policy.md), [스캔 이력 화면 정책](02-functional-design/scan-history-policy.md)에 정리했다. 설계 선택은 [ADR-S010](03-architecture/adr/ADR-S010.md), 구현과의 차이는 [현재 구현과 차이](04-integration/current-implementation-and-gaps.md)를 따른다. 이 목표는 아직 코드에 반영됐다는 뜻이 아니다.
+
 ## 현재 기준 문서
 
 | 영역 | 문서 | 내용 |

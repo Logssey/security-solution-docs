@@ -2,7 +2,7 @@
 
 개별 ADR은 하나의 설계 선택을 맥락, 결정, 근거, 대안, 결과 순서로 기록한다. 전체 구성과 처리 흐름은 [아키텍처 설계 문서](../README.md)에 둔다.
 
-공통 기술 스택, 세션 로그인과 로컬 개발 DB는 [대시보드 ADR](https://github.com/Logssey/dashboard-design-docs/blob/main/03-architecture/README.md)을 유지한다. Secret 원문 정책은 이 묶음의 ADR-S005를 따른다. ADR-D005의 운영 저장 위치는 여전히 별도 미결정 사항이다. 각 ADR의 PRD v0.4 표기는 결정 당시 근거이며 현재 PRD v0.5에는 같은 필수 요구사항과 단계별 개발 범위가 연결되어 있다.
+공통 기술 스택, 세션 로그인과 로컬 개발 DB는 [대시보드 ADR](https://github.com/Logssey/dashboard-design-docs/blob/main/03-architecture/README.md)을 유지한다. Secret 원문 정책은 이 묶음의 ADR-S005를 따른다. ADR-D005의 운영 저장 위치는 여전히 별도 미결정 사항이다. 각 ADR의 이전 PRD 버전 표기는 결정 당시 근거이며 현재 PRD v0.6에는 같은 필수 요구사항과 단계별 개발 범위가 연결되어 있다.
 
 ## 상태
 
@@ -27,6 +27,7 @@
 | [ADR-S007](ADR-S007.md) | 등급 기반 위험 판단 | 네 등급, 미평가와 순서가 정해진 판정 규칙 Accepted |
 | [ADR-S008](ADR-S008.md) | 대시보드와 논리 데이터 경계 | Java API, 워커 분리와 PostgreSQL 경계 Accepted |
 | [ADR-S009](ADR-S009.md) | 스프린트 2 AI 대응 가이드 시험 | 제한된 enum 입력과 기본 가이드, GroqCloud Free 시험 Accepted |
+| [ADR-S010](ADR-S010.md) | 근거 중심 Secret 검토와 대응 완결 | 판정·대응 연결, 해결 증거와 스캔 이력의 목표 설계 Accepted; 구현 예정 |
 
 ## 후속 검토
 
