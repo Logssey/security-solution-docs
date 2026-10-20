@@ -10,7 +10,7 @@ Secret 기능은 `/api/v1/secrets` 아래에서 승인된 수집 범위, 키 인
 
 응답 필드는 camelCase, enum은 대문자, 시각은 UTC ISO 8601이다. 키 원문·연결 비밀·HMAC 지문·전체 공급자 응답·비신뢰 원천 문맥을 요청·응답·오류·일반 로그에 넣지 않는다. 제한된 증거 참조는 `TICKET:SEC-123`, `CHANGE:OPS-123`, `POLICY:SECRET-12`처럼 서버가 등록한 유형과 식별 형식만 허용한다. 임의 URL·자유 메모·파일 업로드는 받지 않는다. 권한 없는 존재·수·활동 시각을 노출하지 않는다.
 
-조회 scope와 unit은 `workbench/Mixed`, `currentCases/ResponseCase`, `inventory/CredentialSet`, `history/ResponseCase`로 구분한다. 운영 기본은 `origin=PRODUCTION`이며 `TEST`는 명시적 시험 보기로 분리한다. `UNCLASSIFIED`는 출처 확인 대상으로 별도 조회하고 운영·시험 대응 수에 섞지 않는다. `source`는 발견 플랫폼, `provider`는 키 발급자다. 스캔 이력의 `provider`만 수집 연결 플랫폼이라는 용어 예외를 갖는다. 환경은 `ALL|PROD|DEV|UNKNOWN`이고 `ALL`은 UNKNOWN을 포함한다.
+조회 scope와 unit은 `workbench/Mixed`, `currentCases/ResponseCase`, `inventory/CredentialSet`으로 구분한다. 대응 과거 목록의 단위는 `ResponseCase`, 실행 이력의 단위는 `ScanRun`이며 실행 목록은 `HISTORY` 읽기 스냅샷을 사용한다. 운영 기본은 `origin=PRODUCTION`이며 `TEST`는 명시적 시험 보기로 분리한다. `UNCLASSIFIED`는 출처 확인 대상으로 별도 조회하고 운영·시험 대응 수에 섞지 않는다. `source`는 발견 플랫폼, `provider`는 키 발급자다. 스캔 이력의 `provider`만 수집 연결 플랫폼이라는 용어 예외를 갖는다. 환경은 `ALL|PROD|DEV|UNKNOWN`이고 `ALL`은 UNKNOWN을 포함한다.
 
 페이지는 0부터, 크기는 1–100(기본 20)이다. 목록은 `{items,total,page,size,filters,scope,unit,asOf,snapshotId,expiresAt}`와 해당 조회의 확인 범위를 반환한다. `total`은 같은 권한·필터의 전체 대상 수다. 목록·카드·분포의 같은 스냅샷은 같은 단위·필터에서 일치한다. workbench 최상위 `total`은 null이며 서로 다른 단위의 지표를 합산하지 않는다. 필터·시간·스냅샷은 5.6·5.12절을 따른다.
 
@@ -31,11 +31,11 @@ Secret 기능은 `/api/v1/secrets` 아래에서 승인된 수집 범위, 키 인
 | `GET /api/v1/secrets/cases/{caseId}` | 마스킹 키·개설 결정·단계·건 조정 담당자·버전·권한 있는 위치·capabilities. 상세는 최신 readAt와 changedSinceSnapshot 제공 |
 | `GET /api/v1/secrets/cases/{caseId}/activities` | 허용된 담당·조치·체크리스트·재검사·예외·해결의 시간순 이력. happenedAt DESC, activityId DESC, 페이지 분리 |
 | `GET /api/v1/secrets/assignees?caseId=&occurrenceId=` | 해당 위치 연결의 적격 REMEDIATOR와 활성 팀 소속. SECURITY 권한과 후보 대상의 역할을 서버에서 확인 |
-| `GET /api/v1/secrets/cases/{caseId}/revalidations` | 허용 위치의 재검사 이력. revalidationId·occurrenceId·runId·jobStatus·result·failureCode·requestedAt·finishedAt |
+| `GET /api/v1/secrets/cases/{caseId}/revalidations` | 허용 위치의 재검사 이력. revalidationId·occurrenceId·runId·canViewRun·jobStatus·result·failureCode·requestedAt·finishedAt. 실행 링크는 canViewRun=true일 때만 제공 |
 | `GET /api/v1/secrets/cases/{caseId}/closure-checks` | 최신 근거의 해결 검사·버전·허용 확인 수준. 5.3·5.9·5.11절 |
 | `GET /api/v1/secrets/connections` | 사용자가 수동 실행할 수 있는 활성 연결의 ID·안전한 표시명·범위 수. 연결 비밀 제외 |
 | `GET /api/v1/secrets/connections/manage` | 연결 운영·승인 상태와 읽기 결과. 5.8절 |
-| `GET /api/v1/secrets/runs`, `GET /api/v1/secrets/runs/{runId}` | 실행 당시 범위·단계·결과·검사 누락. 5.4절 |
+| `GET /api/v1/secrets/runs`, `GET /api/v1/secrets/runs/{runId}` | 실행 당시 범위·단계·결과·검사 누락. 실행 목록의 단위 ScanRun·HISTORY 스냅샷. 5.4절 |
 | `GET /api/v1/secrets/review-queue`, `GET /api/v1/secrets/occurrences/{occurrenceId}/review-context` | 역할과 단위가 고정된 대기열·위치별 판단 근거. 5.2절 |
 | `GET /api/v1/secrets/coverage-gaps` | 현재 승인 revision의 검사 누락 고유 범위. 5.8절 |
 
@@ -62,8 +62,9 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | `POST /cases/{caseId}/actions` | `{actionType,occurrenceId,performedAt,evidenceRef,expectedCaseVersion,expectedOccurrenceVersion,idempotencyKey}`. 할당된 위치의 REMEDIATOR가 외부 조치를 추가 전용 기록. 첫 실질 조치로 위치와 건 OPEN→IN_PROGRESS를 함께 전이 |
 | `POST /cases/{caseId}/occurrences/{occurrenceId}/complete-actions` | 기대 건·위치 버전과 멱등 키. 현재 조치 주기에서 ROTATED·REVOKED·REMOVED_FROM_SOURCE 중 하나 이상 필요. PERMISSION_REDUCED만으로 불가. 위치를 REVALIDATION_PENDING으로 변경하고 남은 위치로 건 단계 산출 |
 | `POST /cases/{caseId}/revalidations` | `{occurrenceId,expectedCaseVersion,expectedOccurrenceVersion,idempotencyKey}`. 조치 기록 마침·원천 capability·할당 권한을 확인하고 승인 위치의 비동기 작업 등록. 202와 재검사 이력 형태 반환 |
-| `POST /cases/{caseId}/revalidation-resume` | `{occurrenceId,expectedCaseVersion,expectedOccurrenceVersion,reasonCode:"REVALIDATION_PRESENT"}`. PRESENT 재검사 결과를 가진 위치에 새 조치 주기·이력을 만들고 IN_PROGRESS 전이 |
+| `POST /cases/{caseId}/revalidation-resume` | `{occurrenceId,expectedCaseVersion,expectedOccurrenceVersion,reasonCode:"REVALIDATION_PRESENT",idempotencyKey}`. PRESENT 재검사 결과를 가진 위치에 새 조치 주기·이력을 만들고 IN_PROGRESS 전이 |
 | `PATCH /cases/{caseId}/checklist/{itemId}` | `{completed,guideVersion,evidenceRef,expectedCaseVersion}`. 허용 담당자가 보조 체크 기록. 완료는 티켓·변경 참조를 요구하되 체크만으로 조치 마침·해결 불가 |
+| `GET /cases/{caseId}/exceptions` | 현재·과거 예외, 허용 위치 ID, `currentlyApplicable`, `canApprove`, `allowedReasonCodes`, `allowedRevokeReasonCodes`, `eligibleOccurrences`, `maxDurationDays`, `fullyRiskAccepted`, `restrictedCoverage`. 승인·취소·만료·범위 변경 상태를 구분 |
 | `POST /cases/{caseId}/exceptions` | 위치 집합·사유 코드·안전한 근거·만료 시각·기대 버전. SECURITY가 위치별 범위·승인 권한·중복 활성 예외 검사 |
 | `POST /cases/{caseId}/exceptions/revoke` | 예외 ID·취소 사유·기대 버전. 만료·취소 뒤 남은 위험에 맞게 조치 재개 |
 | `POST /cases/{caseId}/guide` | 본문 없이 허용 사용자에게 버전 고정 안내 반환. 상태·DB 변경 없음 |
@@ -152,23 +153,25 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 `POST /api/v1/secrets/cases/{caseId}/resolution-decisions`는 `{decision:"RESOLVE",expectedCaseVersion,closureCheckVersion,evidenceIds[],coverageLevel:"FULL|LIMITED|SIMULATION",idempotencyKey}`와 `SECURITY` 권한을 요구한다. 서버는 현재 건과 키·범위·연결 버전, 같은 키·같은 대응 출처의 연결된 비정상 위치마다 마지막 실질 조치 후 비교 가능한 `MISSING`, 미연결 유효 `ABNORMAL` 없음, 현재 값이 있거나 존재 확인 불가인 미판정 위치 없음, 필수 수집 범위 누락 없음을 같은 트랜잭션에서 다시 검사한다. `presence=UNKNOWN`과 `exposure=UNKNOWN`은 다른 차단 사유이며, 활성 정책의 `NORMAL` 위치에는 제거를 요구하지 않는다. 과거 비교 가능한 미발견·다른 출처 위치의 경계는 5.11절을 따른다. 이어서 **실제 자격 증명**은 공급자 또는 승인된 수동 교체·폐기 수명주기 근거를 요구한다. 공급자 확인을 포함한 모든 필수 검사가 갖춰진 경우에만 `FULL`을 검토하고, 승인된 수동 증거만 있는 경우에는 `APPROVED_MANUAL`·`LIMITED`로 확인 범위를 제한한다. **승인 fixture와 키별로 일치한 합성 TEST**만 fixture 제거 증빙과 비교 가능한 재검사로 `SIMULATION`을 허용하며 공급자 키 폐기로 표시하지 않는다. `POSSIBLE_REAL|CONFIRMED_REAL`은 `SIMULATION`으로 닫을 수 없다. 실제 키가 시험 출처에 있었더라도 실제 수명주기 근거와 관련 교차 환경 경고의 처리가 확인되면 `FULL|LIMITED` 경로를 쓸 수 있다. 막힌 항목은 409 `CLOSURE_BLOCKED`와 안전한 `closureChecks[]`로 반환하고 상태를 바꾸지 않는다. `FULL`은 선언된 승인·지원 범위의 모든 필수 확인이 성공한 때만 가능하다. 지원 밖 이력이나 제한된 수동 확인이 남는 `LIMITED`는 확인 한계를 고정하며 알려진 미해결 노출 또는 필수 검사 실패를 우회하지 못한다. 성공은 해결 근거 스냅샷, 승인자·시각·버전을 추가 전용으로 남긴다.
 
-원래 노출 판정 자체가 오류였던 건의 종료는 해결과 다른 `POST /api/v1/secrets/cases/{caseId}/dismissal-decisions`에서 `{reasonCode:"FALSE_POSITIVE|OUT_OF_SCOPE",evidenceIds[],expectedCaseVersion,idempotencyKey}`로 요청한다. `FALSE_POSITIVE`는 **모든** 연결 위치의 Finding이 실제 자격 증명이 아님을 유형별 근거로 교정했고 다른 유효 Finding이 없을 때만 허용한다. `OUT_OF_SCOPE`는 대상이 프로그램 범위 밖이라는 승인된 범위·소유자 이관 근거와 인수 확인을 요구하며, 실제 미해결 비승인 노출을 단순히 제외하는 데 쓸 수 없다. `SECURITY`가 원래 판정·새 근거·타 연결의 미연결 위치를 확인하고 `disposition`, `is_current=false`, `closedAt`과 불변 감사 기록을 함께 저장한다. 결과는 `RESOLVED`·위험 수용 수에 넣지 않고 교정 이력에서 찾는다.
+범위·소유자 이관 근거는 `GET|POST /api/v1/secrets/cases/{caseId}/transfer-evidence`와 `POST /cases/{caseId}/transfer-evidence/{evidenceId}/reviews`로 관리한다. 제출은 `{occurrenceIds,reasonCode:"PROGRAM_SCOPE_ENDED|OWNER_TRANSFER",evidenceRef,acceptedTransferRef,expectedCaseVersion,idempotencyKey}`, 검토는 `{decision:"APPROVE|REJECT",reasonCode,expectedEvidenceVersion,expectedCaseVersion,idempotencyKey}`다. 모든 관련 위치의 `SECURITY` 권한을 검사하고 제출자와 다른 보안 담당자만 승인할 수 있다. 승인 사유는 `TRANSFER_AND_ACCEPTANCE_CONFIRMED`, 거절 사유는 `INSUFFICIENT_EVIDENCE|WRONG_SCOPE`다. 티켓·변경 근거와 인수 확인을 따로 받고 당시 위치·범위 revision·출처 승인·판정 버전을 고정한다. 이관 승인 자체는 해결이나 제외를 실행하지 않으며, 현재 적용 가능한 승인 증거만 `closure-checks`의 `eligibleDismissalEvidenceByReason`에서 선택한다.
+
+판정 오류의 교정 또는 승인된 범위·소유자 이관에 따른 종료는 해결과 다른 `POST /api/v1/secrets/cases/{caseId}/dismissal-decisions`에서 `{reasonCode:"FALSE_POSITIVE|OUT_OF_SCOPE",evidenceIds[],expectedCaseVersion,idempotencyKey}`로 요청한다. `FALSE_POSITIVE`는 **모든** 연결 위치의 Finding이 실제 자격 증명이 아님을 유형별 근거로 교정했고 다른 유효 Finding이 없을 때만 허용한다. `OUT_OF_SCOPE`는 대상이 프로그램 범위 밖이라는 승인된 범위·소유자 이관 근거와 인수 확인을 요구하며, 실제 미해결 비승인 노출을 단순히 제외하는 데 쓸 수 없다. 현재 모든 관련 Finding이 유효한 오탐 근거로 교정됐거나, 위치 제거·필수 검사·키 수명주기와 해당 시험 경고 검토가 모두 충족돼야 한다. `SECURITY`가 원래 판정·새 근거·타 연결의 미연결 위치를 확인하고 `disposition`, `is_current=false`, `closedAt`과 불변 감사 기록을 함께 저장한다. 결과는 `RESOLVED`·위험 수용 수에 넣지 않고 교정 이력에서 찾는다.
 
 ### 5.4. 실행 이력과 발견 연결
 
-`GET /api/v1/secrets/runs?type=SCHEDULED|MANUAL|REVALIDATION|ALL&status=&connectionId=&from=&to=&page=&size=`는 세션과 연결별 조회 권한을 먼저 적용하고 필터를 AND로 결합한 뒤 `requestedAt DESC,runId DESC`로 정렬·페이지 처리한다. `page`는 API에서 0부터, `size`는 1–100(기본 20)이며 목록 화면의 1부터 시작하는 페이지를 변환한다. `from`·`to`는 UTC ISO 8601 경계로 받아 요청 시각의 `from <= requestedAt < to`에 적용한다. `status`는 허용된 실행 결과 enum만, `connectionId`는 권한 있는 연결 ID만 받는다. 잘못된 값은 400, 권한 밖 연결은 403이며 응답 `{items,total,page,size,filters,asOf}`의 `total`은 같은 권한·필터가 적용된 **전체 실행 수**다. 목록 상단 집계도 같은 기준시각·필터에서 서버가 계산해 제공하지 않으면 화면은 숫자 카드를 숨긴다. 결과 항목과 `total`은 같은 조회 스냅샷을 사용해 페이지 간 모순을 피한다.
+`GET /api/v1/secrets/runs?type=SCHEDULED|MANUAL|REVALIDATION|ALL&status=&provider=&connectionId=&from=&to=&snapshotId=&page=&size=`는 세션과 연결별 조회 권한을 먼저 적용하고 필터를 AND로 결합한 뒤 `requestedAt DESC,runId DESC`로 정렬·페이지 처리한다. `page`는 API에서 0부터, `size`는 1–100(기본 20)이며 목록 화면의 1부터 시작하는 페이지를 변환한다. `from`·`to`는 UTC ISO 8601 경계로 받아 요청 시각의 `from <= requestedAt < to`에 적용한다. `status`는 허용된 실행 결과 enum만, `connectionId`는 권한 있는 연결 ID만 받는다. 잘못된 값은 400, 권한 밖 연결은 403이며 응답 `{items,total,page,size,unit:"ScanRun",filters,snapshotId,asOf,expiresAt,historyComplete,retainedFrom}`의 `total`은 같은 권한·필터가 적용된 **전체 실행 수**다. 최초 조회는 사용자·권한 revision·정규화 필터에 고정된 `HISTORY` 스냅샷을 만들고 후속 페이지는 같은 ID를 전달한다. 보존 범위를 증명할 수 없으면 `historyComplete=false`, `retainedFrom=null`을 반환한다. 목록 상단 집계도 같은 기준시각·필터에서 서버가 계산해 제공하지 않으면 화면은 숫자 카드를 숨긴다. 결과 항목과 `total`은 같은 조회 스냅샷을 사용해 페이지 간 모순을 피한다.
 
-`GET /api/v1/secrets/runs`와 `GET /runs/{runId}`의 응답은 실행 시점의 연결 표시·범위 버전을 보존하고 `triggerType=SCHEDULED|MANUAL|REVALIDATION`을 그대로 표시한다. 재검증 실행은 전체 스캔 성공률 분모에 넣지 않는다. `scopeStatusCounts`는 `PENDING`, `RUNNING`, `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED`를 모두 포함하며 합이 `scopeCount`다. `finishedScopeCount=SUCCEEDED+PARTIAL+FAILED+SKIPPED`, `successfulScopeCount=SUCCEEDED`, `gapScopeCount=PARTIAL+FAILED+SKIPPED`, `unverifiedScopeCount=scopeCount-SUCCEEDED`를 함께 반환한다. `unverifiedScopeCount`에는 진행 중인 `PENDING|RUNNING`이 들어가므로 최종 실패·누락인 `gapScopeCount`와 다르게 표시한다.
+`GET /api/v1/secrets/runs`와 `GET /runs/{runId}`의 응답은 안전한 연결 식별과 실행 당시의 범위 표시·버전을 제공하고 `triggerType=SCHEDULED|MANUAL|REVALIDATION`을 그대로 표시한다. 재검증 실행은 전체 스캔 성공률 분모에 넣지 않는다. `scopeStatusCounts`는 `PENDING`, `RUNNING`, `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED`와 호환·근거 부재를 위한 `CANCELLED`, `UNKNOWN` 키를 반환하며 모든 키의 합이 `scopeCount`다. 새 실행의 취소 범위는 아래 SKIPPED/FAILED 규칙으로 정리하고, 과거 UNKNOWN을 여섯 상태로 추정 변환하지 않는다. `finishedScopeCount=SUCCEEDED+PARTIAL+FAILED+SKIPPED+CANCELLED`, `successfulScopeCount=SUCCEEDED`, `gapScopeCount=PARTIAL+FAILED+SKIPPED+CANCELLED`, `unverifiedScopeCount=scopeCount-SUCCEEDED`를 함께 반환한다. 과거 revision·단계 근거를 복원할 수 없으면 성공/누락 집계는 null 또는 aggregationStatus와 함께 미확인으로 처리하고 상태 수만으로 성공률을 계산하지 않는다. `unverifiedScopeCount`에는 진행 중인 `PENDING|RUNNING`이 들어가므로 최종 실패·누락인 `gapScopeCount`와 다르게 표시한다.
 
 **실행 결과** `status`는 여섯 처리 상태와 `CANCELLED`를 허용하며, 범위·단계의 여섯 상태와 구분한다. 작업이 취소되면 실행 결과를 `CANCELLED`로 확정하고, 이미 끝난 범위는 그대로 보존하며 미착수 범위는 `SKIPPED/JOB_CANCELLED`, 진행하다 멈춘 범위는 `FAILED/JOB_CANCELLED`로 확정한다. 과거 기록에 취소 사실을 증명할 근거가 없으면 임의로 다시 쓰지 않는다.
 
 집계 기준 `scopeOutcome`은 범위의 수집 상태와 해당 범위에 **필수로 적용되는** 탐지·검증 단계의 결과를 합성한다. 필수 탐지/검증 실패는 수집이 성공해도 `PARTIAL`이며, 메타데이터 전용의 `NOT_APPLICABLE` 단계와 명시적으로 선택 비활성인 검증은 범위 성공에서 제외하되 단계별 미실행 사유를 응답에 반드시 남긴다. 검증 설정이 켜졌지만 실패한 경우는 범위 `PARTIAL`이다. 오래된 실행에 필수 단계·적용 여부 기록이 없어 신뢰할 수 없는 경우 `scopeCount`는 제공하되 성공/누락 집계에는 `aggregationStatus=LEGACY_UNAVAILABLE`을 주고 화면은 수치를 추정하지 않는다.
 
-각 `scopeResults[]`는 `runScopeId`, 내부 `scopeId`, 운영자가 별도로 승인한 `safeDisplayAlias` 또는 `범위 #ID`, 콘텐츠 유형·리전, 수집·탐지·검증 단계별 상태, 객체 수, 안전한 실패/건너뜀 코드, 시작·종료 시각, 재시도 가능 여부를 제공한다. 별칭은 `approved_ref`·자원명·ARN·파일 경로에서 자동 생성하지 않으며 권한 범위에 따라 제한한다. 실행의 `collectedObjectCount`와 `findingCount`, `distinctCredentialCount`, `newCredentialCount`는 별도 단위·정의·집계 시점을 가진다. 키를 읽지 않는 IAM/목록 메타데이터 범위는 탐지·새 키 수를 0과 혼동하지 않도록 `SKIPPED`와 이유를 제공한다. 부분 실패로 확인되지 않은 범위는 발견 0건이라고 단정하지 않는다.
+각 `scopeResults[]`는 `runScopeId`, 내부 `scopeId`, `scopeRevision`, 운영자가 별도로 승인한 `safeDisplayAlias` 또는 `범위 #ID`, 콘텐츠 유형·리전, 수집·탐지·검증 단계별 상태, 객체 수, 안전한 실패/건너뜀 코드, 시작·종료 시각, 재시도 가능 여부를 제공한다. 별칭은 `approved_ref`·자원명·ARN·파일 경로에서 자동 생성하지 않으며 권한 범위에 따라 제한한다. 실행의 `collectedObjectCount`와 `findingCount`, `distinctCredentialCount`, `newCredentialCount`는 별도 단위·정의·집계 시점을 가진다. 키를 읽지 않는 IAM/목록 메타데이터 범위는 탐지·새 키 수를 0과 혼동하지 않도록 `SKIPPED`와 이유를 제공한다. 부분 실패로 확인되지 않은 범위는 발견 0건이라고 단정하지 않는다.
 
 `distinctCredentialCount`는 이 실행의 값 후보 Finding에 연결된 고유 `CredentialSet` ID 수, `newCredentialCount`는 그중 동일성 키의 원자적 최초 삽입 때 `firstSeenRunId=runId`로 기록된 ID 수다. 같은 후보의 여러 Finding·위치는 한 번만 센다. 이전에 발견한 후보의 새 위치나 동일 항목의 `CANDIDATE→CONFIRMED` 승격은 신규 후보 수에 넣지 않는다. 메타데이터 전용·재검증 실행에는 `newCredentialCount=null`과 미적용 사유를, 과거 실행에 최초 생성 실행을 복원할 수 없거나 결과 연결이 없으면 `null`과 `aggregationStatus=LEGACY_UNAVAILABLE|RESULT_LINK_UNAVAILABLE`을 준다. 부분 실패에서 계산한 수는 확인된 범위의 하한으로만 표시하고 `coverageComplete=false`를 붙인다. 전체 커버리지와 결과 연결이 확인돼 실제 0건인 때에만 숫자 `0`을 반환한다.
 
-`GET /api/v1/secrets/runs/{runId}/findings?page=&size=`는 해당 실행에 연결된 허용 범위의 고유 키·위치·Finding을 구분해 반환하고, `/secrets/findings?runId={runId}`는 같은 서버 필터를 사용한다. 접근 범위 밖 결과나 원문은 노출하지 않는다. 실행 상세는 실패 범위의 재시도 또는 연결 관리로, 발견 항목의 검토 대기열로, 재검증 실행의 대응 건으로 이동할 안전한 링크 식별자만 반환한다. 404·403·대기·일부 실패·없음은 다른 화면 상태다. 화면 경로 `/secrets/history/:runId`는 직접 열 수 있으며 목록으로 돌아오면 필터·페이지·포커스를 복원한다.
+`GET /api/v1/secrets/runs/{runId}/findings?page=&size=`는 `{items,total,unit:"Finding",page,size,runId,asOf}`를 반환한다. 각 항목은 `findingId`, `occurrenceId`, `credentialSetId`, `secretId`, 마스킹 이름·구성, 룰 ID·버전, 출처로 제한한다. `SECURITY` 또는 실제 할당 위치의 `REMEDIATOR` 권한을 결과 행에 먼저 적용하고 같은 읽기 시점에서 수와 페이지를 계산한다. `GET /api/v1/secrets?runId={runId}`와 화면 `/secrets/findings?runId={runId}`는 그 실행의 허용 위치와 연결된 고유 키만 조회한다. 실행 상세의 `capabilities.canViewFindings`와 재검사 이력의 `canViewRun`은 서로 다른 권한이다. 후자가 false이면 위치별 재검사 결과는 보존하되 연결 운영 정보를 담은 실행 상세 링크는 만들지 않는다. 접근 범위 밖 결과나 원문은 노출하지 않는다. 실행 상세는 누락 범위의 연결 관리로, 발견 항목의 검토 대기열로, 재검증 실행의 대응 건으로 이동할 안전한 링크 식별자만 반환한다. 404·403·대기·일부 실패·없음은 다른 화면 상태다. 화면 경로 `/secrets/history/:runId`는 직접 열 수 있으며 목록으로 돌아오면 필터·페이지·포커스를 복원한다.
 
 ### 5.5. 집계 일관성
 
@@ -193,7 +196,11 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 미지정 건은 `ongoingCases`·`revalidationPendingCases`의 **부분집합**이며 별도 추가 노출 건수로 더하지 않는다. 같은 키의 운영·시험 위치가 있어도 위치는 해당 출처에서만 세고 운영·시험 건은 분리한다. 시험 실키 의심 경고는 사용자에게 열람 권한이 있는 경우 `crossEnvironmentAlerts`에 `unit=CrossEnvironmentAlert`로 따로 제공한다. 이는 운영 출처 필터에서도 숨기지 않지만 운영 `ResponseCase` 수에 더하지 않는다. 조사 과제 수나 인벤토리 전체 키 수를 노출·대응 수로 합산하지 않는다.
 
-지표의 공통 형태는 `{key,scope,unit,value,status,reasonCode,appliedFilters,notApplicableFilters,queueFilter}`다. 등록된 지표마다 한 항목을 반환하고 `status=AVAILABLE`일 때만 `value`는 0 이상의 정수다. 역할이 없으면 `NOT_AUTHORIZED`, 과거 자료로 집계를 복원할 수 없으면 `LEGACY_UNAVAILABLE`, 집계 실패는 `UNAVAILABLE`이며 이때 `value=null`이다. 실제 0, 미지원, 권한 없음과 읽기 실패를 구별한다. `queueFilter`는 서버가 만든 허용 필터 객체이며 임의 URL·공급자 링크를 반환하지 않는다. `partialCoverage`는 열람 가능한 필수 범위에서 확인된 누락 여부이며, 집계 근거·권한이 없으면 null과 같은 상태·사유를 반환한다. 권한 제한은 별도 `restrictedCoverage`로 설명하고 누락 0건으로 간주하지 않는다. 화면 라벨은 [문구와 표시 기준](../02-functional-design/content-and-labels.md)을 따른다.
+`NORMAL_INVENTORY`는 `inventorySubtype=METADATA_ONLY|AUTHORIZED_STORAGE|RETIRED_HISTORY`를 구분한다. 승인 보관은 같은 출처의 허용 위치 전체에 유효 Finding·활성 ALLOWED 정책·NORMAL 근거가 있고 활성 대응/재검토가 없는 키다. RETIRED_HISTORY는 호출자가 열람 가능한 현재 유효 PROVIDER_VERIFIED 폐기·교체 근거가 있으며 같은 출처에 활성 대응·판정 대기·현재 존재/판정 UNKNOWN이 없는 키만 포함한다. 수동 승인·INVALID·만료 시각 추정만으로 이 분류를 만들지 않는다. 소스/환경 필터가 다른 위치를 가렸다는 이유로 승인 보관·폐기 이력에 올리지 않고 숨은 근거로 상태·수를 생성하지 않는다.
+
+`stages`는 `ACTION_REQUIRED`에서 `OPEN|IN_PROGRESS|REVALIDATION_PENDING`의 중복 없는 부분집합, `CURRENT_CASES`에서 이들과 `RESOLVED|RISK_ACCEPTED`의 중복 없는 부분집합을 쉼표로 받는다. 다른 대기열에 stages를 보내거나 빈 값·중복·알 수 없는 단계를 보내면 400이다. 전체 위험 수용은 모든 관련 위치의 SECURITY 권한이 있을 때만 별도 파생 단계로 제공한다. 일부 위치만 열람하는 사용자에게는 원래 조치 단계와 restrictedCoverage를 제공하며 숨은 예외의 승인·만료로 단계를 바꾸지 않는다.
+
+지표의 공통 형태는 `{key,scope,unit,value,status,reasonCode,appliedFilters,notApplicableFilters,queueFilter}`다. 등록된 지표마다 한 항목을 반환하고 `status=AVAILABLE`일 때만 `value`는 0 이상의 정수다. `caseSummary`, `normalInventory`, `crossEnvironmentAlerts`도 각각 자신의 status와 단위를 유지한다. 권한 없는 하위 합계·분포는 null이고 경고 목록은 빈 배열이며 권한 밖 수를 0으로 추정하지 않는다. 역할이 없으면 `NOT_AUTHORIZED`, 과거 자료로 집계를 복원할 수 없으면 `LEGACY_UNAVAILABLE`, 집계 실패는 `UNAVAILABLE`이며 이때 `value=null`이다. 실제 0, 미지원, 권한 없음과 읽기 실패를 구별한다. `queueFilter`는 서버가 만든 허용 필터 객체이며 임의 URL·공급자 링크를 반환하지 않는다. `partialCoverage`는 열람 가능한 필수 범위에서 확인된 누락 여부이며, 집계 근거·권한이 없으면 null과 같은 상태·사유를 반환한다. 권한 제한은 별도 `restrictedCoverage`로 설명하고 누락 0건으로 간주하지 않는다. 화면 라벨은 [문구와 표시 기준](../02-functional-design/content-and-labels.md)을 따른다.
 
 ```json
 {
@@ -216,7 +223,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 수치는 응답 모양을 설명하는 예시다. `caseSummary.total`에 대해서만 네 단계·별도 예외 수의 합을 검증하며 `metrics[].value` 합계를 만들지 않는다. `severityCounts`는 CRITICAL·HIGH·MEDIUM·LOW·UNASSESSED를 구분하며 같은 total에 일치한다. 모든 위치가 미평가이면 대표 심각도도 UNASSESSED다. 분포에서 제외한 시험 건·오탐/범위 밖 교정 종료·정상 인벤토리의 수를 끼워 넣지 않는다. 근거 또는 집계 결과가 없으면 심각도·매트릭스는 `UNAVAILABLE`과 사유를 반환하고 기본 등급을 만들지 않는다. 관련 건의 일부 위치만 볼 수 있으면 그 사용자가 열람 가능한 건·위치로 집계한 `visible` 범위임을 응답에 밝힌다. 제한 위치의 정확한 수·이름·미할당 여부를 추론할 수 있는 차감 수치를 주지 않는다. 사용자 전체의 안전 여부나 건 해결 가능성을 이 부분 집계에서 결론 내리지 않는다.
 
-최초 요약 요청은 인증 사용자·역할 부여 revision·허용 연결/범위 revision·정규화 필터·출처에 묶인 스냅샷을 `REPEATABLE READ`에서 만든다. `asOf`는 서버 DB 시각이며 TTL은 **15분**, `expiresAt`을 반환한다. 같은 ID는 요약, 대기열, 대응 목록, 검사 누락 목록의 동일 필터 투영에만 쓴다. 큐의 `total`은 해당 카드와 같아야 한다. 필터 또는 시험 보기 전환은 새 스냅샷을 요구한다. 다른 사용자·다른 필터·출처로 재사용하면 409 `SNAPSHOT_MISMATCH`, 만료는 409 `SNAPSHOT_EXPIRED`, 역할 취소·범위 권한 변경은 409 `SNAPSHOT_ACCESS_CHANGED`로 무효화한다. 권한이 취소된 이전 행은 만료 전에도 반환하지 않는다. 오류 코드는 `code=CONFLICT` 아래 `details.reasonCode`로 제공한다.
+최초 요약 요청은 인증 사용자·역할 부여 revision·허용 연결/범위 revision·정규화 필터·출처에 묶인 스냅샷을 `REPEATABLE READ`에서 만든다. `asOf`는 서버 DB 시각이며 TTL 상한은 **15분**, `expiresAt`을 반환한다. 열람 가능한 정책·오탐 재사용·전체 위험 수용 예외의 효력이 먼저 끝나면 그 시각까지 유효 기간을 줄인다. 같은 ID는 요약, 대기열, 대응 목록, 검사 누락 목록의 동일 필터 투영에만 쓴다. 큐의 `total`은 해당 카드와 같아야 한다. 필터 또는 시험 보기 전환은 새 스냅샷을 요구한다. 같은 사용자·조회 scope에서 필터나 출처가 다르면 409 `SNAPSHOT_MISMATCH`, 역할 취소·범위 권한 변경이면 409 `SNAPSHOT_ACCESS_CHANGED`로 거부한다. 만료·상한 초과로 폐기한 ID는 보존한 폐기 표식으로 409 `SNAPSHOT_EXPIRED`를 구분한다. 존재하지 않거나 다른 사용자·조회 scope의 ID는 404다. 권한이 취소된 이전 행은 만료 전에도 반환하지 않는다. 오류 코드는 `code=CONFLICT` 아래 `details.reasonCode`로 제공한다.
 
 스냅샷을 오래된 상태의 쓰기 근거로 쓰지 않는다. 상세 진입은 현재 상태를 읽고 `readAt`, 버전, `changedSinceSnapshot`을 표시하며, 판정·조치는 최신 버전으로 다시 검사한다. 변경 성공 후에는 `requiresSnapshotRefresh=true`를 반환하고 화면이 요약·목록을 함께 다시 읽는다. 갱신하지 않은 카드만 감소시키는 클라이언트 추정 집계는 금지한다. 스냅샷 생성은 화면 초기 진입·명시 새로고침·변경 후 재조회에 한정하고 초 단위 폴링마다 새로 생성하지 않는다. 사용자별 동시 유효 스냅샷 상한은 5개이며 넘으면 가장 오래된 스냅샷을 만료시키고 기존 조회에 같은 새로고침 흐름을 적용한다.
 
@@ -231,7 +238,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | 블록 | 필수 정보·의미 | 필드별 권한·비노출 |
 |---|---|---|
 | `credential` | ID, 발급자·유형·구성 상태·마스킹 이름, 최신 유효성 결과·사유·시각과 이전 마지막 성공, 심각도 또는 미평가 | 키 수준 결과도 호출자가 허용된 범위에서 열람할 수 있는 근거만 집계. 보이지 않는 위치의 발견·검증 활동을 시각·수치로 누출하지 않음 |
-| 위치 식별 | `occurrenceId`, `source`, `environment`, `origin`, 범위 revision, 승인된 `safeLocationLabel`, 선택적 안전한 위치 별칭 | 자동 추출한 원문 경로·원천 URL·ARN·계정 ID·HMAC·문맥 제외. 표시 별칭이 없으면 `위치 #ID`. 운영자가 승인한 표시 정책과 호출자의 위치 열람 capability가 모두 있는 경우에만 별도 안전한 파일 표시명을 제공 |
+| 위치 식별 | `occurrenceId`, `source`, `environment`, `origin`, 범위 revision, `safeLocationLabel`은 검증된 범위 별칭과 `위치 #ID` 또는 ID만 사용 | 자동 추출한 원문 경로·원천 URL·ARN·계정 ID·HMAC·문맥 제외. 표시 별칭이 없으면 `위치 #ID`. 현재 별칭이 없거나 과거 별칭이 안전문자·토큰 검사를 통과하지 못하면 `위치 #ID`로 대체 |
 | 독립 사실 | `presence`, `exposure`, `storagePolicy`, `validity`, `coverage`, `fixtureStatus` 각각의 값·근거 ID·확인 수준·관측 시각 | 유효성·허용 여부·수집 성공·운영/시험을 서로 추론하지 않음. 검사 누락이 기존 `ABNORMAL` 판정 사실을 지우지 않음 |
 | 위치 업무 | `caseId?`, 위치별 담당자·조치 상태, 조치 주기, 마지막 실질 조치 시각, 재검사 작업·결과·비교 가능 여부, 부족 근거, `whyHereCode`, `nextActionCode` | SECURITY는 허용 위치의 판정·조정 근거, 할당 REMEDIATOR는 자신의 위치 조치·필요 최소 증거만 제공. 다른 역할에서 얻은 필드를 합집합으로 모두 공개하지 않음 |
 | 해결 확인 | `locationAbsenceCheck`, `credentialLifecycleCheck`, `coverageCheck`의 `PASSED\|BLOCKED\|UNKNOWN`, 안전한 이유·확인 범위 | 외부 조치 기록을 공급자 폐기 확인으로 표시하지 않음. 건 전체 해결 검사는 별도 `/closure-checks`의 전체 권한 조건 유지 |
@@ -259,7 +266,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 비활성화·승인 종료된 범위는 현재 예약 분모에서 제외하되 과거 실행과 알려진 노출을 삭제하지 않는다. 범위 비활성화만으로 미해결 건의 해결 조건을 통과시키지 않고 범위 종료·이관 근거를 요구한다. 연결 전체 성공은 **같은 전체 스캔 실행에서 당시 모든 필수 범위·필수 단계가 성공한 경우**에만 기록하며 서로 다른 날짜의 범위별 성공을 합쳐 하나의 연결 전체 성공으로 만들지 않는다. 재검사 작업은 한 위치의 증거이므로 전체 연결·전체 승인 범위의 최신 성공으로 쓰지 않는다. 원천 후보의 부재를 확정할 때에는 같은 원천 버전·탐지 설정 등 비교 조건을 별도로 만족해야 한다.
 
-관리용 안전한 표시 별칭 등록·수정은 `PATCH /connections/{connectionId}/scopes/{scopeId}/display`의 `{safeDisplayAlias,expectedScopeVersion}`로 제한한다. `OPERATIONS`가 길이 1–80, 제어문자·HTML·URL·자격 증명 패턴을 검증하고 변경 감사를 남긴다. 이 명령은 수집 범위·승인 참조를 바꾸지 않는다. 실제 연결 추가·원천 참조·권한 비밀 등록은 기존 운영 등록 경계를 유지하며, 자격 증명 원문을 받는 일반 대시보드 API를 추가하지 않는다. 범위 수정은 승인·새 revision·분류 정책 계약을 거친다.
+관리용 표시 별칭은 `PATCH /api/v1/secrets/scopes/{scopeId}/display-alias`의 `{safeDisplayAlias,expectedScopeRevision,expectedAliasVersion}`으로 변경한다. 해당 연결의 `OPERATIONS`가 두 현재 버전을 검사한다. null은 별칭 해제이며 문자열은 1–80자, 첫 글자는 영문 또는 한글, 나머지는 영문·숫자·한글·공백·밑줄·하이픈만 허용한다. 자격 증명 접두사·24자 이상 연속 ASCII 토큰형 문자열·10자리 이상 연속 숫자도 거부한다. 원문·URL·제어문자·HTML은 표시 별칭으로 받지 않는다. 성공은 `{scopeId,safeDisplayAlias,scopeRevision,aliasVersion,requiresSnapshotRefresh:true}`이며 `aliasVersion`만 증가하고 읽기 스냅샷을 무효화한다. 별칭 변경 이력·수행자·시각을 추가 전용으로 남기며 수집 revision·승인 참조·과거 실행 별칭은 바꾸지 않는다. 실제 연결 추가·원천 참조·권한 비밀 등록은 기존 운영 등록 경계를 유지하며, 자격 증명 원문을 받는 일반 대시보드 API를 추가하지 않는다. 범위 수정은 승인·새 revision·분류 정책 계약을 거친다.
 
 ### 5.9. 능력과 필드별 권한
 
@@ -271,19 +278,19 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 ### 5.10. 수명주기·합성 표본 증거의 제출과 검토
 
-자기 신고인 외부 조치 기록, 보안 담당자가 검토한 수동 증거, 공급자가 확인한 키 상태는 다른 확인 수준이다. `/actions`에 티켓을 적거나 체크리스트를 완료했다는 이유로 수명주기 검사가 통과하지 않는다. 다음 경로는 원문 없이 제한된 증거를 추가·검토한다.
+자기 신고인 외부 조치 기록, 보안 담당자가 검토한 수동 증거, 공급자가 확인한 키 상태는 다른 확인 수준이다. `/actions`에 티켓을 적거나 체크리스트를 완료했다는 이유로 수명주기 검사가 통과하지 않는다. 다음 경로는 원문 없이 제한된 증거를 추가·검토한다. 목록은 허용 증거와 `allowedKinds`, `allowedReviewReasonCodes`, `capabilities`를 제공하고 공급자 폐기 검증을 제공하지 않는 검증기는 `providerVerificationStatus=NOT_SUPPORTED_BY_CURRENT_VALIDATORS`로 표시한다.
 
 | Method·경로 | 요청·권한 | 결과와 불변 조건 |
 |---|---|---|
-| `GET /cases/{caseId}/lifecycle-evidence` | 해당 위치에 권한 있는 SECURITY 또는 할당 REMEDIATOR. 허용된 증거·적용 위치만 조회 | 근거 ID, `ROTATED\|REVOKED\|RETIRED`, 수행/관측 시각, 안전한 참조, 제출·검토 상태, 확인 수준·한계. 원문·공급자 응답·권한 밖 참조 제외 |
-| `POST /cases/{caseId}/lifecycle-evidence` | `{kind,performedAt,evidenceRef,expectedCaseVersion,idempotencyKey}`. SECURITY 또는 허용 위치에 할당된 REMEDIATOR | `201`과 증거 ID, `verificationMethod=EXTERNAL_RECORD`, `reviewStatus=PENDING`. 키는 건에서 결정하며 임의 다른 키·출처에 적용할 수 없음. 티켓/변경 참조의 허용 형식만 받고 원문·자유 URL·파일 업로드는 받지 않음 |
-| `POST /cases/{caseId}/lifecycle-evidence/{evidenceId}/reviews` | `{decision:APPROVE\|REJECT,reasonCode,expectedEvidenceVersion,expectedCaseVersion,idempotencyKey}`. 적용 대상의 SECURITY | 실제 참조·적용 키·시각·확인 범위를 검토한 추가 전용 기록. 승인해도 `APPROVED_MANUAL`이며 `PROVIDER_VERIFIED`로 바뀌지 않음. 이 수동 증거만으로 허용되는 해결 수준은 `LIMITED` |
+| `GET /cases/{caseId}/lifecycle-evidence` | 해당 위치에 권한 있는 SECURITY 또는 할당 REMEDIATOR. 허용된 증거·적용 위치만 조회 | 근거 ID, `ROTATED\|REVOKED\|RETIRED\|FIXTURE_RETIRED`, 수행/관측 시각, 안전한 참조, 제출·검토 상태, 확인 수준·한계. 원문·공급자 응답·권한 밖 참조 제외 |
+| `POST /cases/{caseId}/lifecycle-evidence` | `{kind,performedAt,evidenceRef,expectedCaseVersion,idempotencyKey}`. SECURITY 또는 허용 위치에 할당된 REMEDIATOR | `201`과 `{evidenceId,version,status:"PENDING",requiresSnapshotRefresh:true}`. 상세는 GET으로 다시 읽으며 제출 원본은 `verificationMethod=EXTERNAL_RECORD`, `reviewStatus=PENDING`. 키는 건에서 결정하며 임의 다른 키·출처에 적용할 수 없음. 티켓/변경 참조의 허용 형식만 받고 원문·자유 URL·파일 업로드는 받지 않음 |
+| `POST /cases/{caseId}/lifecycle-evidence/{evidenceId}/reviews` | `{decision:APPROVE\|REJECT,reasonCode,expectedEvidenceVersion,expectedCaseVersion,idempotencyKey}`. 적용 대상 전체의 SECURITY이며 제출자와 다른 사용자 | 실제 참조·적용 키·시각·확인 범위를 검토한 추가 전용 기록. 승인해도 `APPROVED_MANUAL`이며 `PROVIDER_VERIFIED`로 바뀌지 않음. 실키 수동 증거의 해결 상한은 `LIMITED`이며 정확한 합성 표본의 FIXTURE_RETIRED는 `SIMULATION`에만 사용 |
 | `GET /{credentialSetId}/fixture-attestations` | 해당 TEST 위치의 SECURITY | 승인 manifest ID·버전, 위치 scope revision, 보호된 일치 검사의 안전한 결과 ID, 확인자·시각·상태만 반환. manifest의 값·지문·다른 키 목록은 제외 |
 | `POST /{credentialSetId}/fixture-attestations` | `{scopeId,expectedScopeVersion,manifestId,manifestVersion,matchEvidenceId,idempotencyKey}`. 해당 TEST 범위의 SECURITY | 서버에 존재하는 승인 manifest와 정확한 키·scope revision·보호된 일치 근거를 재검사해 attestation ID를 생성. 사용자 선언·TEST 표식·키 ID만으로 합성 인정 불가 |
 
-위 경로는 모두 `/api/v1/secrets` 아래다. 수명주기 증거의 요청 키 ID는 별도 입력받지 않고 현재 건의 `credentialSetId`를 사용한다. 제출·검토 버전과 감사·멱등 결과는 같은 트랜잭션에 저장한다. 승인된 수동 증거는 `APPROVED_MANUAL` 확인 수준을 유지하고 공급자 확인이 없다는 한계를 화면·해결 스냅샷에 남긴다. 공급자 근거로 키 상태를 확인할 수 없는 버전도 이 수동 검토 경로로 제한 확인을 할 수 있으나, 알려진 미해결 위치·조치 후 검사 실패를 우회하지 못한다. 같은 키의 다른 출처 건에서 증거를 재사용하려면 적용 키·시각·권한·현재 건을 별도로 검토해 명시적으로 참조한다.
+위 경로는 모두 `/api/v1/secrets` 아래다. 수명주기 증거의 요청 키 ID는 별도 입력받지 않고 현재 건의 `credentialSetId`를 사용한다. 제출·검토 버전과 감사·멱등 결과는 같은 트랜잭션에 저장한다. 원 제출 행의 `verificationLevel=PENDING`은 바꾸지 않고 별도 검토 이력에서 현재 유효 수준을 계산한다. 승인된 수동 증거는 `APPROVED_MANUAL` 확인 수준을 유지하고 공급자 확인이 없다는 한계를 화면·해결 스냅샷에 남긴다. 공급자 근거로 키 상태를 확인할 수 없는 버전도 이 수동 검토 경로로 제한 확인을 할 수 있으나, 알려진 미해결 위치·조치 후 검사 실패를 우회하지 못한다. 같은 키의 다른 출처 건에서 증거를 적용할 때도 적용 키·시각·권한·현재 건을 별도로 검사하고 추가 전용 적용 관계로 참조한다. 이후의 실제 VALID 관측이 폐기 주장과 상충하면 과거 승인을 현재 유효 폐기 근거로 사용하지 않는다.
 
-`verificationMethod=PROVIDER`, `verificationLevel=PROVIDER_VERIFIED`는 승인된 읽기 검증기·워커만 생성한다. 일반 HTTP 요청은 이 필드를 지정할 수 없다. 검증기 ID·버전·승인 엔드포인트 분류·실제 공급자 관측 시각·안전한 확정 사유가 필요하며 인증 거절·사용 불가·연결 테스트만으로 폐기 확인을 만들지 않는다. 공급자 검증기가 없는 유형이면 이 수준을 생성할 수 없다. 수동 증거를 SECURITY가 승인한 것만으로 FULL 수준이 생기지 않는다.
+`verificationMethod=PROVIDER`, `verificationLevel=PROVIDER_VERIFIED`는 승인된 읽기 검증기·워커만 생성한다. 일반 HTTP 요청은 이 필드를 지정할 수 없다. 검증기 ID·버전·승인 엔드포인트 분류·실제 공급자 관측 시각·안전한 확정 사유가 필요하며 인증 거절·사용 불가·연결 테스트만으로 폐기 확인을 만들지 않는다. 공급자 검증기가 없는 유형이면 이 수준을 생성할 수 없다. 실키 수동 증거를 SECURITY가 승인한 것만으로 FULL 수준이 생기지 않는다. FIXTURE_RETIRED도 실제 키 폐기 확인으로 승격하지 않는다.
 
 fixture manifest는 별도로 승인·버전 고정된 합성 표본 등록물이며 보호된 일치 자료는 일반 API에 노출하지 않는다. 워커 또는 신뢰된 내부 비교기가 현재 키의 보호된 동일성을 manifest와 정확히 비교하고 결과 ID·키·scope revision·manifest 버전을 보존한다. SECURITY는 그 일치 결과를 검토·승인하거나 이미 승인된 manifest의 매칭 정책에 따라 자동 attestation을 허용할 수 있다. 원문 키를 폼에 붙여 넣거나 마스킹 suffix를 비교하는 방식은 허용하지 않는다. manifest 만료·취소·키/위치 revision 변경·실제 키임을 보이는 상충 근거가 생기면 이전 attestation으로 SIMULATION을 통과할 수 없다. 최신 유효 attestation과 실제 fixture 제거·조치 후 비교 가능한 재검사가 있을 때만 시험 종료를 허용한다.
 
@@ -300,7 +307,7 @@ fixture manifest는 별도로 승인·버전 고정된 합성 표본 등록물�
 | 활성 보관 정책으로 `NORMAL`이 유지되는 위치 | 위치 삭제·미발견을 필수로 요구하지 않음. 정책 만료·새 상충 근거로 재확인이 필요해지면 위 미판정/불확실 위치로 처리 |
 | 다른 출처의 같은 키 위치·현재 건 | 운영/시험 건·단계·해결 수에 합치지 않음. 키 상세의 허용된 다른 출처 경고·관련 건 링크로 보여주고, 시험 실키 경고는 별도 안전성 검사를 계속 요구 |
 
-`closure-checks`는 `targetOrigin`, `requiredResponseLocations`, `unlinkedAbnormalLocations`, `unassessedCurrentLocations`, `authorizedStorageLocations`, `historicalMissingLocations`, `otherOriginNotice`를 각 단위·권한 범위에 맞춰 분리한다. 제한 위치의 행·정확한 수는 내보내지 않으며 전체 해결 권한이 없으면 일반 차단 이유만 제공한다. 해결 검사는 위 대상 구분을 동일하게 적용한다. 같은 키의 모든 정상 보관 위치를 삭제하거나, 다른 출처의 불확실성을 운영 건에 조용히 합산하는 방식으로 해석하지 않는다.
+`closure-checks`는 `caseId`, 허용된 `caseVersion`, `closureCheckVersion`, `checkedAt`, `allowedCoverageLevels`, `coverageOptions[]`(수준·필요 근거 ID·한계), `closureChecks[]`(코드·상태·사유·허용 위치 ID·근거 ID)를 제공한다. 화면은 서버의 허용 수준·종료 사유·적격 근거만 선택하고 검사를 통과하지 못한 수준을 임의 구성하지 않는다. `lastResolution`·`lastDismissal`은 과거 확정 결과를 현재 검사와 분리한다. 대상은 `targetOrigin`, `requiredResponseLocations`, `unlinkedAbnormalLocations`, `unassessedCurrentLocations`, `authorizedStorageLocations`, `historicalMissingLocations`, `otherOriginNotice`를 각 단위·권한 범위에 맞춰 분리한다. 제한 위치의 행·정확한 수는 내보내지 않으며 전체 해결 권한이 없으면 일반 차단 이유만 제공한다. 해결 검사는 위 대상 구분을 동일하게 적용한다. 같은 키의 모든 정상 보관 위치를 삭제하거나, 다른 출처의 불확실성을 운영 건에 조용히 합산하는 방식으로 해석하지 않는다.
 
 키 독립 상세·인벤토리에서 출처 필터는 **해당 출처의 위치·건·대표 행동**에 적용한다. 키 자체의 구성·발급자는 바꾸지 않는다. 키의 검증·수명주기 사실이 다른 출처에서 생성됐더라도 열람할 권한과 같은 키에 적용되는 근거가 있으면 `evidenceOrigin`·`observedAt`·확인 범위를 명시해 보여줄 수 있다. 다른 출처의 `UNCHECKED` 또는 합성 차단 시도를 현재 출처의 성공 검사로 설명하지 않는다. 위치 수·단계·정책·최근 원천 검사 시각을 다른 출처 결과로 덮지 않는다. 대응 링크도 단일 `caseId` 대신 허용된 `casesByOrigin[]`와 선택 출처의 `currentCaseId`를 구분한다.
 
