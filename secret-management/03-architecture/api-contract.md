@@ -10,7 +10,7 @@ Secret 기능은 `/api/v1/secrets` 아래에서 승인된 수집 범위, 키 인
 
 응답 필드는 camelCase, enum은 대문자, 시각은 UTC ISO 8601이다. 키 원문·연결 비밀·HMAC 지문·전체 공급자 응답·비신뢰 원천 문맥을 요청·응답·오류·일반 로그에 넣지 않는다. 제한된 증거 참조는 `TICKET:SEC-123`, `CHANGE:OPS-123`, `POLICY:SECRET-12`처럼 서버가 등록한 유형과 식별 형식만 허용한다. 임의 URL·자유 메모·파일 업로드는 받지 않는다. 권한 없는 존재·수·활동 시각을 노출하지 않는다.
 
-조회 scope와 unit은 `workbench/Mixed`, `currentCases/ResponseCase`, `inventory/CredentialSet`으로 구분한다. 대응 과거 목록의 단위는 `ResponseCase`, 실행 이력의 단위는 `ScanRun`이며 실행 목록은 `HISTORY` 읽기 스냅샷을 사용한다. 운영 기본은 `origin=PRODUCTION`이며 `TEST`는 명시적 시험 보기로 분리한다. `UNCLASSIFIED`는 출처 확인 대상으로 별도 조회하고 운영·시험 대응 수에 섞지 않는다. `source`는 발견 플랫폼, `provider`는 키 발급자다. 스캔 이력의 `provider`만 수집 연결 플랫폼이라는 용어 예외를 갖는다. 환경은 `ALL|PROD|DEV|UNKNOWN`이고 `ALL`은 UNKNOWN을 포함한다.
+조회 scope와 unit은 `workbench/Mixed`, `currentCases/ResponseCase`, `inventory/CredentialSet`으로 구분한다. 대응 과거 목록의 단위는 `ResponseCase`, 실행 이력의 단위는 `ScanRun`이며 실행 목록은 `HISTORY` 읽기 스냅샷을 사용한다. 운영 기본은 `origin=PRODUCTION`이며 `TEST`는 명시적 시험 보기로 분리한다. `UNCLASSIFIED`는 범위 설정 대상으로 별도 조회하고 운영·시험 대응 수에 섞지 않는다. `source`는 발견 플랫폼, `provider`는 키 발급자다. 스캔 이력의 `provider`만 수집 연결 플랫폼이라는 용어 예외를 갖는다. 환경은 `ALL|PROD|DEV|UNKNOWN`이고 `ALL`은 UNKNOWN을 포함한다.
 
 페이지는 0부터, 크기는 1–100(기본 20)이다. 목록은 `{items,total,page,size,filters,scope,unit,asOf,snapshotId,expiresAt}`와 해당 조회의 확인 범위를 반환한다. `total`은 같은 권한·필터의 전체 대상 수다. 목록·카드·분포의 같은 스냅샷은 같은 단위·필터에서 일치한다. workbench 최상위 `total`은 null이며 서로 다른 단위의 지표를 합산하지 않는다. 필터·시간·스냅샷은 5.6·5.12절을 따른다.
 
@@ -85,16 +85,24 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 ### 5.1. 연결 승인과 출처 교정
 
-`OPERATIONS`가 범위를 제안하고 별도의 `SECURITY` 권한자가 승인한다. 출처를 `TEST`로 신규 승인하거나 `PRODUCTION`에서 `TEST`로 교정하는 경우 제안자와 승인자는 달라야 한다. 연결 승인 화면은 수집 허가, 대응 출처, 보관 허용 정책을 별도 필드와 설명으로 보여준다. 승인 정책이 적용되는 범위·브랜치·경로·콘텐츠 유형과 만료일을 검사하고 혼합된 시험·운영 범위는 분리한다.
+출처·정책 변경은 [사용자 작업과 승인 기준](../02-functional-design/task-and-approval-policy.md)의 영향별 규칙을 서버가 적용한다. 정책 연결·수집 범위와 기존 위험 처리를 유지하는 SECURITY의 미분류→운영·시험→운영 결정은 `DIRECT`, 시험 최초 분류·운영→시험·정책 연결 변경과 OPERATIONS만 가진 사용자의 제안은 `INDEPENDENT_REVIEW`다. 후자의 제안자와 승인자는 달라야 한다. 더 강한 조건을 우선하며 현재 권한·범위·정책·관련 근거로 제출·승인 순간 다시 계산한다. 연결 화면은 수집 허가, 대응 출처, 보관 허용 정책을 별도 필드로 보여주고 혼합 범위는 분리한다.
 
 | Method | 경로 | 요청 또는 응답의 핵심 |
 |---|---|---|
-| GET | `/api/v1/secrets/scopes/{scopeId}/classification` | 현재 `origin`, `originVersion`, nullable `storagePolicyId`, `storagePolicyVersion`, 승인 상태·시각·수행자, 안전한 정책 요약과 변경 이력. `approved_ref`·계정·자원명 제외 |
-| POST | `/api/v1/secrets/scopes/{scopeId}/classification-proposals` | `{origin,storagePolicyId?,storagePolicyVersion?,reasonCode,evidenceRef,expectedScopeVersion}`. `OPERATIONS` 제안, 검증 가능한 내부 정책·티켓 참조 필수. 정책이 없으면 두 필드를 모두 null로 두고 `reasonCode=POLICY_PENDING`; 보관 판정은 `UNKNOWN`. `PENDING_APPROVAL` 반환 |
-| POST | `/api/v1/secrets/scopes/{scopeId}/classification-proposals/{proposalId}/approve` | `{expectedScopeVersion,expectedProposalVersion}`. 승인자는 서버 세션에서 결정. 승인 순간 범위 버전 증가·추가 전용 변경 이력·영향 대상 목록·집계 무효화가 원자적 |
+| GET | `/api/v1/secrets/scopes/{scopeId}/classification` | 현재 `origin`, `originVersion`, nullable `storagePolicyId`, `storagePolicyVersion`, 결정 상태·방식·시각·수행자, 정책 요약·변경 이력, `setupReasonCodes[]`, `taskGuidance`, `pendingProposal`의 허용 검토 담당·요청 시각. `approved_ref`·계정·자원명 제외 |
+| POST | `/api/v1/secrets/scopes/{scopeId}/classification-preview` | `{origin,storagePolicyId?,storagePolicyVersion?,expectedScopeVersion}`. 부작용 없는 미리보기. `approvalMode`, `approvalReasonCodes[]`, 규칙 버전, 허용 영향 요약·검토 담당 후보·`taskGuidance` 반환. 공급자 호출·제안 생성·승인·스캔 없음 |
+| POST | `/api/v1/secrets/scopes/{scopeId}/classification-proposals` | `{origin,storagePolicyId?,storagePolicyVersion?,reasonCode,evidenceRef,expectedScopeVersion,expectedApprovalMode,reviewerUserId?,idempotencyKey}`. 해당 범위 SECURITY 또는 OPERATIONS. 정책 미설정은 두 필드 null과 `POLICY_PENDING`; 보관 UNKNOWN 유지. 서버가 DIRECT이면 제안·결정을 원자 적용하고, INDEPENDENT_REVIEW이면 PENDING_APPROVAL로 보존. 현재 Classification과 `changeResult` 반환 |
+| PATCH | `/api/v1/secrets/scopes/{scopeId}/classification-proposals/{proposalId}/assignment` | `{reviewerUserId,expectedProposalVersion,idempotencyKey}`. 해당 범위 SECURITY 또는 제안 권한을 유지한 요청자만 적격·비제안자 SECURITY를 지정. 권한 부여가 아니며 변경 감사·버전 증가. 담당 미지정도 대기 내역에 명시 |
+| POST | `/api/v1/secrets/scopes/{scopeId}/classification-proposals/{proposalId}/approve` | `{expectedScopeVersion,expectedProposalVersion,idempotencyKey}`. 제안자와 다른 현재 범위 SECURITY. 지정 검토자가 있으면 해당 사용자만 승인하며 재배정은 별도 감사. 현재 조건을 재검사하고 범위 버전·추가 전용 결정·영향·집계 무효화를 원자 확정 |
 | POST | `/api/v1/secrets/scopes/{scopeId}/classification-proposals/{proposalId}/reject` | `{reasonCode,expectedProposalVersion}`. `SECURITY`가 거절 사유와 이력을 남기고 이전 승인 분류를 유지. 승인 대기 제안을 활성 분류로 읽지 않음 |
 
-미분류 또는 승인 대기 범위는 `/api/v1/secrets/scopes?classificationStatus=NEEDS_REVIEW`에서 운영·시험 집계와 별도로 찾는다. 승인 전에도 이전 탐지·실패 기록은 열람할 수 있고 조사 과제를 만들 수 있다. 범위 교정은 과거 대응 건의 출처를 직접 UPDATE하지 않는다. 영향 대상별 이전·새 건의 관계와 승인 근거를 추가 전용으로 기록하고 현재 분류의 새 스냅샷을 만든다. 이전 판정과 대응 건의 출처는 이력으로 보존한다.
+범위 설정 사유가 남은 대상은 `/api/v1/secrets/scopes?classificationStatus=NEEDS_REVIEW`에서 운영·시험 집계와 별도로 찾는다. 승인 전에도 이전 탐지·실패 기록은 열람할 수 있고 조사 과제를 만들 수 있다. 범위 교정은 과거 대응 건의 출처를 직접 UPDATE하지 않는다. 영향 대상별 이전·새 건의 관계와 승인 근거를 추가 전용으로 기록하고 현재 분류의 새 스냅샷을 만든다. 이전 판정과 대응 건의 출처는 이력으로 보존한다.
+
+`changeResult={effect,proposalId,decisionId,approvalMode,remainingReasonCodes}`에서 `effect=APPLIED|PENDING_REVIEW|UNCHANGED`를 사용한다. DIRECT의 제안은 저장 트랜잭션 안에서 APPROVED로 확정하고 직접 결정자·승인 방식·규칙 버전을 남긴다. 독립 검토 대기는 현재 출처·정책을 바꾸지 않는다. 미리보기와 제출의 승인 방식이 달라지면 409 `APPROVAL_REQUIREMENT_CHANGED`로 재확인을 요구하며 클라이언트의 기대 방식은 권한 근거로 사용하지 않는다. 동일 본문의 멱등 재시도와 의미상 무변경은 기존 결과를 반환하고 결정을 증식하지 않는다.
+
+무변경은 현재 유효한 결정·근거까지 동일한 경우다. 출처 표식만 있고 정식 결정이 없는 LEGACY 범위의 근거 보완을 UNCHANGED로 되돌려 재확인을 막지 않는다. DIRECT에는 reviewerUserId를 받지 않는다. preview는 해당 범위 SECURITY 또는 OPERATIONS의 권한과 안전한 영향만 조회하며 읽기 권한 밖 위치·건·정확한 수를 노출하지 않는다.
+
+`setupReasonCodes[]`는 `SOURCE_UNCLASSIFIED`, `CLASSIFICATION_EVIDENCE_REQUIRED`, `POLICY_MISSING`, `POLICY_EXPIRED`, `POLICY_RETIRED`, `POLICY_NOT_YET_VALID`, `POLICY_SCOPE_MISMATCH`, `PENDING_REVIEW`, `CLASSIFICATION_IMPACT_PENDING`의 현재 사유 집합이다. 값 보관 판단 대상이 아닌 메타데이터 범위에는 POLICY_MISSING을 만들지 않는다. NEEDS_REVIEW는 하나 이상의 사유가 남은 고유 범위다. 분류·정책·대기·기존 건 영향에서 같은 집합을 계산하고, 출처 저장 후 정책 사유가 남아도 실패로 응답하지 않는다. 목록·현황과 갱신한 상세에서 같은 사유·단위·다음 행동을 제공한다.
 
 보관 정책은 `SECURITY`가 `POST /api/v1/secrets/storage-policies/drafts`에 연결·범위·콘텐츠 유형·정확한 경로/접두사 조건, `ALLOW|DENY`, 근거 참조, 유효 기간을 제출하고 **다른** `SECURITY`가 `POST /storage-policies/{policyId}/versions/{version}/approve`로 승인한다. 승인된 버전은 불변이며 `GET /storage-policies?status=ACTIVE`에서 권한에 맞는 안전한 요약만 조회·선택한다. 충돌하는 허용·금지 규칙은 활성화 전에 거부하고 평가 중 범위·버전 불일치나 만료는 `UNKNOWN`으로 남긴다. 정책 폐기는 새 승인 버전 또는 `POST /storage-policies/{policyId}/retire`의 사유·승인 기록으로 처리하며 기존 판정에 재검토 표식을 만든다. 화면은 보호된 `approved_ref`와 규칙의 민감한 전체 경로를 일반 사용자에게 노출하지 않는다. 범위 승인 API는 정책을 지정했다면 **활성 정책 버전**만 받으며, 정책 미설정 범위도 수집 승인은 가능하지만 보관 판정은 `UNKNOWN`·정책 작성 과제로 남는다. 정책 등록·승인·바인딩 모두 감사 기록과 버전 충돌 검사를 수행한다.
 
@@ -179,7 +187,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 ### 5.6. 행동 중심 요약과 같은 시점의 목록
 
-`GET /api/v1/secrets/summary?origin=PRODUCTION&source=&provider=&environment=&connectionId=&assignee=&snapshotId=`가 현황 진입점이다. `origin=PRODUCTION|TEST`를 받으며 기본은 `PRODUCTION`이다. `UNCLASSIFIED`는 아래 별도 지표와 출처 확인 목록으로만 조회하고 운영·시험 건에 합산하지 않는다. `source`·`environment`·`connectionId`는 **같은 허용된 위치**에서 AND로 적용하고, `provider`는 키 발급자에 적용한다. `assignee=ME|UNASSIGNED|사용자ID`는 건 또는 위치 담당 기록이 있는 대응 지표에만 적용한다. 해당하지 않는 검사 누락 지표에 임의로 같은 필터를 적용하지 않고 `appliedFilters`와 `notApplicableFilters`에 이를 명시한다. 파라미터는 서버 허용 목록으로 검증하며 임의 SQL 정렬·전체 원문 검색은 받지 않는다.
+`GET /api/v1/secrets/summary?origin=PRODUCTION&source=&provider=&environment=&connectionId=&assignee=&snapshotId=`가 현황 진입점이다. `origin=PRODUCTION|TEST`를 받으며 기본은 `PRODUCTION`이다. `UNCLASSIFIED`는 아래 별도 지표와 범위 설정 목록으로만 조회하고 운영·시험 건에 합산하지 않는다. `source`·`environment`·`connectionId`는 **같은 허용된 위치**에서 AND로 적용하고, `provider`는 키 발급자에 적용한다. `assignee=ME|UNASSIGNED|사용자ID`는 건 또는 위치 담당 기록이 있는 대응 지표에만 적용한다. 해당하지 않는 검사 누락 지표에 임의로 같은 필터를 적용하지 않고 `appliedFilters`와 `notApplicableFilters`에 이를 명시한다. 파라미터는 서버 허용 목록으로 검증하며 임의 SQL 정렬·전체 원문 검색은 받지 않는다.
 
 판정·건 연결·정상 인벤토리 지표는 연결/위치별 `SECURITY` 범위에서, 조치 지표는 `SECURITY` 또는 본인 할당 위치의 `REMEDIATOR` 범위에서, 검사 누락·출처 분류 지표는 허용된 `OPERATIONS|SECURITY` 범위에서 산출한다. 역할을 갖지 못한 지표는 `NOT_AUTHORIZED`로 남긴다. 담당자용 응답은 `accessScope=ASSIGNED_LOCATIONS`, 보안 범위 조회는 `AUTHORIZED_LOCATIONS`를 명시하며 자신이 확인한 위치만으로 건 전체가 해결됐다고 결론 내리지 않는다. 기존 로그인 `ADMIN` 값이 이 권한을 대신하지 않는다.
 
@@ -332,3 +340,19 @@ CSV는 새 export endpoint 없이 고유 키 인벤토리 `GET /api/v1/secrets`�
 내보내기 상한은 **고유 키 10,000개**, 페이지 크기는 최대 100이다. 상한을 넘으면 시작 전에 필터 축소를 안내하고 조용히 잘라 파일을 만들지 않는다. 스냅샷 만료·권한/범위 변경·페이지 오류·전체 행수 불일치가 생기면 내보내기를 중단하고 새 조회를 요구한다. 모든 페이지를 확인한 뒤 한 파일을 내려받으며 일부 파일을 완성본으로 제공하지 않는다. 전체 UI 카드용 WORKBENCH와 독립 생성한 INVENTORY의 ID를 바꾸어 쓰지 않는다.
 
 열은 마스킹 키·발급자·유형·구성·선택 출처·허용 위치 수·검증 상태/시각·작업 이유·기준시각 등 허용된 요약으로 제한한다. 원문·문맥·HMAC·전체 경로·ARN·공급자 응답·권한 밖 위치 수·외부 증거 자유문은 제외한다. 시험 출처는 각 행과 파일의 기준 정보에 표시한다. UTF-8 CSV의 구분자·따옴표·줄바꿈을 올바르게 escape하고, 셀 앞의 공백을 포함해 `=`, `+`, `-`, `@` 등 수식 시작 문자를 탐지해 텍스트로 무력화한다. 필터·기준시점·단위·확인 범위는 파일의 요약 필드로 제공하며 실제 키 원문을 CSV 검증용으로 기록하지 않는다.
+
+### 5.13. 다음 행동·내부 담당 요청과 처리 결과
+
+업무 행과 키·위치·범위·대응 상세의 `taskGuidance`는 `{whyHereCode,priorityReasonCodes[],evidenceObservedAt,nextActionCode,target,canExecute,blockedReasonCode,requiredRole,waitingSince,relatedTaskId,remainingReasonCodes[]}`다. `target`은 서버가 허용한 대상 종류·내부 ID만 제공하고 화면은 허용된 내부 주소로 연결한다. 실행할 수 없으면 차단 이유·필요 역할·대기·허용 요청 경로를 제공하며 원천 URL·AI 문장을 행동으로 실행하지 않는다. `whyHereCode`와 `nextActionCode` 등 기존 단일 필드는 같은 투영의 호환 표현이고 서로 다른 다음 행동을 반환하지 않는다.
+
+`priorityReasonCodes[]`는 `POST_ACTION_REDETECTED`, `CONFIRMED_EXPOSURE`, `VALID_AND_POLICY_DENIED`, `ASSIGNEE_REQUIRED`, `FOLLOWUP_OVERDUE`, `REVALIDATION_REQUIRED`, `COVERAGE_BLOCKED`, `EVIDENCE_REQUIRED`의 허용된 근거다. 실제로 확인한 조치·검사·정책·검증·시각에 한정하며 새 위험 점수나 노출 판정이 아니다. 같은 단위·권한·스냅샷 안의 정렬에 적용하고 필터 뒤 `total`·membership을 보존한다. 필요한 근거 시각을 확인할 수 없으면 해당 이유를 생성하지 않는다. 동률은 해당 자원의 내부 ID로 고정하고 숨겨진 사실로 순서를 바꾸지 않는다.
+
+`POST /api/v1/secrets/investigations`는 내부 담당 요청을 등록한다. 요청은 `{targetType:SCOPE|OCCURRENCE,targetId,missingReasonCode,assigneeUserId?,dueAt?,evidenceRef?,expectedTargetVersion,idempotencyKey}`이며 서버가 `creationSource=HUMAN_HANDOFF`를 채운다. SCOPE는 해당 연결 OPERATIONS 또는 SECURITY, OCCURRENCE는 해당 위치 SECURITY 또는 할당된 REMEDIATOR 중 `canRequestAssistance`가 있는 사용자만 가능하다. 허용 질문은 출처 확인·보관 정책 보완·소유자 확인·원천 접근 복구·근거 보완이다. 수신자의 현재 대상 권한·질문에 맞는 역할을 검사하고 요청자가 사용자 ID로 권한을 부여하지 못하게 한다. 적격 담당자·기한이 없으면 배정 대기로 보존한다. 수동 노출 판단의 NEEDS_MORE_INFO에는 기존 담당·기한 필수 조건을 유지한다.
+
+해당 조회의 `capabilities.canRequestAssistance`와 `allowedMissingReasonCodes`를 제공한다. 질문 코드는 `SOURCE_UNCLASSIFIED|POLICY_UNKNOWN|OWNER_UNKNOWN|SOURCE_PERMISSION|EVIDENCE_INCOMPLETE` 중 대상·역할에 허용된 부분집합이다. SCOPE의 expectedTargetVersion은 현재 분류 버전, OCCURRENCE는 현재 위치 버전이며 서버가 대상 소속도 확인한다. 양식의 담당·기한 선택은 과제 기록이며 권한·기한 정책을 바꾸는 명령이 아니다.
+
+새 요청은 201, 같은 대상·질문의 열린 요청 재사용은 200과 `{taskId,created,requiresSnapshotRefresh}`다. 기존 요청을 열람할 수 없으면 taskId·담당·활동 시각을 내보내지 않고 안전한 접수 상태만 반환한다. 원문·자유 메모·외부 메시지 발송은 포함하지 않는다. 요청 접수는 분류·판정·조치 완료가 아니며 반복 검사·재전송으로 과제를 증식하지 않는다.
+
+과제 종료는 기존 `/investigations/{taskId}/close`에서 요청 종류에 맞는 `resolvingDecisionId|restoredRunScopeId|scopeOriginDecisionId|policyBindingId|acceptedEvidenceHistoryId`와 기대 버전을 검사한다. 근거는 동일 대상·현재 버전·권한과 질문의 완료 조건에 맞아야 한다. 소유자 확인·자료 보완 요청의 acceptedEvidenceHistoryId는 같은 과제에 제출한 근거를 적격 SECURITY가 검토한 이력만 허용하며 UNKNOWN을 자동 판정하지 않는다. 이 근거로 분류·정책 적용·검사 복구의 필수 결과를 대신하지 못한다. 단순 상태 입력으로 닫거나 분류 결정으로 검사 복구를 대신하지 않는다.
+
+변경 결과에는 적용된 결정·과제·건·실행의 허용 ID, 실제 효과와 `remainingReasonCodes`를 제공한다. UI는 적용 결과에 맞는 상세로 이동하고 원래 목록의 조건·선택 행을 유지한다. 변경된 읽기 스냅샷은 명시적으로 새 기준을 선택하며 옛 스냅샷의 수를 조용히 바꾸지 않는다. 키 상세의 필수 대응 위치 요약은 기존 위치·건·해결 검사에서 계산하고, 전체 위치 수·승인 보관·메타데이터와 다른 모수임을 표시한다. 권한·기간·출처 변경으로 감소한 표시 수를 위험 감소율로 반환하지 않는다.

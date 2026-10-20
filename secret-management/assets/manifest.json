@@ -1,44 +1,50 @@
 [
   {
     "RelativePath": "assets/dashboard/secret-connection-coverage.svg",
-    "SHA256": "6903C503F7E9DAD81284C559D80F9E62FC88B7722AAB4FCEF7C1548D77C88783",
-    "Bytes": 7989,
+    "SHA256": "71B30433D070B5488E24F10F87900021C68A7B82D0BFBF36AE514E5E899CEF81",
+    "Bytes": 7994,
     "Kind": "screen-spec"
   },
   {
     "RelativePath": "assets/dashboard/secret-inventory.svg",
-    "SHA256": "2AB218A7EC56B79C9FA17F837667ACEBAA3D817D0DA5114D0626EBDC6AAB251B",
-    "Bytes": 9096,
+    "SHA256": "2DA68F8156F3C3D8E0F0DDB89F0FD948A124EBDB935A485CD4BF90EEC8F540F6",
+    "Bytes": 9116,
     "Kind": "screen-spec"
   },
   {
     "RelativePath": "assets/dashboard/secret-key-locations.svg",
-    "SHA256": "65463D0893914C212F934EE0380EC6AEA88311F781114B0D81BE04C90C274850",
-    "Bytes": 9549,
+    "SHA256": "A9AE58A2750281C4A84D10FF2DB9897EA945036BCA560E54312AD2E307A1095F",
+    "Bytes": 9559,
     "Kind": "screen-spec"
   },
   {
     "RelativePath": "assets/dashboard/secret-response-evidence.svg",
-    "SHA256": "4B22130EAD6D4017B4A181FECDBB7C8CE56AACCD21CE9BA56D6B548C61877DA7",
-    "Bytes": 8100,
+    "SHA256": "DFAD2455EA54EAFFC22CA465E1F4612041B494FCE96EE403831EF5E3A20F9E35",
+    "Bytes": 8105,
     "Kind": "screen-spec"
   },
   {
     "RelativePath": "assets/dashboard/secret-scan-detail.svg",
-    "SHA256": "96E193BA5386BF38ABF2D6ED39BA4D89AE699E70CC149B3773CB7BE851AE2310",
-    "Bytes": 8507,
+    "SHA256": "32E43E19D755BC8ABE83BB41554D2C7033678448FDD089738E11201038632A48",
+    "Bytes": 8512,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-scope-setup.svg",
+    "SHA256": "9B84CC3D260801CA4CD341A0074E9E97F05C8F14DC20404AA9DD9B38E3AD843F",
+    "Bytes": 8067,
     "Kind": "screen-spec"
   },
   {
     "RelativePath": "assets/dashboard/secret-triage-evidence.svg",
-    "SHA256": "714CAD9A09D0A7488F3B108C3C231BC3079A336992A0E8E0C32043F17E76C3A7",
-    "Bytes": 7301,
+    "SHA256": "5E964E9DC5DCA3078FFCD26BE814B6065E023601F0A63C47E0F5AD55D682C9C9",
+    "Bytes": 7306,
     "Kind": "screen-spec"
   },
   {
     "RelativePath": "assets/dashboard/secret-workbench.svg",
-    "SHA256": "CFE1C6CFB25E29014D47582C9A44525E15FFE0E384F880466D9EBD3F3740C748",
-    "Bytes": 10386,
+    "SHA256": "B1C43E2E85B630E1C59381E386C62FE2C850CE9888157DCE1A43B995EA5D32E5",
+    "Bytes": 10369,
     "Kind": "screen-spec"
   }
 ]
