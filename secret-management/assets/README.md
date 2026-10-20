@@ -1,31 +1,17 @@
-# 설계 이미지 목록
+# 화면 설계 이미지
 
-PNG 8장을 용도에 맞는 이름으로 보관한다. 원본 픽셀과 내용은 수정하지 않았다. 파일별 SHA-256과 바이트 수는 [manifest.json](manifest.json)에 기록했다. 이미지는 해당 설계 문서에 배치하고 이 목록은 파일 찾기에 사용한다.
-
-| 원래 파일 | 현재 경로 | 용도 |
-|---|---|---|
-| 제목 없는 다이어그램.drawio (16).png | [architecture/overall-secret-solution-architecture.png](architecture/overall-secret-solution-architecture.png) | [전체 시스템 구성](../03-architecture/system-overview.md) |
-| 제목 없는 다이어그램.drawio (17).png | [architecture/secret-processing-flow.png](architecture/secret-processing-flow.png) | [처리 흐름](../03-architecture/processing-flow.md) |
-| 제목 없는 다이어그램.drawio (3).png | [architecture/secret-detection-pipeline.png](architecture/secret-detection-pipeline.png) | 초기 탐지 파이프라인 참고 이미지 |
-| image (71).png | [dashboard/01-attack-path-and-response.png](dashboard/01-attack-path-and-response.png) | 상세, 공격 경로, 근거, 대응 절차 |
-| image (72).png | [dashboard/02-detection-to-review-summary.png](dashboard/02-detection-to-review-summary.png) | 탐지→분류→우선순위→검토 완료 진행 지표 |
-| image (73).png | [dashboard/03-remediation-status-reference.png](dashboard/03-remediation-status-reference.png) | 이전 6단계 조치 막대 참고안 |
-| image (74).png | [dashboard/04-severity-validity-matrix.png](dashboard/04-severity-validity-matrix.png) | 심각도×유효성 매트릭스 |
-| image (75).png | [dashboard/05-unassigned-findings.png](dashboard/05-unassigned-findings.png) | 담당자 미지정 목록 |
-
-**image 73의 6단계는 최종 기준이 아니다.** PRD에 따라 신규 및 분석 / 조치 중 / 재검증 대기 / 해결 4단계와 별도 예외 표시를 사용한다. 이미지 72의 4개 진행 지표 및 심각도 4등급과 구별한다.
-
-대시보드 이미지의 버튼, 등급, 수치, 규정 태그는 참고이며 구현 완료, 표준 준수, 실제 침해를 나타내지 않는다. 화면별 해석은 [화면 설계](../02-functional-design/dashboard-flow.md), 전체 구성의 해석은 [전체 시스템 구성](../03-architecture/system-overview.md)을 따른다.
-
-## 시크릿 보안 목표 와이어프레임
-
-아래 SVG는 대시보드의 공통 레이아웃과 디자인 토큰에 맞춰 새로 작성한 목표 화면이다. 수치와 시각은 배치 검토용 예시다. 화면별 동작과 현재 구현 상태는 [대시보드 화면 설계](../02-functional-design/dashboard-flow.md)를 따른다.
+아래 7장은 [화면 명세](../02-functional-design/dashboard-flow.md)와 함께 사용하는 설계 이미지다. 표시 수치는 합성 예시다. 각 이미지의 상단 표시는 실제 운영·시험 데이터와 문서 예시를 구별하기 위한 것이며 제품의 상태값이 아니다.
 
 | 파일 | 화면 |
 |---|---|
-| [secret-overview-wireframe.svg](dashboard/secret-overview-wireframe.svg) | 통합 현황의 시크릿 요약 |
-| [secret-security-wireframe.svg](dashboard/secret-security-wireframe.svg) | 시크릿 현황과 대응 목록 |
-| [secret-detail-wireframe.svg](dashboard/secret-detail-wireframe.svg) | 대응 건 상세 패널 |
-| [secret-assignment-wireframe.svg](dashboard/secret-assignment-wireframe.svg) | 담당 팀과 개인 지정 |
-| [secret-action-record-wireframe.svg](dashboard/secret-action-record-wireframe.svg) | 외부 조치 기록 |
-| [secret-exception-wireframe.svg](dashboard/secret-exception-wireframe.svg) | 위험 수용 예외 |
+| [secret-workbench.svg](dashboard/secret-workbench.svg) | 지금 확인할 일·범위 커버리지·조치 분포 |
+| [secret-inventory.svg](dashboard/secret-inventory.svg) | 값 후보·메타데이터와 확인 이유 |
+| [secret-key-locations.svg](dashboard/secret-key-locations.svg) | 키별 위치의 존재·조치·확인 불가 비교 |
+| [secret-triage-evidence.svg](dashboard/secret-triage-evidence.svg) | 위치 근거·부족한 사실·판정 |
+| [secret-response-evidence.svg](dashboard/secret-response-evidence.svg) | 담당 행동·위치별 잔여 작업·해결 증거 |
+| [secret-scan-detail.svg](dashboard/secret-scan-detail.svg) | 독립 실행 상세와 성공·누락 범위 |
+| [secret-connection-coverage.svg](dashboard/secret-connection-coverage.svg) | 연결 인증과 범위별 실제 검사 결과 |
+
+예시의 대응 건 4건은 신규1·조치중1·재검사대기1·해결1이다. 현황의 대응 중은 앞의 두 단계 2건이다. 위치 3곳은 발견1·미발견1·확인불가1이며 전체 해결이 아니다. 승인 범위 8개는 성공6·부분1·실패1로, 종료 수와 성공 수가 다르다.
+
+파일 무결성은 [manifest.json](manifest.json)에 기록한다. 업무·권한·집계 규칙은 그림의 예시 숫자가 아닌 본문 명세를 따른다.

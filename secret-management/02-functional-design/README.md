@@ -1,19 +1,14 @@
-# 02. 기능 설계
-
-PRD의 요구사항을 처리 단위, 상태, 집계 규칙과 대시보드 동작으로 구체화한다. 전체 시스템 구성과 처리 단계별 데이터 흐름은 아키텍처 문서에서 관리한다.
-
-## 설계 문서
+# 02. 기능과 화면 설계
 
 | 문서 | 내용 |
 |---|---|
-| [상태와 집계](workflow-and-states.md) | key set과 발견 위치, 유효성, 심각도, 조치 단계, 예외와 집계 기준 |
-| [후보 판정과 조사 대기열](triage-policy.md) | 근거 중심 판정, 승인 보관 정책, 조사 과제와 한 번의 대응 건 연결 |
-| [대응 단위와 상태 전이](response-policy.md) | 대응 건 생성, 위치별 조치, 해결, 재발과 배타적 집계 |
-| [심각도 판정](severity-policy.md) | 정규화 입력, 순서가 정해진 등급 규칙, 미평가와 위치별 대표 등급 |
-| [대시보드 화면 흐름](dashboard-flow.md) | 통합 현황, 시크릿 현황, 상세와 담당자 지정의 목표 와이어프레임 및 화면 동작 |
-| [스캔 이력 화면과 상태](scan-history-policy.md) | 독립 실행 상세, 배타적 범위 집계, 실패·누락과 목록 복귀 |
+| [화면과 사용자 흐름](dashboard-flow.md) | 현황·목록·상세·연결·스캔의 구성과 행동 |
+| [키별 위치 시각화](location-visualization.md) | 위치별 존재·판정·조치·검사 근거 비교 |
+| [문구와 상태 표시](content-and-labels.md) | 사용자 용어·짧은 안내·시험 보기·오류 표현 |
+| [상태와 집계](workflow-and-states.md) | 독립 상태·처리 단위·다음 행동·집계 규칙 |
+| [판정과 조사](triage-policy.md) | 근거·보관 정책·불확실성·단일 노출 결정 |
+| [대응과 해결](response-policy.md) | 위치별 담당·조치·재검사·해결·예외 |
+| [스캔 이력](scan-history-policy.md) | 실행·범위 결과·누락·최신성 |
+| [심각도](severity-policy.md) | 영향 근거와 버전이 있는 등급 판정 |
 
-## 관련 문서
-
-- [PRD](../01-requirements/PRD.md): 기능의 목적, 범위와 수용 기준
-- [아키텍처](../03-architecture/README.md): 구성요소와 처리 흐름
+요구사항은 [PRD](../01-requirements/PRD.md), 동작의 수용 판정은 [수용 기준](../01-requirements/acceptance-criteria.md), 데이터와 권한은 [아키텍처](../03-architecture/README.md)를 따른다.

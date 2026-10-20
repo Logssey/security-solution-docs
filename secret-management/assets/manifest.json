@@ -1,50 +1,44 @@
-﻿[
-    {
-        "Original":  "제목 없는 다이어그램.drawio (3).png",
-        "RelativePath":  "assets/architecture/secret-detection-pipeline.png",
-        "SHA256":  "B6BD995442F604AEE92FC685FC269DA9B2AC7B65AC3900436E4F3A984142C533",
-        "Bytes":  120847
-    },
-    {
-        "Original":  "제목 없는 다이어그램.drawio (16).png",
-        "RelativePath":  "assets/architecture/overall-secret-solution-architecture.png",
-        "SHA256":  "866BD8EB27D43B966AF913E6BB6EB36F04BCF806F4678339C2C9A6E4789C2836",
-        "Bytes":  132280
-    },
-    {
-        "Original":  "제목 없는 다이어그램.drawio (17).png",
-        "RelativePath":  "assets/architecture/secret-processing-flow.png",
-        "SHA256":  "1079A1AB35993EB4E3A5ABED63CEF036BE1276A52666A561C644C93EF9BB8158",
-        "Bytes":  179538
-    },
-    {
-        "Original":  "image (71).png",
-        "RelativePath":  "assets/dashboard/01-attack-path-and-response.png",
-        "SHA256":  "9A89402C35D3A68982E5FA985AFF18FEAFE746D11285B4F77CE7C79162A62FEC",
-        "Bytes":  519827
-    },
-    {
-        "Original":  "image (72).png",
-        "RelativePath":  "assets/dashboard/02-detection-to-review-summary.png",
-        "SHA256":  "F73449AE2201B1FF0A974A38B399042C8B3BD5A35FBBB51A8816E495EE332E13",
-        "Bytes":  96714
-    },
-    {
-        "Original":  "image (73).png",
-        "RelativePath":  "assets/dashboard/03-remediation-status-reference.png",
-        "SHA256":  "094B212722BF7435D9AEB3CCB8FF644C94D7646F39956671CC78C2699E7B6344",
-        "Bytes":  58531
-    },
-    {
-        "Original":  "image (74).png",
-        "RelativePath":  "assets/dashboard/04-severity-validity-matrix.png",
-        "SHA256":  "F3A48DEC25808EFCCEAA787F55EE1B8D1C6D06556C2A62DD7315BE001EB53C37",
-        "Bytes":  53096
-    },
-    {
-        "Original":  "image (75).png",
-        "RelativePath":  "assets/dashboard/05-unassigned-findings.png",
-        "SHA256":  "0BE95C7EA09280D36FE2705F53B018E0A0990A6978E89244C49B64769331B7A1",
-        "Bytes":  72431
-    }
+[
+  {
+    "RelativePath": "assets/dashboard/secret-connection-coverage.svg",
+    "SHA256": "6903C503F7E9DAD81284C559D80F9E62FC88B7722AAB4FCEF7C1548D77C88783",
+    "Bytes": 7989,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-inventory.svg",
+    "SHA256": "2AB218A7EC56B79C9FA17F837667ACEBAA3D817D0DA5114D0626EBDC6AAB251B",
+    "Bytes": 9096,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-key-locations.svg",
+    "SHA256": "65463D0893914C212F934EE0380EC6AEA88311F781114B0D81BE04C90C274850",
+    "Bytes": 9549,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-response-evidence.svg",
+    "SHA256": "4B22130EAD6D4017B4A181FECDBB7C8CE56AACCD21CE9BA56D6B548C61877DA7",
+    "Bytes": 8100,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-scan-detail.svg",
+    "SHA256": "96E193BA5386BF38ABF2D6ED39BA4D89AE699E70CC149B3773CB7BE851AE2310",
+    "Bytes": 8507,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-triage-evidence.svg",
+    "SHA256": "714CAD9A09D0A7488F3B108C3C231BC3079A336992A0E8E0C32043F17E76C3A7",
+    "Bytes": 7301,
+    "Kind": "screen-spec"
+  },
+  {
+    "RelativePath": "assets/dashboard/secret-workbench.svg",
+    "SHA256": "CFE1C6CFB25E29014D47582C9A44525E15FFE0E384F880466D9EBD3F3740C748",
+    "Bytes": 10386,
+    "Kind": "screen-spec"
+  }
 ]
