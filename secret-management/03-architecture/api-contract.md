@@ -261,7 +261,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | 블록 | 필수 정보·의미 | 필드별 권한·비노출 |
 |---|---|---|
 | `credential` | ID, 발급자·유형·구성 상태·마스킹 이름, 최신 유효성 결과·사유·시각과 이전 마지막 성공, 심각도 또는 미평가 | 키 수준 결과도 호출자가 허용된 범위에서 열람할 수 있는 근거만 집계. 보이지 않는 위치의 발견·검증 활동을 시각·수치로 누출하지 않음 |
-| 위치 식별 | `occurrenceId`, `source`, `environment`, `origin`, 범위 revision, `safeLocationLabel`은 검증된 범위 별칭과 `위치 #ID` 또는 ID만 사용 | 자동 추출한 원문 경로·원천 URL·ARN·계정 ID·HMAC·문맥 제외. 표시 별칭이 없으면 `위치 #ID`. 현재 별칭이 없거나 과거 별칭이 안전문자·토큰 검사를 통과하지 못하면 `위치 #ID`로 대체 |
+| 위치 식별 | `occurrenceId`, `source`, `environment`, `origin`, 범위 revision. `safeLocationLabel`은 현재 승인 범위와 일치하고 안전 검사를 통과한 `sourceDetails.label`을 우선 사용하며, 없으면 검증된 별칭 또는 `위치 #ID` | 검증되지 않은 원문 경로·임의 원천 URL·보호 승인 참조·ARN·계정 ID·HMAC·문맥 제외. 좌표가 현재 승인 대상과 다르거나 안전문자·토큰 검사를 통과하지 못하면 별칭 또는 `위치 #ID`로 대체 |
 | 독립 사실 | `presence`, `exposure`, `storagePolicy`, `validity`, `coverage`, `fixtureStatus` 각각의 값·근거 ID·확인 수준·관측 시각 | 유효성·허용 여부·수집 성공·운영/시험을 서로 추론하지 않음. 검사 누락이 기존 `ABNORMAL` 판정 사실을 지우지 않음 |
 | 위치 업무 | `caseId?`, 위치별 담당자·조치 상태, 조치 주기, 마지막 실질 조치 시각, 재검사 작업·결과·비교 가능 여부, 부족 근거, `whyHereCode`, `nextActionCode` | SECURITY는 허용 위치의 판정·조정 근거, 할당 REMEDIATOR는 자신의 위치 조치·필요 최소 증거만 제공. 다른 역할에서 얻은 필드를 합집합으로 모두 공개하지 않음 |
 | 해결 확인 | `locationAbsenceCheck`, `credentialLifecycleCheck`, `coverageCheck`의 `PASSED\|BLOCKED\|UNKNOWN`, 안전한 이유·확인 범위 | 외부 조치 기록을 공급자 폐기 확인으로 표시하지 않음. 건 전체 해결 검사는 별도 `/closure-checks`의 전체 권한 조건 유지 |
@@ -374,7 +374,7 @@ CSV는 새 export endpoint 없이 고유 키 인벤토리 `GET /api/v1/secrets`�
 
 ## 발견 위치와 연결 실행 표시
 
-키 위치 응답은 기존 occurrence ACL을 적용한 뒤 `sourceDetails`와 `detectionEvidence[]`를 제공한다. `sourceDetails`는 승인 범위와 일치하는 저장소·브랜치·파일·줄 또는 AWS 자원 좌표이며, `status=UNAVAILABLE`은 원본 좌표 확인 불가다. 원본 `approved_ref`, 인증 참조·파일 내용·키 원문은 반환하지 않는다. 규칙 기록은 `{ruleId,detectedAt,runId}`다. GitHub 링크는 고정 호스트와 인코딩한 좌표만 사용한다.
+키 위치 응답은 기존 occurrence ACL을 적용한 뒤 `sourceDetails`와 `detectionEvidence[]`를 제공한다. `sourceDetails`는 승인 범위와 일치하는 저장소·브랜치·파일·줄 또는 허용된 AWS 자원 좌표이며, `status=UNAVAILABLE`은 원본 좌표 확인 불가다. 같은 좌표·표시 규칙을 대응 상세의 허용된 `occurrences[]`와 위치 `review-context`에도 적용한다. 이 조회에서는 ACL을 통과한 각 위치의 현재 승인 참조로 좌표를 검증하고 원본 참조를 응답하지 않는다. 원본 `approved_ref`, 인증 참조·파일 내용·키 원문은 반환하지 않는다. 규칙 기록은 `{ruleId,detectedAt,runId}`다. GitHub 링크는 고정 호스트와 인코딩한 좌표만 사용한다.
 
 연결 관리 응답은 `targetSummary[]`, `testBlockedReasonCode`, `scanBlockedReasonCode`와 기존 `capabilities.canTest/canRun`을 제공한다. 사용 설정 상태와 실제 연결 테스트 결과를 구분하며, 실행 버튼을 숨기는 대신 권한·중지·대상 누락 등 사유를 표시한다. 일반 분류 저장 권한은 `capabilities.canClassifySource`다.
 
