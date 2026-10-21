@@ -80,6 +80,11 @@
 - **결정**: 러너에서 민감 표시(`*_sensitive`)된 값을 지운 뒤 전송, 분석 후 삭제
 - **근거**: 공식 문서상 `terraform show -json`은 민감값을 평문으로 출력. 경로 계산에는 값이 필요 없음
 - **지울 범위**: `resource_changes`의 `before`·`after` 중 `*_sensitive`로 표시된 값만으로는 부족함. sensitive 변수가 평문으로 남는 `variables`, `sensitive_values`로 표시된 `prior_state`·`planned_values`, sensitive output까지 같이 지움
+- **지우는 방법 (10/15 구현, infrastructure `policy/scrub-plan.sh`)**: 두 단계로 지움
+    1. 표시 기준: 위 범위에서 sensitive로 표시된 자리의 값을 `(sensitive)`로 바꿈. 키와 구조는 그대로 둠
+    2. 복사본 제거: Terraform은 민감값이 복사된 자리(프로바이더가 돌려준 속성 등)에 표시를 붙이지 않을 때가 있음. 1단계에서 찾은 값을 모아 문서 전체에서 같은 문자열과, 8자 이상이면 그 값을 품은 문자열까지 지움
+- **부작용**: 민감값과 우연히 같은 값도 가려짐 (실제 plan에서 SSM 파라미터로 받은 AMI ID가 가려짐). 경로 계산에는 값이 필요 없어 그대로 둠
+- **받는 쪽 확인**: 백엔드는 업로드된 plan에서 sensitive 표시가 있는 자리에 `(sensitive)`가 아닌 값이 있으면 422(`UNPROCESSABLE`)로 거부
 - **버린 대안**: 원본 전송·보관
 
 ### ADR-07
@@ -182,4 +187,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-15 |
+| 수정일 | 2026-10-21 |
