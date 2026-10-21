@@ -90,6 +90,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | Method | 경로 | 요청 또는 응답의 핵심 |
 |---|---|---|
 | GET | `/api/v1/secrets/scopes/{scopeId}/classification` | 현재 `origin`, `originVersion`, nullable `storagePolicyId`, `storagePolicyVersion`, 결정 상태·방식·시각·수행자, 정책 요약·변경 이력, `setupReasonCodes[]`, `taskGuidance`, `pendingProposal`의 허용 검토 담당·요청 시각. `approved_ref`·계정·자원명 제외 |
+| PATCH | `/api/v1/secrets/scopes/{scopeId}/classification` | 일반 운영·시험 분류 저장. `{origin,expectedScopeVersion,idempotencyKey}`. 해당 대상 SECURITY가 직접 저장하며 외부 티켓 불필요. `source-label-v2` 변경 이력을 자동 생성. 정책·수집 범위·노출/해결 판정은 변경하지 않음 |
 | POST | `/api/v1/secrets/scopes/{scopeId}/classification-preview` | `{origin,storagePolicyId?,storagePolicyVersion?,expectedScopeVersion}`. 부작용 없는 미리보기. `approvalMode`, `approvalReasonCodes[]`, 규칙 버전, 허용 영향 요약·검토 담당 후보·`taskGuidance` 반환. 공급자 호출·제안 생성·승인·스캔 없음 |
 | POST | `/api/v1/secrets/scopes/{scopeId}/classification-proposals` | `{origin,storagePolicyId?,storagePolicyVersion?,reasonCode,evidenceRef,expectedScopeVersion,expectedApprovalMode,reviewerUserId?,idempotencyKey}`. 해당 범위 SECURITY 또는 OPERATIONS. 정책 미설정은 두 필드 null과 `POLICY_PENDING`; 보관 UNKNOWN 유지. 서버가 DIRECT이면 제안·결정을 원자 적용하고, INDEPENDENT_REVIEW이면 PENDING_APPROVAL로 보존. 현재 Classification과 `changeResult` 반환 |
 | PATCH | `/api/v1/secrets/scopes/{scopeId}/classification-proposals/{proposalId}/assignment` | `{reviewerUserId,expectedProposalVersion,idempotencyKey}`. 해당 범위 SECURITY 또는 제안 권한을 유지한 요청자만 적격·비제안자 SECURITY를 지정. 권한 부여가 아니며 변경 감사·버전 증가. 담당 미지정도 대기 내역에 명시 |
@@ -356,3 +357,9 @@ CSV는 새 export endpoint 없이 고유 키 인벤토리 `GET /api/v1/secrets`�
 과제 종료는 기존 `/investigations/{taskId}/close`에서 요청 종류에 맞는 `resolvingDecisionId|restoredRunScopeId|scopeOriginDecisionId|policyBindingId|acceptedEvidenceHistoryId`와 기대 버전을 검사한다. 근거는 동일 대상·현재 버전·권한과 질문의 완료 조건에 맞아야 한다. 소유자 확인·자료 보완 요청의 acceptedEvidenceHistoryId는 같은 과제에 제출한 근거를 적격 SECURITY가 검토한 이력만 허용하며 UNKNOWN을 자동 판정하지 않는다. 이 근거로 분류·정책 적용·검사 복구의 필수 결과를 대신하지 못한다. 단순 상태 입력으로 닫거나 분류 결정으로 검사 복구를 대신하지 않는다.
 
 변경 결과에는 적용된 결정·과제·건·실행의 허용 ID, 실제 효과와 `remainingReasonCodes`를 제공한다. UI는 적용 결과에 맞는 상세로 이동하고 원래 목록의 조건·선택 행을 유지한다. 변경된 읽기 스냅샷은 명시적으로 새 기준을 선택하며 옛 스냅샷의 수를 조용히 바꾸지 않는다. 키 상세의 필수 대응 위치 요약은 기존 위치·건·해결 검사에서 계산하고, 전체 위치 수·승인 보관·메타데이터와 다른 모수임을 표시한다. 권한·기간·출처 변경으로 감소한 표시 수를 위험 감소율로 반환하지 않는다.
+
+## 발견 위치와 연결 실행 표시
+
+키 위치 응답은 기존 occurrence ACL을 적용한 뒤 `sourceDetails`와 `detectionEvidence[]`를 제공한다. `sourceDetails`는 승인 범위와 일치하는 저장소·브랜치·파일·줄 또는 AWS 자원 좌표이며, `status=UNAVAILABLE`은 원본 좌표 확인 불가다. 원본 `approved_ref`, 인증 참조·파일 내용·키 원문은 반환하지 않는다. 규칙 기록은 `{ruleId,detectedAt,runId}`다. GitHub 링크는 고정 호스트와 인코딩한 좌표만 사용한다.
+
+연결 관리 응답은 `targetSummary[]`, `testBlockedReasonCode`, `scanBlockedReasonCode`와 기존 `capabilities.canTest/canRun`을 제공한다. 사용 설정 상태와 실제 연결 테스트 결과를 구분하며, 실행 버튼을 숨기는 대신 권한·중지·대상 누락 등 사유를 표시한다. 일반 분류 저장 권한은 `capabilities.canClassifySource`다.
