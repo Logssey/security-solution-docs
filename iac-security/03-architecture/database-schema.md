@@ -46,7 +46,7 @@
 |---|---|---|
 | `iac_repos` | `repo_id BIGINT PK`, `full_name VARCHAR(200) NOT NULL UQ`, `default_branch VARCHAR(100) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `enabled BOOLEAN NOT NULL`, `created_at TIMESTAMPTZ NOT NULL` | 검사 대상 레포 허용 목록. `environment`는 `PROD`, `DEV`. CI OIDC의 `repository` 클레임을 여기서 대조 |
 | `iac_rules` | `rule_id VARCHAR(80) PK`, `engine VARCHAR(20) NOT NULL`, `default_enforcement VARCHAR(10) NOT NULL`, `default_severity VARCHAR(10)`, `template_key VARCHAR(80) NOT NULL`, `version VARCHAR(40) NOT NULL`, `enabled BOOLEAN NOT NULL`, `updated_at TIMESTAMPTZ NOT NULL` | 규칙 등록부. 원본은 레포의 `policy/`이고 배포 때 이 표로 동기화. `rule_id`는 `gate.exec_data_source` 같은 식별자. `engine`은 `CONFTEST`, `GIT`, `TERRAFORM`, `HASH`, `KICS`, `PATH`, `STATE`, `DRIFT` |
-| `iac_data_assets` | `data_asset_id BIGINT PK`, `arn VARCHAR(300) NOT NULL UQ`, `kind VARCHAR(20) NOT NULL`, `tier SMALLINT NOT NULL`, `asset_id BIGINT FK`, `owner_team VARCHAR(50)`, `updated_at TIMESTAMPTZ NOT NULL` | 데이터 등급표. `kind`는 `RDS`, `SECRET`, `S3`, `TFSTATE`. `CHECK(tier BETWEEN 1 AND 3)`. `asset_id`는 기존 `assets`와 대응할 때만 |
+| `iac_data_assets` | `data_asset_id BIGINT PK`, `arn VARCHAR(300) NOT NULL UQ`, `kind VARCHAR(20) NOT NULL`, `tier SMALLINT NOT NULL`, `asset_id BIGINT FK`, `owner_team VARCHAR(50)`, `updated_at TIMESTAMPTZ NOT NULL` | 데이터 등급표. `kind`는 `RDS`, `SECRET`, `S3`, `TFSTATE`. `CHECK(tier BETWEEN 1 AND 3)`. `asset_id`는 기존 `assets`와 대응할 때만. 환경마다 값이 달라 마이그레이션에 넣지 않고 SQL로 등록 (로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`, 12개). 등록 API·화면은 MVP에 없음 |
 
 ### 실행
 
@@ -61,8 +61,8 @@
 | 테이블 | 컬럼 | 제약과 의미 |
 |---|---|---|
 | `iac_findings` | `finding_id BIGINT PK`, `rule_id VARCHAR(80) NOT NULL FK`, `source VARCHAR(10) NOT NULL`, `enforcement VARCHAR(10) NOT NULL`, `severity VARCHAR(10)`, `environment VARCHAR(10) NOT NULL`, `resource_address VARCHAR(500)`, `params JSONB NOT NULL`, `fingerprint VARCHAR(64) NOT NULL UQ`, `last_run_id BIGINT FK`, `last_job_id BIGINT FK`, `status VARCHAR(10) NOT NULL`, `assignee_user_id BIGINT FK`, `version BIGINT NOT NULL`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL` | 모든 탐지 결과. `source`는 `GATE`, `RULE`, `PATH`, `STATE`, `DRIFT`. `status`는 `OPEN`, `FIXED`, `ACCEPTED`. `CHECK(last_run_id IS NOT NULL OR last_job_id IS NOT NULL)`. `params`에는 속성 이름·개수만, 값 없음. `version`은 담당 지정 등 변경 시 낙관적 잠금 |
-| `iac_attack_paths` | `path_id BIGINT PK`, `fingerprint VARCHAR(64) NOT NULL UQ`, `entry VARCHAR(200) NOT NULL`, `target_data_asset_id BIGINT NOT NULL FK`, `tier SMALLINT NOT NULL`, `severity VARCHAR(10) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `hops JSONB NOT NULL`, `length SMALLINT NOT NULL`, `status VARCHAR(10) NOT NULL`, `last_job_id BIGINT FK`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL` | 현재 그래프에서 열린 경로. S-01 C. `status`는 `OPEN`, `CLOSED`. `fingerprint`는 진입+단계+대상의 해시 |
-| `iac_run_path_changes` | `change_id BIGINT PK`, `run_id BIGINT NOT NULL FK`, `change VARCHAR(10) NOT NULL`, `path_id BIGINT FK`, `path_fingerprint VARCHAR(64) NOT NULL`, `tier SMALLINT NOT NULL`, `severity VARCHAR(10)`, `hops JSONB NOT NULL`, `cause_address VARCHAR(500)`, `evidence JSONB` | PR이 만든 경로 차이. S-02 ①. `change`는 `ADDED`, `REMOVED`, `SHORTENED`. `UQ(run_id, path_fingerprint)`. `ADDED`면 `path_id`는 NULL. `evidence`에는 IAM 시뮬레이터 판정(`explicitDeny`, `allowed` 등)만 |
+| `iac_attack_paths` | `path_id BIGINT PK`, `fingerprint VARCHAR(64) NOT NULL UQ`, `entry VARCHAR(200) NOT NULL`, `target_data_asset_id BIGINT NOT NULL FK`, `tier SMALLINT NOT NULL`, `severity VARCHAR(10) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `hops JSONB NOT NULL`, `length SMALLINT NOT NULL`, `status VARCHAR(10) NOT NULL`, `last_job_id BIGINT FK`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL` | 현재 그래프에서 열린 경로. S-01 C. `status`는 `OPEN`, `CLOSED`. `fingerprint`는 진입+단계+대상의 해시. `hops`는 단계 배열 `[{kind, id, name}]` (`kind`는 Cartography 라벨, `id`는 ARN) |
+| `iac_run_path_changes` | `change_id BIGINT PK`, `run_id BIGINT NOT NULL FK`, `change VARCHAR(10) NOT NULL`, `rule_id VARCHAR(80) NOT NULL FK`, `path_id BIGINT FK`, `path_fingerprint VARCHAR(64) NOT NULL`, `tier SMALLINT NOT NULL`, `severity VARCHAR(10)`, `hops JSONB NOT NULL`, `cause_address VARCHAR(500)`, `evidence JSONB` | PR이 만든 경로 차이. S-02 ①. `change`는 `ADDED`, `REMOVED`, `SHORTENED`. `UQ(run_id, path_fingerprint)`. `ADDED`면 `path_id`는 NULL. `rule_id`는 이 변화가 걸린 규칙(`path.tier1.added`, `path.removed` 등). PR 목록의 대표 사유와 다음 할 일에 씀. `hops`는 `iac_attack_paths`와 같은 모양. `evidence`에는 IAM 시뮬레이터 판정(`simulator.before`·`after`: `explicitDeny`, `allowed` 등)과 원인 변경 종류(`causeAction`: `CREATE`, `UPDATE`, `DELETE`, `REPLACE`)만 |
 
 ### 기록
 
@@ -239,6 +239,7 @@ CREATE TABLE iac_run_path_changes (
     change_id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_id            BIGINT      NOT NULL REFERENCES iac_runs (run_id) ON DELETE CASCADE,
     change            VARCHAR(10) NOT NULL CHECK (change IN ('ADDED', 'REMOVED', 'SHORTENED')),
+    rule_id           VARCHAR(80) NOT NULL REFERENCES iac_rules (rule_id),
     path_id           BIGINT REFERENCES iac_attack_paths (path_id),
     path_fingerprint  VARCHAR(64) NOT NULL,
     tier              SMALLINT    NOT NULL CHECK (tier BETWEEN 1 AND 3),
@@ -280,16 +281,17 @@ CREATE TABLE iac_audit_events (
 |---|---|---|
 | 노드 | `AWSEC2Instance`, `AWSRole`, `AWSInstanceProfile`, `AWSPolicy`, `AWSPolicyStatement`, `AWSS3Bucket`, `AWSRDSInstance`, `AWSLoadBalancerV2`, `AWSEC2SecurityGroup`, `AWSCloudFrontDistribution`, `AWSSecretsManagerSecret` | Cartography AWS 모듈 |
 | 노드 | `KubernetesCluster`, `KubernetesNode`, `KubernetesPod` | Cartography Kubernetes 모듈 |
-| 노드 | `Internet` (가상 노드 1개, 경로 출발점) | logssey 보강 |
+| 노드 | `LogsseyInternet` (가상 노드 1개, `id = 'internet'`, 경로 출발점. `hops`에는 `kind: Internet`으로 나감) | logssey 보강 |
 | 관계 | `INSTANCE_PROFILE`, `ASSOCIATED_WITH`, `POLICY`, `STATEMENT`, `EXPOSE`(LB→EC2), `MEMBER_OF_EC2_SECURITY_GROUP`, `RUNS_ON`(파드→노드), `IS_INSTANCE`(노드→EC2, `providerID` 기준. 현재 클러스터에서는 만들어지지 않음, 아래 보강으로 대체) | Cartography |
 | 관계 | `CAN_READ`·`CAN_WRITE`(주체→S3·시크릿, 거부 반영) | Cartography 권한 매핑 + 사용자 정의 매핑 파일 |
-| 관계 | `ORIGIN`(CloudFront→NLB), `HAS_CREDS_OF`(EC2→역할, IMDS 조건), `CAN_REACH {port}`(네트워크 도달), `IS_INSTANCE` 대체(노드 InternalIP ↔ `AWSEC2Instance.privateipaddress` 매칭) | logssey 보강 |
+| 관계 | `ORIGIN`(CloudFront→LB), `HAS_CREDS_OF`(EC2→역할, IMDS 조건), `CAN_REACH {port}`(네트워크 도달), `IS_INSTANCE` 대체(노드 InternalIP ↔ `AWSEC2Instance.privateipaddress` 매칭) | logssey 보강 |
 
-- 경로 쿼리는 `Internet`에서 출발해 `tier`가 붙은 데이터 노드까지 최대 6단계 탐색, 결과는 `iac_attack_paths`에 저장
-- PR 분석은 이 그래프의 복사본(또는 메모리 안 부분 그래프)에 plan 변경을 얹어 계산하고 원본은 수정 안 함. 결과는 `iac_run_path_changes`에 저장
+- `ORIGIN`: Cartography의 CloudFront 노드에는 origin이 없어, 보강 단계에서 AWS API(`cloudfront:ListDistributions`, 읽기 전용)로 배포별 origin 도메인을 읽음. 그 도메인이 LB의 `dnsname`과 같거나, 같은 이름의 Route53 레코드가 LB를 가리키면(`DNS_POINTS_TO`) 연결
+- 경로 쿼리는 `LogsseyInternet`에서 출발해 `tier`가 붙은 데이터 노드까지 최대 6단계 탐색, 결과는 `iac_attack_paths`에 저장
+- PR 분석은 이 그래프를 워커 메모리에 읽어 둔 스냅샷에 plan 변경을 얹어 계산하고 원본은 수정 안 함. 결과는 `iac_run_path_changes`에 저장
 
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-10-21 |
