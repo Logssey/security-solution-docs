@@ -203,9 +203,21 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | `needsDecisionLocations` | `UNKNOWN` 또는 근거가 낡아 재검토가 필요한, 유효 Finding이 남은 위치, `Occurrence` | `review-queue?bucket=NEEDS_DECISION` |
 | `needsCaseLinkLocations` | 유효 `ABNORMAL`이 현재 건에 연결되지 않은 무결성 복구 대상 위치, `Occurrence` | `review-queue?bucket=NEEDS_CASE_LINK` |
 | `coverageGapScopes` | 5.8절의 현재 필수 승인 범위 중 검사 누락 사유가 있는 고유 범위, `Scope` | `coverage-gaps` |
-| `unclassifiedScopes` | 현재 출처 미분류·승인 대기 범위, `Scope` | `scopes?classificationStatus=NEEDS_REVIEW` |
+| `unclassifiedScopes` | 선택 출처의 활성 연결·활성 범위 중 설정 사유가 남은 고유 범위, `Scope`. 이름은 호환용이며 미분류 출처만 뜻하지 않음 | `scopes?origin={selectedOrigin}&classificationStatus=NEEDS_REVIEW` |
 
 미지정 건은 `ongoingCases`·`revalidationPendingCases`의 **부분집합**이며 별도 추가 노출 건수로 더하지 않는다. 같은 키의 운영·시험 위치가 있어도 위치는 해당 출처에서만 세고 운영·시험 건은 분리한다. 시험 실키 의심 경고는 사용자에게 열람 권한이 있는 경우 `crossEnvironmentAlerts`에 `unit=CrossEnvironmentAlert`로 따로 제공한다. 이는 운영 출처 필터에서도 숨기지 않지만 운영 `ResponseCase` 수에 더하지 않는다. 조사 과제 수나 인벤토리 전체 키 수를 노출·대응 수로 합산하지 않는다.
+
+#### 현황의 실제 업무·검사 상태·설정 보조 조회
+
+요약은 숫자만으로 업무 행이나 검사 성공을 추정하지 않도록 다음 읽기 모델을 함께 제공한다. 새 업무 상태·원장이나 새로운 위험 점수를 만들지 않는다.
+
+- `workPreviews.response`, `workPreviews.revalidation`, `workPreviews.decision`: `{status,items,total,unit,snapshotId}`. 같은 스냅샷·권한·필터의 대기열 순서에서 최대 5개를 반환한다. 화면은 최대 3개씩 요약하고 같은 스냅샷의 전체 목록으로 연결한다. 응답 실패·권한 없음은 빈 업무로 단정하지 않는다.
+- `collectionHealth`: `{status,origin,approvedScopeCount,lastAttempt,lastCompleteSuccess,counts,items}`. `counts`는 `success,partial,failed,notRun,paused,running`이며 `items`는 허용된 범위별 검사 상태다. 최신 현재 scope revision에 맞는 실행·필수 단계 근거만 사용한다. `lastCompleteSuccess`는 동일한 전체 실행에서 모든 필수 범위가 성공한 사실이며 범위별 다른 날의 성공을 합성하지 않는다. 적용되지 않는 필터를 설명하며 원문·보호 승인 참조는 반환하지 않는다.
+- `setupSummary`: `status,selectedOrigin,selectedOriginScopeCount,unclassifiedScopeCount,pausedScopeCount`와 사유별 `reasonCounts,selectedReasonCounts,unclassifiedReasonCounts,pausedReasonCounts` 및 `items,unclassifiedItems,pausedItems`를 제공한다. 각 미리보기는 최대 10개다. 선택 출처의 활성 설정, 출처 미분류인 활성 설정, 중지된 연결의 설정을 별개 집합으로 구분한다. 전역 두 그룹은 `globalGroupsIgnoreOrigin=true`로 출처 필터 미적용을 밝힌다. 발견 소스·연결·ACL은 모든 그룹에 적용하고 발급자·환경·담당은 `notApplicableFilters`로 표시한다. 같은 범위의 여러 사유는 중복 집계될 수 있으므로 사유별 수의 합을 총 범위 수로 쓰지 않는다.
+
+중지된 연결은 현재 수행 가능한 설정 수나 선택 출처 지표에 끼워 넣지 않는다. 활성화 요청과 남아 있는 과거 설정은 별도 안내한다. 미분류 전역 수를 운영·시험 각각의 적용 지표처럼 표시하지 않는다. 적용 필터와 `queueFilter`가 같은 집합을 가리켜야 한다.
+
+위치 행과 위험 조회의 `legacyExposureAssessment`는 기존 판정의 `assessmentId,decision,scopeRevision,currentScopeRevision,needsReconfirmation,reasonCodes`를 허용된 범위에서 제공한다. 기존 판정의 revision이 없거나 재확인 표식이 있으면 원판정을 현재 평가 근거로 위조하지 않고 재확인 이유를 설명한다. 해당 판정·현재 대응의 존재를 새 심각도 UNKNOWN으로 지우지 않는다.
 
 `NORMAL_INVENTORY`는 `inventorySubtype=METADATA_ONLY|AUTHORIZED_STORAGE|RETIRED_HISTORY`를 구분한다. 승인 보관은 같은 출처의 허용 위치 전체에 유효 Finding·활성 ALLOWED 정책·NORMAL 근거가 있고 활성 대응/재검토가 없는 키다. RETIRED_HISTORY는 호출자가 열람 가능한 현재 유효 PROVIDER_VERIFIED 폐기·교체 근거가 있으며 같은 출처에 활성 대응·판정 대기·현재 존재/판정 UNKNOWN이 없는 키만 포함한다. 수동 승인·INVALID·만료 시각 추정만으로 이 분류를 만들지 않는다. 소스/환경 필터가 다른 위치를 가렸다는 이유로 승인 보관·폐기 이력에 올리지 않고 숨은 근거로 상태·수를 생성하지 않는다.
 
