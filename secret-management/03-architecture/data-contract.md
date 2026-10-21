@@ -43,7 +43,7 @@ CredentialSet의 동일성은 발급자, 유형, 구성요소 형식과 보호�
 
 일반 영속 저장소에는 발견한 원문을 보관하지 않는다. 검사할 때 승인된 원천에서 필요한 값을 다시 읽고 격리된 검증 작업의 메모리에서만 사용한다. 정확한 AWS 본문 경로는 탐지·정규화와 선택적 검증을 동기 처리한 뒤 소유 `byte[]`를 지운다. 다만 AWS SDK가 Secrets Manager와 SSM의 문자열을 Java 불변 `String`으로 이미 만들 수 있어 메모리 전체 소거는 보장하지 못한다. 큐에는 원문 대신 내부 ID와 작업 ID를 넣는다. 재취득 실패는 UNKNOWN 또는 UNCHECKED와 `SOURCE_UNAVAILABLE` 사유로 남긴다. 시도 실패로 마지막 성공 판정이나 사용 메타데이터의 성공 시각을 갱신하지 않는다. 원문 정책의 근거는 [ADR-S005](adr/ADR-S005.md)에 둔다.
 
-모든 시각은 UTC로 저장하고 API에서 UTC 시각을 반환한다. `lastAttemptAt`, `lastSuccessfulValidationAt`, `nextDueAt`, `lastCollectionSuccessAt`, `actionPerformedAt`은 각각 다른 사실이다. 조치가 마지막 유효성 판정 뒤에 있으면 `postActionValidationPending`을 표시한다. 예약 기준은 마지막 성공만을 기준으로 밀리지 않도록 직전 예정 시각과 운영 정책을 사용한다.
+모든 시각은 UTC로 저장하고 API에서 UTC 시각을 반환한다. `lastAttemptAt`, `lastSuccessfulValidationAt`, `nextDueAt`, `lastCollectionSuccessAt`, `actionPerformedAt`은 각각 다른 사실이다. 조치가 마지막 유효성 판정 뒤에 있으면 `postActionValidationPending`을 표시한다. 정기 예약은 실제 예약 시각에서 기본 6시간 뒤로 고정하고 성공·수동 실행으로 뒤로 밀지 않는다. 중단 중 놓친 슬롯은 한 번만 예약하며 연속 재생하지 않는다.
 
 ## 3. 현재 상태와 이력
 
@@ -124,3 +124,20 @@ CredentialSet의 동일성은 발급자, 유형, 구성요소 형식과 보호�
 자동 실키 의심 경고의 과제는 연결의 기본 적격 SECURITY 담당자와 기본 기한 정책이 있으면 적용한다. 미설정이면 **담당자와 기한을 각각 독립적으로 nullable**로 두고 경고·과제 생성을 성공시킨다. 이 경우 `assignmentStatus=UNASSIGNED` 또는 `dueStatus=UNSET`, 다음 행동 `ASSIGN_INVESTIGATION`을 표시하며 기한이 없는 과제를 기한 초과 수에 넣지 않는다. 사람이 `NEEDS_MORE_INFO`를 제출하는 경우의 담당자·기한 필수 조건은 유지한다. 기본 담당자 부재로 의심 경고 자체를 누락시키지 않는다.
 
 WORKBENCH 스냅샷의 typed membership은 같은 헤더 안에서 건·위치·범위 목록으로 투영할 수 있다. 독립 생성한 CURRENT_CASES/INVENTORY/HISTORY의 ID를 다른 독립 범위에 재사용하는 것은 여전히 금지한다. 마스킹 CSV는 선택 출처와 `contentKind`·`workBucket`을 포함한 정규화 필터의 **독립 INVENTORY 스냅샷** 전체 페이지를 사용한다. 10,000개 상한·만료·권한 변경·오류 중단과 필드 보호는 [API 계약](api-contract.md)의 5.12절을 따른다.
+
+## 9. 검증 시도와 위치별 위험 평가의 독립 원본
+
+유효성은 [검증 계약](credential-validation.md)의 공통 시도 원장, 심각도는 [평가 계약](risk-assessment-contract.md)의 위치별 정책·규칙·근거·평가 원장을 따른다. 공급자별 검증 테이블·현재 등급 복제 원장·전용 큐를 만들지 않는다. [DB 스키마](database-schema.md)의 검증 예약·승인 revision과 위치 risk_evidence_revision은 동시 변경을 제어하며 현재 권한 재검사를 대체하지 않는다.
+
+| 정보 | 기준 |
+|---|---|
+| 최근 검증 시도 | 현재 ACL·동일성·승인에 적격인 COMPLETED 시도의 결과와 종료/실제 관측 시각. 진행 예약과 분리 |
+| 마지막 인증 성공 | 적격 VALID의 실제 공급자 관측. UNKNOWN·UNCHECKED·probe·재취득 성공으로 갱신하지 않음 |
+| 현재 유효성 최신성 | 확인 기한·승인/동일성·조치와 최근 미확정 시도를 적용. 확인 기한과 토큰 만료는 다름 |
+| 최신 자동 위험 평가 | 고정 정책·입력·근거 revision·evaluationAsOf로 계산한 결과. ASSESSED에는 4등급, UNASSESSED/NOT_APPLICABLE에는 severity=NULL |
+| 적용 중 위험 판단 | APPLICATION과 필요한 독립 검토로 확정된 평가. 하향 보류 시 최신 미평가·이전 확정 등급·보류 이유를 함께 제공 |
+| 악용 조사 | NOT_CONFIRMED는 미조사를 포함한 확정 근거 부재. 조사 상태·기간·완전성을 별도 보존 |
+
+메타데이터는 위험 평가 대상에서 제외하고 파생 NOT_APPLICABLE을 반환하며 평가/대응 건을 생성하지 않는다. 정상 보관 R00과 근거 부족 R99는 독립 상태다. 유효성·존재·시험 분류만으로 노출·영향을 확정하지 않는다. 평가용 입력은 기존 사실을 참조하고 권한·자산·접근 범위·악용의 정규화 근거만 추가로 저장한다. 노출 결정 당시 access_snapshot은 불변이며, 현재 접근 관측의 갱신이 노출 재판정이나 새 승인 절차를 만들지 않는다.
+
+같은 요청·정책·입력의 재시도는 같은 결과를 사용하고 새로운 관측·정책·시각의 재평가는 새 이력이다. 룰·근거·이력을 삭제하거나 과거 UNKNOWN을 나중의 사실로 소급 확정하지 않는다. 확인된 사고 이력은 키 폐기·검증 실패·권한 조회 실패로 하향하지 않는다. API는 작업을 등록하고 워커가 수행하며 ASSESS는 DB 평가 작업으로만 기록한다.

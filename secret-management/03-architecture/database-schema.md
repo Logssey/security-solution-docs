@@ -45,7 +45,7 @@ PostgreSQL에 저장하는 Secret 사실 원본, 관계, 제약과 조회 스냅
 
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
-| `secret_jobs` | `job_id BIGINT PK`, `kind VARCHAR(20) NOT NULL`, `connection_id BIGINT NOT NULL FK`, `requested_by_user_id BIGINT FK`, `idempotency_key VARCHAR(120)`, `scheduled_at TIMESTAMPTZ NOT NULL`, `available_at TIMESTAMPTZ NOT NULL`, `attempt_no INTEGER NOT NULL`, `max_attempts INTEGER NOT NULL`, `status VARCHAR(20) NOT NULL`, `lease_owner VARCHAR(120)`, `lease_until TIMESTAMPTZ`, `last_error_code VARCHAR(80)`, `created_at`, `finished_at TIMESTAMPTZ` | kind=FULL_SCAN·REVALIDATE. 상태 PENDING·LEASED·SUCCEEDED·FAILED·CANCELLED. 같은 연결의 활성 전체 스캔/재검사는 합쳐 최대 하나. attempt_no>=0, max_attempts>0. 대상은 case_revalidations로 연결. 만료 임대는 재시도 한도 내 재예약한다. |
+| `secret_jobs` | `job_id BIGINT PK`, `kind VARCHAR(20) NOT NULL`, `purpose VARCHAR(40) NOT NULL`, `connection_id BIGINT NOT NULL FK`, `target_occurrence_id BIGINT FK`, `expected_context JSONB`, `expected_evidence_revision BIGINT`, `requested_by_user_id BIGINT FK`, `idempotency_key VARCHAR(120)`, `scheduled_at TIMESTAMPTZ NOT NULL`, `available_at TIMESTAMPTZ NOT NULL`, `attempt_no INTEGER NOT NULL`, `max_attempts INTEGER NOT NULL`, `status VARCHAR(20) NOT NULL`, `lease_owner VARCHAR(120)`, `lease_until TIMESTAMPTZ`, `last_error_code VARCHAR(80)`, `created_at`, `finished_at TIMESTAMPTZ` | kind=FULL_SCAN·REVALIDATE·ASSESS, 목적은 각각 COLLECTION_AND_DETECTION·CREDENTIAL_VALIDITY/LOCATION_RECHECK·SEVERITY_ASSESSMENT다. 상태는 PENDING·LEASED·SUCCEEDED·FAILED·CANCELLED다. 같은 연결의 외부 호출을 동반하는 FULL_SCAN/REVALIDATE는 합쳐 최대 하나다. ASSESS는 위치/근거 revision/정책별로 멱등화하고 ScanRun을 만들지 않는다. expected_context에는 내부 ID와 승인/동일성/조치 revision만 허용하고 원문·URI를 넣지 않는다. 대상 위치는 같은 connection에 속한다. attempt_no>=0,max_attempts>0이며 만료 lease는 한도 안에서 재예약한다. |
 | `secret_scan_runs` | `run_id BIGINT PK`, `job_id BIGINT NOT NULL UQ FK`, `connection_id BIGINT NOT NULL FK`, `trigger_type VARCHAR(20) NOT NULL`, `scope_version BIGINT NOT NULL`, `scheduled_at`, `requested_at TIMESTAMPTZ NOT NULL`, `started_at`, `finished_at TIMESTAMPTZ`, `collection_status`, `detection_status`, `validation_status VARCHAR(20) NOT NULL`, `result_status VARCHAR(20) NOT NULL`, `failure_code VARCHAR(80)`, `created_at TIMESTAMPTZ NOT NULL` | trigger_type=SCHEDULED·MANUAL·REVALIDATION. 당시 connection scope_version과 run_scope 스냅샷을 보존한다. 단계는 여섯 처리 상태, 실행 결과에는 CANCELLED도 포함한다. 현재 연결 표시명은 연결 #ID 등 안전한 별칭으로 제공하며 원문 display_name을 과거 스냅샷처럼 노출하지 않는다. 재검사는 전체 스캔 성공률에서 제외. |
 | `secret_run_scopes` | `run_scope_id BIGINT PK`, `run_id`, `scope_id BIGINT NOT NULL FK`, `scope_revision BIGINT`, `snapshot_content_type VARCHAR(80)`, `snapshot_origin VARCHAR(20)`, `safe_display_alias VARCHAR(80)`, `evidence_version SMALLINT`, `collection_status VARCHAR(20) NOT NULL`, `object_count BIGINT`, `failure_code VARCHAR(80)`, `detection_stage_status`, `validation_stage_status VARCHAR(20)`, `detection_reason_code`, `validation_reason_code VARCHAR(80)`, `validation_required BOOLEAN`, `started_at`, `finished_at TIMESTAMPTZ` | UQ(run_id,scope_id). 실제 수집 결과와 탐지·검증의 실행/미실행 사유를 보존한다. scope_outcome은 secret_scope_outcomes 뷰에서 필수 단계로 파생한다. 과거 evidence_version 부재는 UNKNOWN·LEGACY_UNAVAILABLE이며 필수 단계 성공을 추정하지 않는다. 원천 참조·리전은 보호된 승인 설정에서만 읽고 별칭은 당시 안전값만 복제한다. |
 | `secret_tool_runs` | `tool_run_id BIGINT PK`, `run_scope_id BIGINT NOT NULL FK`, `engine VARCHAR(20) NOT NULL`, `engine_version VARCHAR(100) NOT NULL`, `config_hash VARCHAR(100) NOT NULL`, `fingerprint_key_version VARCHAR(40)`, `scope_origin_version BIGINT`, `status VARCHAR(20) NOT NULL`, `finding_count BIGINT`, `failure_code VARCHAR(80)`, `started_at`, `finished_at TIMESTAMPTZ` | UQ(run_scope_id,engine), finding_count>=0. 실제 탐지 시도의 엔진·설정·HMAC 키 버전과 출처 승인 버전이다. 과거 NULL은 비교 가능한 부재를 증명하지 못한다. 전체 스캔의 미발견도 최신 양성 Finding의 이 버전들과 현재 범위를 비교하며 불일치는 UNKNOWN이다. 원문 HMAC 키·지문을 반환하지 않는다. |
@@ -57,12 +57,23 @@ PostgreSQL에 저장하는 Secret 사실 원본, 관계, 제약과 조회 스냅
 | `secret_credential_sets` | `credential_set_id BIGINT PK`, `issuer VARCHAR(40) NOT NULL`, `credential_type VARCHAR(80) NOT NULL`, `component_state VARCHAR(20) NOT NULL`, `issuer_connection_id BIGINT FK`, `fingerprint BYTEA`, `candidate_locator BYTEA`, `fingerprint_key_version VARCHAR(40)`, `masked_label VARCHAR(120)`, `external_key_ref VARCHAR(300)`, `owner_ref VARCHAR(200)`, `purpose_label VARCHAR(200)`, `issued_at TIMESTAMPTZ`, `expiry_policy VARCHAR(10) NOT NULL`, `expires_at TIMESTAMPTZ`, `lifecycle_status VARCHAR(20) NOT NULL`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL`, `created_at TIMESTAMPTZ NOT NULL`; `first_seen_run_id BIGINT FK` | CONFIRMED는 보호키 HMAC fingerprint, CANDIDATE는 원천 위치를 포함한 HMAC candidate_locator, METADATA_ONLY는 값 지문 없이 보호된 목록 참조다. 마스킹·접두사 병합 금지. FIXED는 expires_at 필수. 최초 동일성 삽입 실행만 first_seen_run_id를 고정하고 구성 승격·새 위치로 덮지 않는다. 근거 불명 과거 행은 NULL. 메타데이터·재검사는 신규 값 후보 집계 제외. |
 | `secret_occurrences` | `occurrence_id BIGINT PK`, `credential_set_id`, `connection_id`, `scope_id BIGINT NOT NULL FK`, `asset_id BIGINT FK`, `source_object_ref VARCHAR(500) NOT NULL`, `location_key VARCHAR(500) NOT NULL`, `latest_object_version VARCHAR(200)`, `environment`, `exposure_status`, `exposure_range`, `presence_status VARCHAR(10) NOT NULL`, `first_seen_at`, `last_seen_at TIMESTAMPTZ NOT NULL`, `last_seen_run_id BIGINT FK`, `last_complete_coverage_at TIMESTAMPTZ`, `exposure_assessment_version BIGINT NOT NULL`, `policy_assessed_binding_id BIGINT FK`, `policy_assessed_origin_version BIGINT`, `policy_recheck_required BOOLEAN NOT NULL` | UQ(credential_set_id,connection_id,source_object_ref,location_key), scope는 같은 연결 소속. 구성·존재·노출은 독립이며 현재 판정 ID/근거와 커버리지 상세는 원본 이력에서 조회한다. 실패는 UNKNOWN으로 기록하되 마지막 완전 검사 시각·수동 판정은 보존한다. 재취득 참조는 제한 접근하고 일반 표시는 위치 #ID다. |
 | `secret_findings` | `finding_id BIGINT PK`, `occurrence_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `tool_run_id BIGINT NOT NULL FK`, `finding_key VARCHAR(100) NOT NULL`, `rule_id VARCHAR(120) NOT NULL`, `rule_version VARCHAR(100) NOT NULL`, `masked_context TEXT`, `detected_at TIMESTAMPTZ NOT NULL` | `UQ(tool_run_id, finding_key)`. 마스킹된 문맥만 저장한다. 동일 위치의 두 엔진 결과를 둘 다 남기되 위치를 두 번 만들지 않는다. `tool_run_id`와 `run_id`의 관계를 적재 트랜잭션에서 검증한다. |
-| `secret_validation_attempts` | `attempt_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `job_id BIGINT NOT NULL FK`, `validator_id VARCHAR(120) NOT NULL`, `validator_version VARCHAR(80) NOT NULL`, `endpoint_class VARCHAR(80) NOT NULL`, `requested_at`, `completed_at TIMESTAMPTZ NOT NULL`, `provider_checked_at TIMESTAMPTZ`, `result VARCHAR(10) NOT NULL`, `reason_code VARCHAR(80) NOT NULL`, `next_due_at TIMESTAMPTZ` | (run_id,job_id) 복합 FK. VALID·INVALID·UNKNOWN·UNCHECKED와 안전한 사유. 실제 공급자 관측과 미실행을 구분한다. 현재 위치의 마지막 실질 조치 뒤 관측이 없으면 이전 VALID를 현재 확정으로 표시하지 않고 POST_ACTION_VALIDATION_REQUIRED로 설명한다. 이전 관측은 이력으로 유지. |
+| `secret_validation_attempts` | `attempt_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `job_id BIGINT NOT NULL FK`, `validator_id VARCHAR(120) NOT NULL`, `validator_version VARCHAR(80) NOT NULL`, `endpoint_class VARCHAR(80) NOT NULL`, `attempt_state VARCHAR(20) NOT NULL`, `requested_at TIMESTAMPTZ NOT NULL`, `request_sent_at`, `completed_at`, `provider_checked_at TIMESTAMPTZ`, `result VARCHAR(10)`, `reason_code VARCHAR(80)`, `next_due_at TIMESTAMPTZ`, 보호된 실행 동일성·승인/조치 revision·현재 적용 적격성 | (run_id,job_id) 복합 FK. 공급자별 테이블을 만들지 않고 [검증 계약](credential-validation.md)의 RESERVED·SENT·COMPLETED·ABANDONED를 사용한다. 완료 시에만 4상태 결과와 사유가 필요하며 진행 예약을 최신 결과로 조회하지 않는다. 실제 관측·전송·종료 시각을 분리하고 미전송·timeout을 인증 성공 시각으로 채우지 않는다. 승인 취소·동일성 변경의 응답은 과거 시도로만 보존한다. 조치 이후 관측 부재는 POST_ACTION_VALIDATION_REQUIRED이며 과거 이력을 덮지 않는다. |
 | `secret_aws_access_key_observations` | `credential_set_id BIGINT NOT NULL FK`, `run_id BIGINT NOT NULL FK`, `key_status VARCHAR(10) NOT NULL`, `issued_at`, `last_used_at TIMESTAMPTZ`, `last_used_service VARCHAR(120)`, `last_used_region VARCHAR(80)`, `observed_at TIMESTAMPTZ NOT NULL` | PK(credential_set_id,run_id). 키 상태 ACTIVE·INACTIVE·EXPIRED·UNKNOWN. 목록 ACTIVE는 VALID·노출·권한의 증거가 아니며 기록 부재는 미사용이 아니다. 사용자명·키 ID 원문·Secret 값 금지. |
 | `secret_exposure_assessments` | `assessment_id BIGINT PK`, `occurrence_id BIGINT NOT NULL FK`, `finding_id BIGINT`, `finding_run_id BIGINT`, `finding_rule_id VARCHAR(120)`, `finding_rule_version VARCHAR(100)`, `from_status`, `decision VARCHAR(20) NOT NULL`, `reason_code VARCHAR(80) NOT NULL`, `scope_origin VARCHAR(20) NOT NULL`, `scope_version`, `scope_revision BIGINT`, `policy_id`, `policy_version`, `policy_binding_id BIGINT FK`, `policy_result VARCHAR(10)`, `decision_source VARCHAR(20) NOT NULL`, `evidence_refs JSONB NOT NULL`, `observed_at TIMESTAMPTZ`, `actor_user_id BIGINT FK`, `automatic_policy_version BIGINT`, `assessed_at TIMESTAMPTZ NOT NULL`, `version BIGINT NOT NULL` | UQ(occurrence_id,version). API decisionId의 단일 원본이며 NORMAL·ABNORMAL·NEEDS_MORE_INFO·FALSE_POSITIVE를 보존한다. HUMAN은 수행자, POLICY는 정확한 ALLOWED의 NORMAL과 정책 버전 필요. 불완전 후보·추가 조사나 과거 근거가 없는 Finding 필드는 NULL이다. 자동 ABNORMAL 금지. |
 | `secret_finding_dispositions` | `disposition_id BIGINT PK`, `decision_id BIGINT NOT NULL UQ FK`, `finding_id BIGINT NOT NULL`, `occurrence_id`, `scope_id BIGINT NOT NULL FK`, `scope_revision`, `scope_origin_version BIGINT NOT NULL`, `scope_fingerprint VARCHAR(32) NOT NULL`, `source_object_digest`, `location_digest BYTEA NOT NULL`, `object_version VARCHAR(200)`, `rule_version`, `engine_version VARCHAR(100) NOT NULL`, `protected_evidence_identity BYTEA`, `identity_key_version VARCHAR(40)`, `reason_code VARCHAR(80) NOT NULL`, `decision_source VARCHAR(30) NOT NULL`, `reused_from_disposition_id BIGINT FK`, `reviewed_by_user_id BIGINT FK`, `created_at TIMESTAMPTZ NOT NULL`, `reuse_expires_at`, `revoked_at TIMESTAMPTZ`, `is_current BOOLEAN NOT NULL` | Finding당 현재 교정 최대 하나. FALSE_POSITIVE는 자격 증명 아님이며 NORMAL·INVALID가 아니다. 같은 범위·객체 버전·위치·룰/엔진·후보 동일성이 모두 같은 재탐지만 최대 30일 EXACT_EVIDENCE_REUSE 행을 새로 쓴다. 근거 부재·만료·취소 시 재사용 금지. 원문 원천 참조를 재사용 색인에 넣지 않는다. |
 
-심각도·권한 영향의 입력과 등급 기준은 [심각도 정책](../02-functional-design/severity-policy.md)의 독립 계약이다. 판정과 수명주기 증거를 일반 평가 테이블에 복제하지 않는다. 유효한 영향 근거·집계가 없으면 응답은 UNASSESSED와 집계 미제공 사유를 보존한다.
+심각도·권한 영향의 입력과 등급 기준은 [심각도 정책](../02-functional-design/severity-policy.md), 규칙·정규화 근거·평가 저장은 [심각도 평가 계약](risk-assessment-contract.md)을 따른다. 판정·검증·수명주기 원장은 FK/검증된 참조로 재사용하며 일반 평가 테이블에 복제하지 않는다. 유효한 영향 근거·집계가 없으면 응답은 UNASSESSED와 집계 미제공 사유를 보존한다.
+
+| 심각도 전용 테이블 | 저장 책임 | 핵심 제약 |
+|---|---|---|
+| `secret_severity_policies` | 불변 정책 버전·활성화·검토/수명주기 | 활성 정책과 과거 평가 재현을 분리. 활성 버전의 조건 수정 금지 |
+| `secret_severity_rules` | 정책별 규칙 ID·우선순위·타입 제한 조건·결과 | 정책/규칙과 정책/우선순위 고유, 명시적 ANY와 UNKNOWN 구분, 임의 SQL·스크립트 금지 |
+| `secret_risk_evidence` | 권한·실제 대상·자산 중요도·악용/조사의 정규화 근거·시각·적용 범위·매핑 완전성 | 같은 키/위치·현재 승인·ACL 검사, 추가 전용 보완·취소 이력, 원문·공급자 응답 제외 |
+| `secret_severity_assessments` | 위치별 자동 평가·수동 조정·승인/반려·적용과 당시 입력·근거 참조 | ASSESSED/UNASSESSED/NOT_APPLICABLE과 등급 NULL 제약, 동일 입력 멱등, revision CAS, 과거 평가 불변 |
+
+이 네 테이블의 컬럼·FK·CHECK·색인과 유효 head는 [평가 계약](risk-assessment-contract.md)이 정의한다. 화면용 상태 이동·공급자별 중복 원장·별도 재평가 큐는 추가하지 않는다. 정책·규칙과 평가 기능의 실제 스키마 변경은 하나의 일관된 변경 단위로 검토하며 이 문서에 마이그레이션 번호를 미리 고정하지 않는다.
+
+`secret_exposure_assessments`에는 `exposure_range VARCHAR(10)`과 `access_snapshot JSONB`를 함께 보존한다. access_snapshot은 공개성·접근 범위·완전성·관측 시각·승인 revision·검증된 typed 원본 참조의 닫힌 schema다. 원래 ACL·사용자 명단·공급자 응답은 넣지 않는다. 과거 행의 NULL은 UNKNOWN 근거 부재로 보존하며 현재 범위 컬럼만 읽어 과거 결정을 소급 재현하지 않는다. 이는 기존 노출 원장의 확장이며 위험 근거 테이블에 노출 사실을 다시 적재하지 않는다.
 
 ### 3.4. 조사·원자 명령
 
@@ -164,9 +175,11 @@ CREATE UNIQUE INDEX uq_secret_aws_metadata_identity
 CREATE UNIQUE INDEX uq_secret_current_case
   ON secret_response_cases (credential_set_id, case_origin) WHERE is_current;
 CREATE UNIQUE INDEX uq_secret_active_connection_job
-  ON secret_jobs (connection_id) WHERE status IN ('PENDING', 'LEASED');
+  ON secret_jobs (connection_id)
+  WHERE kind IN ('FULL_SCAN', 'REVALIDATE') AND status IN ('PENDING', 'LEASED');
 CREATE UNIQUE INDEX uq_secret_scheduled_job
-  ON secret_jobs (connection_id, kind, scheduled_at) WHERE requested_by_user_id IS NULL;
+  ON secret_jobs (connection_id, kind, scheduled_at)
+  WHERE requested_by_user_id IS NULL AND kind = 'FULL_SCAN';
 CREATE UNIQUE INDEX uq_secret_enabled_scope
   ON secret_connection_scopes (connection_id, scope_key) WHERE enabled;
 CREATE UNIQUE INDEX uq_secret_open_real_key_alert
@@ -174,6 +187,8 @@ CREATE UNIQUE INDEX uq_secret_open_real_key_alert
 CREATE INDEX idx_secret_jobs_available
   ON secret_jobs (available_at, job_id) WHERE status = 'PENDING';
 ```
+
+ASSESS의 활성 작업은 `(target_occurrence_id, expected_evidence_revision, expected_context의 정책 버전)`별로 유일해야 한다. 정책 버전은 서버 허용 구조의 JSONB scalar로 고정하며 식 인덱스로 고유성을 강제한다. 같은 위치·근거의 자동 평가와 요청은 같은 의미일 때 재사용한다. 외부 호출 직렬화 색인에 ASSESS를 포함하지 않는다. 모든 ASSESS는 대상 위치·기대 revision·정책 버전을 요구하고, FULL_SCAN은 전체 연결 목적이며 대상 위치가 없다. REVALIDATE의 목적·대상 제약은 [검증 계약](credential-validation.md)을 따른다.
 
 | 특수 FK | 참조 대상 |
 |---|---|
@@ -206,7 +221,7 @@ secret_exposure_assessments는 재생성되는 Finding에 의존해 과거 증�
 ## 6. 적재와 집계
 
 1. 수집 범위 허가와 출처·정책을 분리한다. 영향별 직접 결정·독립 검토로 출처 버전·정책 바인딩·감사를 고정하고, 이름·공급자·환경으로 운영/시험을 추정하지 않는다. 범위 설정 사유는 현재 분류·정책·대기·영향 처리에서 계산하며 일부 사유만 해소돼도 나머지를 유지한다.
-2. 도래한 작업은 FOR UPDATE SKIP LOCKED로 선점해 임대 상태·소유자·시각을 원자 저장한다. 6시간 정기는 직전 예정 기준이며 수동 실행은 그 시각을 바꾸지 않는다.
+2. 도래한 작업은 FOR UPDATE SKIP LOCKED로 선점해 임대 상태·소유자·시각을 원자 저장한다. 6시간 정기는 실제 예약 시각 기준이며 수동 실행은 그 시각을 바꾸지 않는다. 중단 중 놓친 슬롯은 한 번만 예약하고 연속 재생하지 않는다. DB 근거만 평가하는 ASSESS는 원천 스캔 분모·성공 횟수에 넣지 않는다.
 3. 도구 출력·원문은 승인 워커 메모리에서 정규화·HMAC·선택 검증 후 폐기한다. 동일성 고유 제약 아래 최초 삽입 실행을 고정하고 재발견·새 위치·구성 승격에서 변경하지 않는다.
 4. 같은 키·원천 위치를 재사용하고 Finding은 엔진별 보존한다. 전체 스캔은 작업·실행 전체 성공과 해당 범위 필수 수집·탐지 성공을 확인하고 최신 양성 Finding의 범위·출처 승인·연결·설정·엔진·HMAC 버전이 현재와 같을 때만 미관측 위치를 MISSING으로 기록한다. 실패·부분 실행·증거 부재·불일치는 UNKNOWN이다. 이미 완전한 동일성 키가 있는 과거 partial 후보를 근거 없이 합치지 않으며 그 후보의 현재 부재도 이 비교 절차를 따른다. 수동 노출·수명주기 사실과 마지막 완전 검사 이력은 보존한다.
 5. IAM 목록은 METADATA_ONLY·실행별 관측이다. Secrets Manager·SSM·S3 목록은 항목 수·범위 상태·안전한 사유만 남기고 자원명·ARN·설명·태그·페이지 토큰을 결과로 적재하지 않는다. 정확한 단일 값 범위는 별도 승인·CURRENT_VALUE_ONLY·opt-in에서만 탐지하고 위치 참조는 aws-content-scope:<scope_id>다.
@@ -227,3 +242,33 @@ API DB 역할은 허용 조회·업무 변경, 워커 역할은 작업 임대·�
 원문은 영속 저장하지 않는다. AWS SDK가 불변 String을 만들 수 있어 프로세스 메모리 전체 소거를 보장한다고 주장하지 않는다. 메타데이터·감사·증거·백업은 범주별 보존 기간·접근·삭제·복구 범위를 운영 정책에 명시한다. 기간 미정은 자동 삭제나 무기한 보존의 기본값이 아니다. 만료 스냅샷 정리는 사실·감사 보존과 별개다.
 
 복구 후 동일성·FK·현재 건 유일성·scope revision·최신 시도와 마지막 성공·증거 추가 전용성·권한 취소·집계 단위를 검증한다. 근거 부재는 null과 안전한 미확인 사유로 남기고 합성/실키·정상 보관·완전 검사·공급자 폐기를 소급 생성하지 않는다.
+
+## 8. 검증 일반화와 평가 revision의 물리 제약
+
+다음은 3절 요약을 구체화한 필수 컬럼·제약이다. 별도 큐·공급자별 원장을 추가하지 않고 기존 테이블을 확장한다. 저장된 적격 flag는 현재 권한·승인·동일성의 읽기 재검사를 대체하지 않는다.
+
+| 원본 | 컬럼·타입 | 규칙 |
+|---|---|---|
+| `secret_jobs` | `lease_token UUID`, `lease_generation BIGINT NOT NULL DEFAULT 0` | 선점 때 token 교체·generation 증가. LEASED는 둘 다 유효하고 lease_owner·lease_until 필수. 결과/heartbeat는 jobId와 현재 token/generation·만료를 CAS 검사. 일반 API에 token 반환 금지 |
+| `secret_credential_sets` | `credential_revision BIGINT NOT NULL DEFAULT 1` | 양수. 구성 승격·동일성 교정·보호키 회전의 의미 변경 시 증가. 단순 last_seen_at 갱신과 다른 기준 |
+| `secret_occurrences` | `risk_evidence_revision BIGINT NOT NULL DEFAULT 0` | 0 이상. 평가 입력 사실의 확정 변경과 같은 트랜잭션에서 증가·재평가 예약. 입력 원본 head·정책 버전도 함께 확인 |
+| `secret_connections` | `validation_enabled BOOLEAN NOT NULL DEFAULT false`, `validation_profile_version VARCHAR(80)`, `validation_revision BIGINT NOT NULL DEFAULT 1` | 서버의 승인 검증 profile 참조. 활성화에는 등록된 profile 필요. profile·활성화 변경은 revision과 감사를 갱신하고 범위 승인을 조용히 확대하지 않음 |
+| `secret_connection_scopes` | `validation_approved BOOLEAN NOT NULL DEFAULT false`, `validation_approval_revision BIGINT NOT NULL DEFAULT 1`, `validation_profile_version VARCHAR(80)`, `validation_approved_by_user_id BIGINT FK`, `validation_approved_at TIMESTAMPTZ` | 양수 revision. 승인에는 현재 연결 profile 일치·수행자·시각 필요. 원천 수집 승인을 대체하지 않음. 철회/변경 때 revision 증가·안전한 감사 보존 |
+| `secret_validation_attempts` | `scope_id BIGINT NOT NULL FK`, `occurrence_id BIGINT NOT NULL FK`, `source_finding_id BIGINT FK`, `credential_revision BIGINT NOT NULL`, `scope_revision BIGINT NOT NULL`, `validation_revision BIGINT NOT NULL`, `validation_approval_revision BIGINT NOT NULL`, `validation_profile_version VARCHAR(80)`, `action_context_digest BYTEA NOT NULL` | 현재 키·연결·범위·검증 승인과 조치 원본 ID/주기의 안전한 digest를 고정. 같은 키·실행·범위의 실제 부모를 저장 시 검사. source_finding_id는 사전 차단/재취득 실패에 NULL 허용, 실제 인증 관측에는 동일성을 확인한 유효 Finding 필요. profile 미설정의 사전 차단 COMPLETED/UNCHECKED만 profile=NULL 허용하며 실제 전송에는 등록 profile 필수 |
+| `secret_validation_attempts` | `dedup_key BYTEA NOT NULL`, `cycle_key VARCHAR(120) NOT NULL`, `attempt_no INTEGER NOT NULL`, `reservation_generation BIGINT NOT NULL`, `reservation_token UUID NOT NULL`, `current_eligible BOOLEAN NOT NULL DEFAULT false`, `ineligible_reason_code VARCHAR(80)` | digest는 32 bytes, 번호·세대 양수. cycle은 승인된 6시간 구간/수동 요청 epoch/조치 주기를 구분한 내부 식별자. raw key나 경로를 넣지 않음. token은 내부 fencing용이며 읽기 API에 반환하지 않음 |
+
+검증 profile은 버전 관리된 서버 설정의 검증기·요청·한도 manifest를 가리킨다. 연결·범위 JSON에 임의 호스트·메서드·헤더를 저장해 실행하지 않는다. 승인 이력은 기존 감사 원장의 대상 scope·이전/새 revision·profile·수행자로 보존한다. 현재 설정 행의 변경으로 과거 시도의 승인 근거가 사라지지 않게 한다.
+
+검증 예약의 부분 고유 색인은 `(credential_set_id, validator_id, validator_version, dedup_key)`에 `attempt_state IN ('RESERVED','SENT')`를 조건으로 둔다. COMPLETED의 재사용 적격성과 새 수동 epoch는 [검증 계약](credential-validation.md)을 따른다. lease 복구자는 이전 예약을 CAS로 ABANDONED 처리한 뒤 새 세대를 확보하고 원문을 재취득한다. 외부 HTTP exactly-once는 보장하지 않으며 실제 시도와 예산을 보존한다.
+
+필수 CHECK는 다음과 같다.
+
+- RESERVED/SENT는 result·reason_code·completed_at이 NULL이다. RESERVED는 request_sent_at=NULL, SENT는 request_sent_at이 있다.
+- COMPLETED는 result가 VALID·INVALID·UNKNOWN·UNCHECKED 중 하나이고 reason_code·completed_at이 있다. VALID/INVALID에는 request_sent_at·provider_checked_at이 필수, UNCHECKED에는 둘 다 없다. UNKNOWN의 실제 공급자 관측 시각은 NULL일 수 있다.
+- ABANDONED는 result=NULL이며 종료 사유·completed_at이 있다. 진행 예약이나 포기 행을 최신 완료 결과로 선택하지 않는다.
+- 모든 알려진 전송·공급자 관측·완료 시각은 requested_at 이후이며 완료 시각 이하이고 provider_checked_at은 request_sent_at 이후다. 로컬 전송 기록의 부재를 crash 시 미전송의 증명으로 해석하지 않는다.
+- credential/scope/validation revision·reservation_generation·attempt_no는 양수, action_context_digest와 dedup_key는 32 bytes다. result/reason·발급자/유형/검증기/endpoint 조합은 고정 등록부와 일치해야 한다.
+- profile 미설정은 `attempt_state=COMPLETED AND result='UNCHECKED' AND request_sent_at IS NULL AND provider_checked_at IS NULL`인 사전 차단에만 허용한다. 미등록 유형은 고정된 `validator_id=UNREGISTERED`, `validator_version=registry-v1`, `endpoint_class=NONE`의 비호출 분류자로 기록하며 등록된 실제 검증기가 있다고 가장하지 않는다. 가짜 profile·공급자 endpoint를 채우지 않는다.
+- COMPLETED/current_eligible=false에는 안전한 부적격 사유가 필요하다. true여도 현재 ACL·동일성·승인 revision을 매번 재검사한다. 과거 이력의 사실을 수정해 재승인하지 않는다.
+
+조회 색인은 `(credential_set_id,completed_at DESC,attempt_id DESC) WHERE attempt_state='COMPLETED'`와 `(job_id,attempt_state)`, 활성 예약 색인으로 구성한다. 마지막 인증 성공은 COMPLETED/VALID의 실제 provider_checked_at에서 구하고 권한/승인 적격성을 함께 검사한다. 위험 평가의 상세 CHECK·FK·색인은 [평가 계약](risk-assessment-contract.md)이 정의한다.

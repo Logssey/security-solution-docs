@@ -11,5 +11,6 @@
 | [대응과 해결](response-policy.md) | 위치별 담당·조치·재검사·해결·예외 |
 | [스캔 이력](scan-history-policy.md) | 실행·범위 결과·누락·최신성 |
 | [심각도](severity-policy.md) | 영향 근거와 버전이 있는 등급 판정 |
+| [검증·심각도 확인 화면](validation-and-risk-experience.md) | 실제 인증 결과·미실행 이유·위치별 위험 근거와 다음 행동 |
 
 요구사항은 [PRD](../01-requirements/PRD.md), 동작의 수용 판정은 [수용 기준](../01-requirements/acceptance-criteria.md), 데이터와 권한은 [아키텍처](../03-architecture/README.md)를 따른다.

@@ -1,6 +1,6 @@
 # Secret API 계약
 
-기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [데이터베이스 스키마](database-schema.md), [워크플로 상태](../02-functional-design/workflow-and-states.md), [대응 정책](../02-functional-design/response-policy.md), [자격 증명 유형](../04-reference/credential-types.md)
+기준: [PRD](../01-requirements/PRD.md), [데이터 계약](data-contract.md), [데이터베이스 스키마](database-schema.md), [워크플로 상태](../02-functional-design/workflow-and-states.md), [대응 정책](../02-functional-design/response-policy.md), [자격 증명 유형](../04-reference/credential-types.md), [검증 계약](credential-validation.md), [심각도 평가 계약](risk-assessment-contract.md)
 
 Secret 기능은 `/api/v1/secrets` 아래에서 승인된 수집 범위, 키 인벤토리, 위치별 근거와 대응을 제공한다. API는 비동기 작업 등록·조회와 권한 있는 판정·기록을 담당하고 별도 Java 워커가 정기·수동 수집, 탐지와 승인 검증을 실행한다. 서버 시작은 스캔을 실행하지 않는다. 이 문서는 제품의 단일 API 명세이며 구현 진행률이나 배포 상태를 나타내지 않는다.
 
@@ -141,6 +141,8 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 ```
 
 `ABNORMAL`에는 현재 위치·형식 탐지와 적용 정책 또는 명시적인 비승인 위치 근거가 필요하다. 유효성 `UNKNOWN`·`UNCHECKED`는 이 결정을 자동 차단하거나 안전 판정으로 바꾸지 않는다. 성공 응답은 `201`(건 생성) 또는 `200`(기존 건에 위치 연결)과 `{decisionId,occurrenceId,exposureStatus,caseId,caseOperation:"CREATED|ATTACHED",caseVersion,queueBucket}`를 반환한다. 기존 건에 같은 위치가 이미 있으면 동일 멱등 요청은 기존 결과를 반환하고 새 이력·건을 만들지 않는다. 다른 출처 건에 붙이지 않으며 해결된 건 뒤 새 노출은 `previousCaseId`로 연결한 새 건을 만든다. 건은 이 보안 결정을 개설 근거로 사용하며 담당자 지정 뒤 첫 실질 외부 조치를 기록할 수 있다. 기존 판정에 없는 근거를 소급 생성하지 않는다.
+
+같은 결정 명령은 선택적인 `exposureRange=BROAD|BOUNDED|UNKNOWN`, `accessEvidenceRefs[]`를 받을 수 있다. 보안 담당자에게 항상 접근 명단을 다시 입력시키지 않고 현재 적격 접근 snapshot을 먼저 제시·재사용한다. BROAD/BOUNDED는 해당 위치·revision의 공개성/접근 주체·완전성·관측 시각을 확인한 구조화 근거가 있어야 하며 없으면 UNKNOWN이다. 원본 정책·접근 ACL 응답·사용자 명단을 일반 화면 또는 요청 본문에 넣지 않는다. 서버가 선택한 typed 참조·정규화 access_snapshot과 exposure_range를 기존 노출 결정 원장에 고정한다. 범위 미확인은 노출 결정·담당자 조치를 일괄 차단하지 않고 심각도의 부족 정보로 남긴다.
 
 이미 `REVALIDATION_PENDING`인 건에 새 `ABNORMAL` 위치가 붙으면 그 위치의 미완료 조치 주기를 열고 건을 **같은 트랜잭션에서 `IN_PROGRESS`로 되돌린다**. `OPEN`·`IN_PROGRESS` 건은 기존 단계를 유지한다. 건 버전·단계 이력·전이 사유와 요약 집계 무효화를 함께 확정한다. 기존 위치의 과거 재검증은 보존하지만 새 위치가 미조치인 동안 해결은 차단한다. 전체 위험 수용 예외가 새 위치를 포함하지 않으면 예외 집계에서 빼고 미해결 단계로 보여준다.
 
@@ -363,3 +365,65 @@ CSV는 새 export endpoint 없이 고유 키 인벤토리 `GET /api/v1/secrets`�
 키 위치 응답은 기존 occurrence ACL을 적용한 뒤 `sourceDetails`와 `detectionEvidence[]`를 제공한다. `sourceDetails`는 승인 범위와 일치하는 저장소·브랜치·파일·줄 또는 AWS 자원 좌표이며, `status=UNAVAILABLE`은 원본 좌표 확인 불가다. 원본 `approved_ref`, 인증 참조·파일 내용·키 원문은 반환하지 않는다. 규칙 기록은 `{ruleId,detectedAt,runId}`다. GitHub 링크는 고정 호스트와 인코딩한 좌표만 사용한다.
 
 연결 관리 응답은 `targetSummary[]`, `testBlockedReasonCode`, `scanBlockedReasonCode`와 기존 `capabilities.canTest/canRun`을 제공한다. 사용 설정 상태와 실제 연결 테스트 결과를 구분하며, 실행 버튼을 숨기는 대신 권한·중지·대상 누락 등 사유를 표시한다. 일반 분류 저장 권한은 `capabilities.canClassifySource`다.
+
+## 6. 발견 키의 유효성 확인
+
+검증 방법·사유·원문 재취득·시간·진행 상태의 원본은 [검증 계약](credential-validation.md)이다. 연결 probe, 발견 키의 인증 확인, 조치 후 위치 재검사는 다른 자원이다. 일반 조회는 공급자 호출을 시작하지 않는다.
+
+| Method·경로 | 계약 |
+|---|---|
+| `GET /api/v1/secrets/{id}/validation?occurrenceId={occurrenceId}` | 허용된 키·선택 위치의 지원 상태, 최근 적격 완료 시도, 마지막 인증 성공, 진행 중 요청, 최신성·한계·capability |
+| `POST /api/v1/secrets/{id}/validation-requests` | 키 원문 없이 선택 위치의 유효성 확인 작업 등록. 202와 `requestId`, `jobId`, `runId`, `status`, `reused`, `requiresSnapshotRefresh` |
+| `GET /api/v1/secrets/validation-requests/{requestId}` | 해당 목적의 작업만 조회. 대기·선점·종료·생략·실패, 단계별 시각과 허용된 결과 ID |
+| `GET /api/v1/secrets/{id}/validation-history?occurrenceId={occurrenceId}&page={page}&size={size}` | 해당 원천 근거에 대한 현재 ACL을 적용한 시도 이력. `requestedAt DESC, attemptId DESC` 정렬 |
+
+등록 본문은 `{occurrenceId, expectedContextVersion, idempotencyKey}`다. `expectedContextVersion`은 위 GET이 발행한 불투명 버전이며 키 동일성·위치·scope revision·검증 승인 revision·조치 revision에 묶인다. 클라이언트가 공급자·endpoint·원문·인증 참조·검증 결과를 지정하지 못한다. 한 키에 위치가 여러 곳이면 권한 있는 적격 위치를 명시하며 서버가 임의로 권한 밖 위치로 바꾸지 않는다.
+
+SECURITY 또는 해당 위치의 현재 지정 REMEDIATOR가 승인된 능력 안에서 요청할 수 있다. OPERATIONS의 수집 권한과 로그인 ADMIN은 발견 키 검증 권한을 대신하지 않는다. 검증 설정·허용 endpoint·호출 예산을 확대하는 일은 이 명령의 효과가 아니다. 등록과 전송 직전에 현재 역할·연결·승인 revision을 다시 확인한다.
+
+작업은 기존 `secret_jobs`의 `kind=REVALIDATE`, `purpose=CREDENTIAL_VALIDITY`를 사용하고 선택 위치·안전한 기대 revision만 저장한다. 기존 대응 재검사는 `purpose=LOCATION_RECHECK`다. `requestId=jobId`로 매핑하며 별도의 요청 원장·공급자별 큐를 만들지 않는다. 같은 요청자·명령·멱등 키의 같은 본문은 기존 결과를 반환한다. 다른 활성 작업은 409 `details.reasonCode=ACTIVE_JOB_EXISTS`이며, 그 작업을 볼 권한이 있을 때만 진행 링크를 제공한다. 자동 검증과 수동 검증의 외부 호출 중복은 검증 계약의 실행 예약으로 제어한다.
+
+읽기 응답의 필수 블록은 다음과 같다.
+
+- `support`: 지원·부분 지원·미지원과 안전한 사유, 허용 검증 방법. 미지원은 공급자 인증 실패가 아니다.
+- `latestAttempt`: 현재 ACL·동일성·승인 조건에 적격인 최근 완료 시도. `result`, `reasonCode`, `method`, `validatorVersion`, `requestedAt`, `requestSentAt`, `providerCheckedAt`, `completedAt`, `currentEligible`를 제공한다. 없으면 null이다.
+- `lastAuthenticatedAt`: 적격한 VALID의 실제 공급자 관측 시각. UNKNOWN·UNCHECKED·대기·실패로 갱신하지 않는다. 승인 또는 동일성 조건이 바뀌면 현재 블록에 승격하지 않고 허용된 과거 이력으로만 보존한다.
+- `lastConclusiveValidation`: 마지막 적격 VALID/INVALID의 결과·실제 관측 시각·시도 ID. 마지막 인증 성공과 분리하며 현재 응답 오류를 숨기는 용도로 사용하지 않는다.
+- `latestRequest`: 진행 중 작업의 ID·상태·접수/시작/예정 시각. 진행 중 작업을 완료된 유효성 결과로 만들지 않는다.
+- `freshness`: `CURRENT|STALE|POST_ACTION_REQUIRED|UNAVAILABLE`과 이유·확인 기한. 확인 기한은 토큰 만료일이 아니다.
+- `nextDueAt`, `postActionValidationPending`: 다음 유효성 확인 기한과 조치 이후 확정 관측 부재. 마지막 성공·작업 접수 시각과 혼용하지 않는다.
+- `capabilities`: `canRequestValidation`, `blockedReasonCodes`, 허용된 설정/담당자 요청 행동. 단순 boolean만 반환하지 않는다.
+- `readAt`, `contextVersion`, `coverage`, `limitations`: 기준 시각·필드별 권한·관측 범위. 제한된 다른 위치의 결과·수·시각을 노출하지 않는다.
+
+기존 키·위치 요약의 `validationStatus`는 같은 적격 근거에서 투영하고, 시도 전이면 `UNCHECKED`와 `UNSUPPORTED_TYPE|DISABLED|SYNTHETIC_FIXTURE|INCOMPLETE_PAIR|SOURCE_VALUE_UNAVAILABLE|NO_VERIFICATION_ATTEMPT` 등의 정확한 사유를 제공한다. `validatedAt`은 실제 공급자 관측 시각인 `providerCheckedAt`에만 대응하며 접수·생략·시도 종료 시각으로 채우지 않는다. 과거 VALID의 확인 기한이 지났으면 원래 결과와 당시 시각은 보존하되 `freshness=STALE`과 `다시 확인 필요`를 함께 표시한다. 조치 후에는 기존 POST_ACTION_VALIDATION_REQUIRED 경계를 적용한다.
+
+권한 없는 대상은 기존 404/필드 차단 규칙, 지원·구성·승인 부족은 422의 안전한 사유, 오래된 context는 409, 대시보드 요청 한도는 429를 사용한다. 공급자의 401/403/429는 대시보드 세션 오류로 중계하지 않는다.
+
+검증 설정 조회는 기존 연결·범위 설정 응답에 현재 서버 검증 profile 버전·활성화·scope 승인 revision·승인 여부·지원 유형과 `canConfigureValidation`을 추가한다. `PATCH /api/v1/secrets/scopes/{scopeId}/validation-policy`는 `{expectedValidationApprovalRevision,idempotencyKey,enabled,reasonCode}`를 받으며 현재 범위 SECURITY만 수행한다. 이는 이미 승인된 범위의 등록 검증기를 허용/철회하는 직접 결정이고 수집 범위를 넓히거나 endpoint·원문·권한을 지정하지 못한다. 서버 profile 활성화는 승인된 운영 배포 설정의 책임이다. 연결·서버 profile이 꺼져 있으면 범위 허용만으로 외부 호출하지 않는다. 결정자·시각·승인 revision·감사를 원자 저장하고 철회는 대기 요청 취소와 현재 투영 무효화를 수행한다. 서버 profile이 바뀌면 기존 scope 승인을 자동 확대하지 않는다.
+
+## 7. 위치별 심각도·근거·재평가
+
+규칙·입력·증거·불변 기록·승인 조건의 원본은 [심각도 평가 계약](risk-assessment-contract.md), 표시와 행동은 [검증·심각도 화면](../02-functional-design/validation-and-risk-experience.md)이다. 규칙과 정책 활성화는 버전이 고정된 검토·배포 절차로 관리하며 일반 화면에 임의 규칙 편집·SQL 실행 API를 제공하지 않는다.
+
+| Method·경로 | 계약 |
+|---|---|
+| `GET /api/v1/secrets/occurrences/{occurrenceId}/risk` | 현재 위치 평가·적용 중 판단·이전 확정 등급·부족 정보·근거·capability·`evidenceRevision` |
+| `GET /api/v1/secrets/occurrences/{occurrenceId}/assessment-history?page={page}&size={size}` | 위치별 자동 평가·수동 조정·승인/반려·적용 이력. `assessedAt DESC, assessmentId DESC` 정렬 |
+| `POST /api/v1/secrets/occurrences/{occurrenceId}/risk-evidence` | 허용된 구조화 자료와 제한된 참조 제출. 201과 `evidenceId`, 수용 상태, `evidenceRevision` |
+| `POST /api/v1/secrets/occurrences/{occurrenceId}/risk-evidence/{evidenceId}/decisions` | SECURITY의 같은 위치 자료 수용·거절·교정. 원본 대신 새 결정 기록 |
+| `POST /api/v1/secrets/occurrences/{occurrenceId}/assessment-requests` | 외부 호출 없이 현재 DB 근거의 규칙 재평가 예약. 202와 `requestId`, `jobId`, `status`, `reused` |
+| `GET /api/v1/secrets/assessment-requests/{requestId}` | ASSESS 목적 작업의 상태·안전한 결과/실패 사유. 허용될 때만 assessmentId 제공 |
+| `POST /api/v1/secrets/occurrences/{occurrenceId}/severity-overrides` | SECURITY의 별도 수동 등급 제안. 자동 평가·여섯 축의 사실을 덮지 않음 |
+| `POST /api/v1/secrets/occurrences/{occurrenceId}/severity-overrides/{assessmentId}/decisions` | 계약에 따른 독립 SECURITY의 승인·반려. 승인 이후에도 현재 근거·버전을 재검사 |
+
+위치 조회 권한·증거 자체의 ACL을 모두 검사하고 같은 키 ID만으로 다른 원천의 권한·악용 근거를 공개하지 않는다. 평가 요청·수동 조정은 SECURITY, 자료 제출은 SECURITY 또는 해당 위치의 지정 REMEDIATOR에 허용한다. REMEDIATOR 제출은 자료이며 공급자 자동 확인이나 적용된 영향 범주가 아니다. SECURITY가 직접 수용한 일반 자료에 다시 자기 자신과 다른 승인자를 일괄 요구하지 않는다. 명시적 등급 조정과 기존 높은 등급 하향은 별도 승인 계약을 적용한다.
+
+자료 본문은 `{expectedEvidenceRevision,idempotencyKey,evidenceType,subject,observedAt,validUntil,evidenceRef,facts}`다. `facts`는 등록된 유형별 필드·enum·개수·길이만 허용하며 `evidenceRef`는 기존 TICKET/CHANGE/POLICY 등의 제한된 형식이다. 클라이언트는 `PROVIDER_VERIFIED`·검증 결과·자동 매핑 버전·자동 노출 결정·행위자를 지정하지 못한다. 외부 응답·인증 재료·임의 URL·자유 본문은 400으로 거부한다. 자료 결정은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`이며 수용 대상·유형·같은 키/위치·근거 시각을 재검사한다.
+
+평가 요청 본문은 `{expectedEvidenceRevision,idempotencyKey}`다. 정책 버전은 현재 활성 정책을 서버가 선택하며 사용자가 과거 정책을 현재 판단에 적용하지 못한다. 기존 `secret_jobs`에 `kind=ASSESS`, `purpose=SEVERITY_ASSESSMENT`, 내부 위치 ID·근거 revision을 저장한다. 이 작업은 DB 근거만 평가하며 ScanRun·수집·탐지·검증 성공 기록을 생성하지 않는다. 결과에서 `runId`는 null이다. 같은 위치·근거 revision·정책의 진행 작업은 멱등 재사용한다. 연결의 외부 호출 직렬화와 별개로 위치 잠금·revision CAS를 적용한다.
+
+새 노출 결정·자료 수용/취소·권한 근거·자산 분류·정책 활성화는 해당 사실과 재평가 예약을 원자 확정한다. 유효성 갱신은 결과 설명과 해결 근거의 최신성도 갱신하되 VALID/INVALID만으로 심각도를 바꾸지 않는다. 평가 중 근거 revision이 바뀌면 과거 기준 결과를 현재 head로 적용하지 않고 새 기준으로 재예약한다. 과거 결과는 당시 입력과 함께 보존한다.
+
+위치 risk 응답은 `{latestAutomaticAssessment,effectiveAssessment,lastConfirmedSeverity,evidenceRevision,capabilities,nextAction,readAt}`와 허용된 `inputs,evidenceSummary,missingReasonCodes,conflictReasonCodes,freshness`다. `latestAutomaticAssessment`는 `{assessmentId,assessmentStatus,severity,ruleId,policyVersion,assessedAt}`이고 `assessmentStatus=ASSESSED|UNASSESSED|NOT_APPLICABLE`, 뒤 두 상태의 `severity=null`이다. `effectiveAssessment`는 적용 근거의 같은 필드와 `held,holdReasonCodes,sourceAssessmentId,reviewRequired`를 갖는다. 최신 R99가 기존 CRITICAL과 동시에 존재할 때 각각의 규칙·시각·원평가를 구분한다. 호환 평면 필드 `assessmentStatus,severity,ruleId,policyVersion,assessmentId,assessedAt`를 제공하면 모두 latestAutomaticAssessment에 대응시키고 `effectiveSeverity`는 effectiveAssessment.severity에만 대응시킨다. 규칙별 입력은 [심각도 정책](../02-functional-design/severity-policy.md)을 따른다. 현재 미평가·오래된 근거와 이전 확정/적용 중 등급은 별개이며 새 UNKNOWN으로 과거 악용 등급을 조용히 삭제하지 않는다. 근거 부족을 LOW로 투영하지 않는다.
+
+수동 조정 본문은 `{expectedEvidenceRevision,idempotencyKey,targetAssessmentStatus,targetSeverity,basisAssessmentId,reasonCode,evidenceIds,validUntil}`이고 결정 본문은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`다. `targetAssessmentStatus=ASSESSED`이면 네 등급 중 하나가 필수다. `NOT_APPLICABLE`이면 `targetSeverity=null`과 현재 적격 R00 등 자동 평가의 `basisAssessmentId`를 요구한다. 이는 잘못된 노출 판단을 근거 있게 교정한 뒤 기존 등급 보류를 독립 검토로 해제하는 경로이며 자료 부재·권한 철회·원천 삭제만으로는 사용할 수 없다. 확정 사고 근거와 충돌하면 반증·정식 교정 없이 보류를 해제하지 않는다. 제안·승인·적용은 서로 다른 기록으로 남기며 자동 평가를 수정하지 않는다. 같은 범위의 독립 승인자·현재 권한·충돌·근거 만료를 적용 시 다시 검사한다. 예외 만료는 자동 LOW 또는 해결이 아니라 자동 근거 재평가와 필요한 검토를 만든다. 등급 보류 해제는 대응 건 해결·키 폐기를 만들지 않는다. 대응 건·현황·목록은 같은 출처·허용 위치·스냅샷 기준의 유효 대표 등급과 미평가 수를 사용한다.

@@ -35,6 +35,8 @@ IAM 접근키 목록은 현재 사용자 접근키·최근 사용 메타데이�
 
 ### 능동 검증과 재시도
 
+검증 capability·승인 revision·허용 endpoint·호출 예산은 [검증 계약](credential-validation.md)의 등록부로 고정한다. 유효성 확인은 기존 REVALIDATE 작업의 CREDENTIAL_VALIDITY 목적, 조치 후 위치 재검사는 LOCATION_RECHECK 목적이다. 외부 호출 없는 심각도 재평가는 ASSESS/SEVERITY_ASSESSMENT 작업을 사용하며 공급자 검증·스캔 이력과 분리한다.
+
 AWS STS 검증은 본문 수집과 별도인 `SECRET_AWS_VALIDATION_ENABLED`로 활성화하며 기본 false다. 승인된 합성 fixture 원천의 후보는 능동 호출 없이 UNCHECKED/SYNTHETIC_FIXTURE다. 발견 사실만으로 외부 노출·권한·심각도를 판단하지 않는다. 원문 부재·미지원·불완전 구성은 미검증 사유를 남긴다.
 
 유형별 최소 승인 요청으로 인증 가능성을 확인한다. 검증기 자신의 인증 오류·대상 권한 부족·대상 없음·호출 제한·네트워크 장애를 구분하며 401·403을 일괄 INVALID로 해석하지 않는다. 실제 데이터를 내려받거나 키·권한을 변경해 검증하지 않는다. 검증 호출의 흔적과 실제 업무 사용 기록을 구별한다.
