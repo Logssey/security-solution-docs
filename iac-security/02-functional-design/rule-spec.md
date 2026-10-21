@@ -36,7 +36,7 @@
 | 2등급 | 이미지 버킷, Loki 버킷(chunks·ruler) |
 | 3등급 | 공개 정적 리소스 |
 
-등급표는 대시보드 PostgreSQL의 `iac_data_assets` 테이블에서 관리 (ERD).
+등급표는 대시보드 PostgreSQL의 `iac_data_assets` 테이블에서 관리 (ERD). 환경마다 ARN이 달라 마이그레이션에 넣지 않고 SQL로 등록함. 로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`(1등급 9개, 2등급 3개). 등록 화면은 MVP에 없음.
 
 ## ② plan 전 검사 규칙
 
@@ -128,4 +128,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-15 |
+| 수정일 | 2026-10-21 |
