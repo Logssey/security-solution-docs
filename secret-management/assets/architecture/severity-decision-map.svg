@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">시크릿 심각도 판단 입력과 전체 규칙</title>
+  <desc id="desc">심각도 평가에 쓰는 다섯 입력 축과 별도 유효성 축, R00부터 R07 및 R99까지의 순서 있는 판정 규칙</desc>
+  <defs>
+    <style>
+      text{font-family:'Noto Sans KR','Malgun Gothic',sans-serif;fill:#251f1b}
+      .head{font-size:34px;font-weight:800}.sub{font-size:18px;fill:#5d5550}
+      .panel{fill:#fff;stroke:#443b35;stroke-width:2;stroke-dasharray:9 6;rx:18}
+      .ph{font-size:22px;font-weight:800}.axis{font-size:17px;font-weight:800}.value{font-size:16px;font-weight:700}
+      .note{font-size:14px;fill:#635951}.row{stroke:#d7d0c8;stroke-width:1}
+      .rule{font-size:16px;font-weight:700}.out{font-size:16px;font-weight:800}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#fbf8f2"/>
+  <text class="head" x="64" y="66">시크릿 심각도는 어떤 근거로 정하나?</text>
+  <text class="sub" x="66" y="101">입력 값을 확인한 뒤, R00 → R07 순서로 첫 일치 규칙을 적용한다. 일치하지 않으면 R99 미평가다.</text>
+
+  <rect class="panel" x="64" y="143" width="548" height="690"/>
+  <text class="ph" x="88" y="184">심각도 평가 입력: 5개 축</text>
+  <text class="note" x="88" y="208">값마다 증거 출처·관측 시각을 기록한다</text>
+  <line class="row" x1="88" y1="224" x2="588" y2="224"/>
+  <text class="axis" x="88" y="257">① 노출 상태 · 3개</text>
+  <text class="value" x="88" y="283">ABNORMAL · NORMAL · UNKNOWN</text>
+  <text class="note" x="88" y="305">저장 위치의 보관 정책과 실제 접근 근거</text>
+  <line class="row" x1="88" y1="323" x2="588" y2="323"/>
+  <text class="axis" x="88" y="356">② 노출 범위 · 3개</text>
+  <text class="value" x="88" y="382">BROAD · BOUNDED · UNKNOWN</text>
+  <text class="note" x="88" y="404">공개·조직 전체 / 확인된 제한 주체 / 불명</text>
+  <line class="row" x1="88" y1="422" x2="588" y2="422"/>
+  <text class="axis" x="88" y="455">③ 자격 증명 확인 · 2개</text>
+  <text class="value" x="88" y="481">CONFIRMED · CANDIDATE</text>
+  <text class="note" x="88" y="503">완전한 구성·형식 또는 승인 검증 근거</text>
+  <line class="row" x1="88" y1="521" x2="588" y2="521"/>
+  <text class="axis" x="88" y="554">④ 영향 범위 · 5개</text>
+  <text class="value" x="88" y="580">ADMIN · IMPORTANT · LIMITED</text>
+  <text class="value" x="88" y="604">MINIMAL · UNKNOWN</text>
+  <text class="note" x="88" y="626">권한·대상·제한 통제·등록된 자산 분류</text>
+  <line class="row" x1="88" y1="644" x2="588" y2="644"/>
+  <text class="axis" x="88" y="677">⑤ 중대한 악용 · 2개</text>
+  <text class="value" x="88" y="703">CONFIRMED · NOT_CONFIRMED</text>
+  <text class="note" x="88" y="725">해당 노출과 연관된 독립적인 사고 증거</text>
+  <rect x="82" y="746" width="512" height="69" rx="11" fill="#eff3f5" stroke="#c4d0d7"/>
+  <text class="axis" x="98" y="772">별도 축: 유효성 · 4개</text>
+  <text class="note" x="98" y="795">VALID · INVALID · UNKNOWN · UNCHECKED</text>
+
+  <rect class="panel" x="650" y="143" width="886" height="690"/>
+  <text class="ph" x="674" y="184">심각도 매핑: 첫 일치 규칙</text>
+  <text class="note" x="674" y="208">R02~R07은 ABNORMAL과 CONFIRMED 자격 증명이 전제된다</text>
+  <rect x="674" y="231" width="838" height="43" rx="9" fill="#eae5dc"/>
+  <text class="axis" x="694" y="259">규칙</text><text class="axis" x="805" y="259">판단 근거</text><text class="axis" x="1335" y="259">결과</text>
+  <text class="rule" x="694" y="310">R00</text><text class="rule" x="805" y="310">NORMAL · 허용된 보관</text><text class="out" x="1335" y="310">등급 없음</text>
+  <line class="row" x1="674" y1="327" x2="1512" y2="327"/>
+  <text class="rule" x="694" y="362">R01</text><text class="rule" x="805" y="362">ABNORMAL + 연관된 중대한 악용 확인</text><text class="out" x="1335" y="362">CRITICAL</text>
+  <line class="row" x1="674" y1="379" x2="1512" y2="379"/>
+  <text class="rule" x="694" y="414">R02</text><text class="rule" x="805" y="414">BROAD + ADMIN</text><text class="out" x="1335" y="414">CRITICAL</text>
+  <line class="row" x1="674" y1="431" x2="1512" y2="431"/>
+  <text class="rule" x="694" y="466">R03</text><text class="rule" x="805" y="466">BOUNDED + ADMIN</text><text class="out" x="1335" y="466">HIGH</text>
+  <line class="row" x1="674" y1="483" x2="1512" y2="483"/>
+  <text class="rule" x="694" y="518">R04</text><text class="rule" x="805" y="518">노출 범위 확인 + IMPORTANT</text><text class="out" x="1335" y="518">HIGH</text>
+  <line class="row" x1="674" y1="535" x2="1512" y2="535"/>
+  <text class="rule" x="694" y="570">R05</text><text class="rule" x="805" y="570">노출 범위 확인 + LIMITED</text><text class="out" x="1335" y="570">MEDIUM</text>
+  <line class="row" x1="674" y1="587" x2="1512" y2="587"/>
+  <text class="rule" x="694" y="622">R06</text><text class="rule" x="805" y="622">BROAD + MINIMAL</text><text class="out" x="1335" y="622">MEDIUM</text>
+  <line class="row" x1="674" y1="639" x2="1512" y2="639"/>
+  <text class="rule" x="694" y="674">R07</text><text class="rule" x="805" y="674">BOUNDED + MINIMAL</text><text class="out" x="1335" y="674">LOW</text>
+  <line class="row" x1="674" y1="691" x2="1512" y2="691"/>
+  <text class="rule" x="694" y="726">R99</text><text class="rule" x="805" y="726">위 규칙에 일치하지 않음 · 근거 부족·충돌</text><text class="out" x="1335" y="726">미평가</text>
+  <rect x="674" y="759" width="838" height="56" rx="10" fill="#fff4e8" stroke="#e4c9a8"/>
+  <text class="note" x="692" y="782">유효성은 키가 지금 인증 가능한지를 나타낸다. VALID만으로 등급을 올리거나,</text>
+  <text class="note" x="692" y="802">INVALID만으로 과거 노출의 등급을 낮추지 않는다.</text>
+  <text class="note" x="65" y="866">근거: secret-management/02-functional-design/severity-policy.md · 입력 정의와 R00~R99 규칙</text>
+</svg>

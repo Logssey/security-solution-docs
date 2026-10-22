@@ -1,5 +1,11 @@
 # 화면 설계 이미지
 
+## 처리 과정 아키텍처
+
+[시크릿 처리 과정 SVG](architecture/secret-processing-flow.svg) · [PNG](architecture/secret-processing-flow.png) — 수집원, Gitleaks 후보 탐지와 정규화, 유형별 유효성 검증, 노출·영향 평가, 대응 가이드와 조치 후 재검사를 한 장으로 나타낸다. 발표 자료에 삽입할 때 SVG를 사용하면 확대해도 글자와 선이 선명하다.
+
+[심각도 판단 상세 SVG](architecture/severity-decision-map.svg) · [PNG](architecture/severity-decision-map.png) — 평가 입력 5개 축과 별도 유효성 축의 값, R00~R07 및 R99 매핑을 발표용으로 펼쳐 놓았다.
+
 아래 8장은 [화면 명세](../02-functional-design/dashboard-flow.md)와 함께 사용하는 설계 이미지다. 표시 수치는 합성 예시다. 각 이미지의 상단 표시는 실제 운영·시험 데이터와 문서 예시를 구별하기 위한 것이며 제품의 상태값이 아니다.
 
 | 파일 | 화면 |
