@@ -10,12 +10,12 @@
 | [ADR-04](#adr-04) | 실효 권한을 어떻게 계산하나 | Cartography 권한 매핑(사용자 정의 매핑 파일)으로 1차 계산, 1등급은 IAM 시뮬레이터로 확정 | 결정 |
 | [ADR-05](#adr-05) | 분석을 어디서 돌리나 | ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 | 결정 |
 | [ADR-06](#adr-06) | plan JSON의 민감값 처리 | 러너에서 민감 표시(`*_sensitive`)된 값을 지운 뒤 전송, 분석 후 삭제 | 결정 |
-| [ADR-07](#adr-07) | 매일 작업의 AWS 자격 증명 | 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음 | 결정 (구축 초반 시범 적용) |
+| [ADR-07](#adr-07) | 매일 작업의 AWS 자격 증명 | 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음 | 결정 (10/14 시범 검증 완료) |
 | [ADR-08](#adr-08) | PR 봇의 신원 | GitHub App (이름, 최소 권한, 검사 결과 API) | 결정 |
 | [ADR-09](#adr-09) | 규칙 도구 선택 | KICS 주력 + Conftest 보완 규칙. Checkov·Trivy는 선택. MVP는 Conftest만, KICS 연동은 다음 단계 | 결정 |
 | [ADR-10](#adr-10) | 그래프·결과 저장소 | 그래프는 전용 Neo4j, 결과는 대시보드 PostgreSQL의 `iac_` 테이블 | 결정 |
 | [ADR-11](#adr-11) | 어디에, 무슨 언어로 구현하나 | dashboard-backend(Spring Boot)에 `iac` 모듈로 통합, 분석은 별도 Java 워커 | 결정 |
-| [ADR-12](#adr-12) | 사람의 AWS·State 권한 | 사람은 읽기 전용(plan-ro와 같은 정책), 로컬 plan은 래퍼로 허용, apply는 CI apply 역할만, 비상시 break-glass | 결정 (적용은 팀 일정) |
+| [ADR-12](#adr-12) | 사람의 AWS·State 권한 | 사람은 읽기 전용(plan-ro와 같은 정책), 로컬 plan은 래퍼로 허용, apply는 CI apply 역할만, 비상시 break-glass | 결정 (적용은 팀 일정, 로컬 래퍼는 10/15 적용) |
 
 **상태 값**
 
@@ -80,11 +80,16 @@
 - **결정**: 러너에서 민감 표시(`*_sensitive`)된 값을 지운 뒤 전송, 분석 후 삭제
 - **근거**: 공식 문서상 `terraform show -json`은 민감값을 평문으로 출력. 경로 계산에는 값이 필요 없음
 - **지울 범위**: `resource_changes`의 `before`·`after` 중 `*_sensitive`로 표시된 값만으로는 부족함. sensitive 변수가 평문으로 남는 `variables`, `sensitive_values`로 표시된 `prior_state`·`planned_values`, sensitive output까지 같이 지움
+- **지우는 방법 (10/15 구현, infrastructure `policy/scrub-plan.sh`)**: 두 단계로 지움
+    1. 표시 기준: 위 범위에서 sensitive로 표시된 자리의 값을 `(sensitive)`로 바꿈. 키와 구조는 그대로 둠
+    2. 복사본 제거: Terraform은 민감값이 복사된 자리(프로바이더가 돌려준 속성 등)에 표시를 붙이지 않을 때가 있음. 1단계에서 찾은 값을 모아 문서 전체에서 같은 문자열과, 8자 이상이면 그 값을 품은 문자열까지 지움
+- **부작용**: 민감값과 우연히 같은 값도 가려짐 (실제 plan에서 SSM 파라미터로 받은 AMI ID가 가려짐). 경로 계산에는 값이 필요 없어 그대로 둠
+- **받는 쪽 확인**: 백엔드는 업로드된 plan에서 sensitive 표시가 있는 자리에 `(sensitive)`가 아닌 값이 있으면 422(`UNPROCESSABLE`)로 거부
 - **버린 대안**: 원본 전송·보관
 
 ### ADR-07
 
-**매일 작업의 AWS 자격 증명** · 상태: 결정 (구축 초반 시범 적용)
+**매일 작업의 AWS 자격 증명** · 상태: 결정 (10/14 시범 검증 완료)
 
 - **결정**: 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음
 - **근거**: 10/10에 노드 역할이 모든 시크릿을 읽는 것을 문제로 찾음. 스캐너가 같은 역할을 쓰면 안 됨
@@ -95,6 +100,12 @@
     3. IAM OIDC 공급자를 등록
     4. 파드에 projected 토큰을 마운트하고 `AWS_ROLE_ARN`·`AWS_WEB_IDENTITY_TOKEN_FILE`을 넣음
 - **어려울 때 대안**: 매일 작업을 GitHub Actions 스케줄 + 읽기 전용 OIDC 역할로 옮기고 결과는 API로 업로드(Neo4j는 클러스터 안 작업이 적재)
+- **시범 결과 (10/14)**: 전제 조건 1~4 모두 적용, 대안 없이 본안으로 진행
+    - 발급자 `https://k8s-oidc.re-used.store`: 비공개 S3 + CloudFront OAC로 discovery 문서·JWKS 공개 (`infrastructure`의 `modules/k8s-oidc`)
+    - IAM OIDC 공급자 등록
+    - API 서버 3대를 두 단계로 전환: 발급자 [기존, 새] → [새, 기존]. 기존 토큰도 계속 인정하고 `api-audiences`는 기존 값으로 고정해 운영 중단 없음
+    - 시험 파드의 `aws sts get-caller-identity`가 노드 역할이 아니라 시험 역할로 나옴. 시험 역할은 삭제
+    - 주의: Kubespray `upgrade-cluster.yml`은 kubeadm 1.35에서 apiserver `extraArgs` 변경을 반영하지 않음(kubeadm-config ConfigMap을 읽음). 설정 변경은 ConfigMap을 먼저 바꾸고 노드별로 적용
 
 ### ADR-08
 
@@ -153,7 +164,8 @@
 
 - **결정**
     - 사람은 IAM Identity Center 읽기 전용 권한만 가짐(plan-ro와 같은 정책)
-    - 로컬 plan은 래퍼(`make plan`)로 허용: ② 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`, backend 설정은 래퍼가 넘김
+    - 로컬 plan은 래퍼(`make plan`)로 허용: ② 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`
+        - 10/15 적용: SSO 전환 전까지는 IAM 사용자가 plan-ro 역할을 assume (`iac_plan_local_users`, 세션 이름 = 사용자 이름)
     - 남의 PR은 로컬에서 plan하지 않고 CI plan 결과로 리뷰
     - apply는 CI apply 역할만(GitHub OIDC, main + environment `prod`)
     - 비상시 break-glass 역할(MFA, 사용 즉시 알림)
@@ -175,4 +187,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-10-21 |
