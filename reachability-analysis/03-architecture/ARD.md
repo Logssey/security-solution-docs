@@ -1,6 +1,6 @@
 # ARD
 
-**한 줄 요약**: Reach(Logssey 도달 가능성 분석 모듈)가 지켜야 할 품질 속성과, 그것을 만족시키는 구조(구성 요소, 데이터 흐름, 배치, 결정)를 정한다. 지금 구현은 CLI와 스크립트이고, API 서버·대시보드·CI 연동은 [계획]이다.
+**한 줄 요약**: Reach(Logssey 도달 가능성 분석 모듈)가 지켜야 할 품질 속성과, 그것을 만족시키는 구조(구성 요소, 데이터 흐름, 배치, 결정)를 정한다. 지금 구현은 CLI와 스크립트이고, API(dashboard-backend `reach` 모듈)·대시보드·CI 연동은 [계획]이다.
 
 ## 1. 개요와 범위
 
@@ -23,7 +23,7 @@
 
 | 구분 | 내용 |
 |---|---|
-| 범위 안 | Reach 모듈: SBOM 생성, CVE 대조, L1·L2 판정, 근거와 보고서. [계획] API 서버, 화면, CI 연동, OCSF 내보내기, L3 능동 관측(스테이징·로컬·CI), 대상 목록(C-15) |
+| 범위 안 | Reach 모듈: SBOM 생성, CVE 대조, L1·L2 판정, 근거와 보고서. [계획] API(dashboard-backend `reach` 모듈), 화면, CI 연동, OCSF 내보내기, L3 능동 관측(스테이징·로컬·CI), 대상 목록(C-15) |
 | 범위 밖 | Logssey의 다른 모듈(시크릿, IaC, 런타임 등). 우리 코드 자체의 취약점(SAST)은 직접 만들지 않는다. 확장 단계에서 기존 도구(Semgrep CE 등) 결과를 공통 Finding으로 받는 것만 검토한다. L3 상시 관측(운영 트래픽 감시)은 비목표다(PRD 3-2) |
 | PoC 대상 | Re:Used **api** (`service-backend`, Spring Boot 4.1.1, Java 21, Gradle) |
 | 확장 대상 | [계획] **web**(정적 프론트, npm), **chat**(Node) |
@@ -38,7 +38,8 @@ Logssey는 서비스, 인프라, 데이터, 네트워크, 개발 도구를 하�
 | 공통 Finding | Reach → Logssey | Finding 단위로 판정과 근거를 내보낸다. 형식은 OCSF가 후보다 | [계획] 스키마 합의 필요 (FR-10, API-11, C-10) |
 | 자산 연결 키 | Reach ↔ Logssey | 이미지 digest, 레포·커밋(OCI revision 라벨), 워크로드, purl | [부분] Reach 안에서는 쓰고 있다. 공유 저장소는 없다 |
 | 통합 대시보드 | Logssey → 사용자 | 제안서 v0 5절의 제안: 통합 대시보드와 공통 Finding 모델의 주인을 인프라 담당 1명으로 두고, Reach는 공급자로 둔다. 팀 합의 전이다 | [계획] 합의 필요 |
-| Reach 화면 | Reach → 사용자 | Logssey 공통 레이아웃 안의 모듈 화면 SCR-01~06 | [계획] (FR-12, C-09) |
+| Reach 화면 | Reach → 사용자 | Logssey 대시보드 공통 레이아웃(ADR-D007)의 "취약점 관리" 메뉴 안 화면 SCR-01~06 | [계획] (FR-12, C-09) |
+| 대시보드 백엔드 | Reach → Logssey | API는 dashboard-backend의 `reach` 모듈(`/api/v1/reach`), 결과는 대시보드 PostgreSQL의 `reach_` 테이블. 시크릿·IaC·런타임과 같은 구조다(AD-18) | [계획] |
 
 ### 1-5. 이 문서의 ID
 
@@ -116,7 +117,7 @@ Logssey는 서비스, 인프라, 데이터, 네트워크, 개발 도구를 하�
 | L1 조회 | L1이 실행 중 파드를 조회한다 | 읽기 전용 권한으로만 조회한다 | Reach가 쓰는 계정의 쓰기 권한 0개 | [부분] 지금은 control plane 노드에 SSM으로 접속해 관리자 kubeconfig로 `kubectl get pods`만 실행한다. 동작은 읽기지만 권한은 관리자다. 전용 읽기 전용 계정은 [계획] |
 | 도구 배포 체계 침해 | 스캐너 바이너리나 DB의 배포 경로가 변조된다(2026년 3월 Trivy 배포 체계 침해 사례) | 버전을 고정하고, 체크섬·서명 확인에 실패하면 실행을 멈춘다 | 검증하지 않은 도구로 만든 결과 0건 | [계획] SR-04 |
 | 분석 대상 코드 | 악의적이거나 취약한 코드가 분석 대상이다 | L2는 바이트코드를 읽기만 하고 실행하지 않는다 | L2에서 대상 코드 실행 0회 | [완료] L2. 단 bootJar 빌드와 cdxgen은 Gradle 빌드를 실행한다. 격리 실행은 \[계획\](SR-05) |
-| 결과 유출 | 권한 없는 사람이 Finding 목록을 열려고 한다 | 인증과 역할로 막는다 | 무권한 조회 0건 | [계획] Bearer 토큰, `viewer` / `reviewer` / `admin`(SR-06) |
+| 결과 유출 | 권한 없는 사람이 Finding 목록을 열려고 한다 | 대시보드 로그인 세션으로 막는다. CI 토큰은 조회 API를 못 쓴다 | 무권한 조회 0건 | [계획] 대시보드 세션 `ADMIN`, CI는 OIDC로 업로드만(SR-06) |
 
 관련: NFR-05 · C-03, C-08, C-11 · CON-01 · 11절
 
@@ -221,8 +222,8 @@ flowchart LR
   C14["C-14 검증 세트<br>샘플 앱 5개 · 대조군"]
   subgraph PLAN["계획"]
     C11["C-11 CI 통합"]
-    C13[("C-13 결과 저장소")]
-    C08["C-08 API 서버"]
+    C13[("C-13 결과 저장소<br>reach_ 테이블")]
+    C08["C-08 API<br>dashboard-backend reach 모듈"]
     C09["C-09 대시보드"]
     C10["C-10 OCSF 내보내기"]
     C12["C-12 L3 능동 관측 프로브<br>스테이징·로컬·CI"]
@@ -235,8 +236,8 @@ flowchart LR
   C04 --> C05 --> C07
   C14 -->|회귀 테스트| C04
   C11 -.-> C01
-  C07 -.-> C13
-  C13 -.-> C08
+  C07 -.->|API-13| C08
+  C08 -.-> C13
   C08 -.-> C09
   C13 -.-> C10
   C12 -.-> C05
@@ -255,12 +256,12 @@ flowchart LR
 | C-05 | 판정 엔진 | 규칙 평가와 근거 조립 | `verdict.py` (Python, 외부 라이브러리 없음) | [완료] v0 | FR-05, FR-06, FR-07 |
 | C-06 | 데이터 | 취약 함수·규칙 데이터와 생성 경로 | `vuln-functions.json`, `rules.json`, 조사 원본, `make_spec.py` | [완료] v0 | FR-06, FR-09 |
 | C-07 | 보고서 생성 | 판정 결과를 기계용·사람용으로 출력 | `verdict.py`의 출력 단계 | [완료] | FR-07 |
-| C-08 | API 서버 | `/api/v1` 제공 | 없음. `run-reach.sh` 등 CLI가 대신한다 | [계획] | FR-01, FR-07, FR-08, FR-12 |
+| C-08 | API (dashboard-backend `reach` 모듈) | `/api/v1/reach` 제공, 러너 결과 받기(API-13) | 없음. `run-reach.sh` 등 CLI가 대신한다 | [계획] | FR-01, FR-07, FR-08, FR-12 |
 | C-09 | 대시보드 | 화면 SCR-01~06 | 없음 | [계획] | FR-12 |
 | C-10 | OCSF 내보내기 | 공통 Finding으로 변환 | 없음 | [계획] 합의 필요 | FR-10 |
 | C-11 | CI 통합 | PR·이미지 빌드·매일·수동 실행 | 없음 | [계획] | FR-11 |
 | C-12 | L3 능동 관측 프로브 | 스테이징·로컬·CI(이미지 빌드 때 백엔드 테스트)에서 취약 메서드 실행(커버리지 에이전트)과 네이티브 라이브러리 로드·호출(maps·uprobe) 확인 | 없음 | [계획] | FR-14 |
-| C-13 | 결과 저장소 | 스캔·Finding·판정·검토 기록, SBOM 보관 | 없음. 파일과 문서(`answer-key.md`, `l1/result.md`) | [계획] | FR-01, FR-02, FR-08, FR-11 |
+| C-13 | 결과 저장소 (`reach_` 테이블) | 스캔·Finding·판정·검토 기록, SBOM 보관 | 없음. 파일과 문서(`answer-key.md`, `l1/result.md`) | [계획] | FR-01, FR-02, FR-08, FR-11 |
 | C-14 | 검증 세트 | 샘플 앱, 대조군, 회귀 테스트 | `test/` 샘플 앱 5개, `expected.json`, `run-tests.sh` | [완료] | FR-05, FR-06, FR-08 |
 | C-15 | 대상 목록(서비스 설정) | 서비스마다 레포 · ECR 리포지토리 · 클러스터 워크로드(네임스페이스, 디플로이먼트)를 묶는다. 매일 스캔(C-11)과 L1(C-03)의 기준 목록이고, 목록에 없는 워크로드를 "미등록"으로 가려낸다 | 작업 PC의 `targets.env`(api·web 이미지 태그만). MVP는 레포에 커밋한 설정 파일, 등록 API·화면은 확장 | [부분] | FR-15 |
 
@@ -276,7 +277,7 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 | 입력 | 이미지(digest 기준) 또는 레포 커밋(`git archive`로 꺼낸 깨끗한 사본). MVP 기준이다. PoC 입력은 스캔마다 달랐다(3-1) |
 | 출력 | CycloneDX JSON SBOM |
 | 현재 구현 | 이미지: `trivy image --format cyclonedx`<br>레포: `cdxgen -t java` (Gradle을 실행해 간접 의존성까지 잡는다)<br>보완: Syft (JRE처럼 패키지 매니저 밖에 설치된 런타임)<br>도구는 FR-02 수용 기준을 만족하면 바꿀 수 있다 |
-| 좌표 확인·AI 후보 [계획] | ① 이미지 SBOM과 레포 SBOM의 좌표가 다르면 레포 SBOM(빌드 도구가 해석한 좌표)을 우선하고 차이를 기록한다.<br>② 버전 범위는 잠금 파일이나 의존성 해석기로 확정한다. 못 하면 "버전 미확정"으로 두고 범위 전체로 대조한다.<br>③ 결정적 방법(`pom.properties`, MANIFEST, SHA-1 조회, 레포 SBOM 교차 확인)으로 식별하지 못한 구성요소만 AI로 후보를 만든다. 사람이 확인하기 전에는 "구성요소 추정"으로 표시하고, 그 Finding은 `unreachable`로 확정하지 않는다. AI에 보내는 데이터는 SR-11을 따른다.<br>④ SBOM에 도구와 버전을, AI 후보에는 모델·프롬프트 버전과 입력(jar SHA-1)을 남긴다. SBOM은 재대조를 위해 C-13에 보관한다(FR-02) |
+| 좌표 확인·AI 후보 [계획] | ① 이미지 SBOM과 레포 SBOM의 좌표가 다르면 레포 SBOM(빌드 도구가 해석한 좌표)을 우선하고 차이를 기록한다.<br>② 버전 범위는 잠금 파일이나 의존성 해석기로 확정한다. 못 하면 "버전 미확정"으로 두고 범위 전체로 대조한다.<br>③ 결정적 방법(`pom.properties`, MANIFEST, SHA-1 조회, 레포 SBOM 교차 확인)으로 식별하지 못한 구성요소만 AI로 후보를 만든다. 사람이 확인하기 전에는 "구성요소 추정"으로 표시하고, 그 Finding은 `UNREACHABLE`로 확정하지 않는다. AI에 보내는 데이터는 SR-11을 따른다.<br>④ SBOM에 도구와 버전을, AI 후보에는 모델·프롬프트 버전과 입력(jar SHA-1)을 남긴다. SBOM은 재대조를 위해 C-13에 보관한다(FR-02) |
 | 근거 (10/7 비교) | 이미지 Maven: Trivy 182/184, shading 8/8. 레포 Maven: cdxgen 266/266, Trivy fs·Syft는 0(lock 파일 없음). Syft는 Maven groupId를 39개(21%) 잘못 추정해 Maven 목록으로 쓰지 않는다 |
 | 상태 | [완료] 스크립트로 수동 실행. 앱별 SBOM 병합과 보관은 \[계획\](C-13) |
 | 관련 | FR-02, AD-03, AD-04, AD-06, AD-09, CON-03, SR-11 |
@@ -301,7 +302,7 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 |---|---|
 | 책임 | 대상이 실제 배포물과 같은지, 그 이미지가 실행 중인지 확인해 `deployment`를 정한다 |
 | 입력 | 실행 중 파드의 `status.containerStatuses[].imageID`, ECR 최신 푸시, 이미지 라벨 `org.opencontainers.image.revision`, git 커밋 관계와 소스 트리 해시 |
-| 출력 | 워크로드(네임스페이스, 파드, digest), 대상 ↔ 워크로드 연결, `deployment`(`running` / `not_running` / `unknown`) |
+| 출력 | 워크로드(네임스페이스, 파드, digest), 대상 ↔ 워크로드 연결, `deployment`(`RUNNING` / `NOT_RUNNING` / `UNKNOWN`) |
 | 현재 구현 | `sca-eval/l1/`의 `scan.sh`(배포 digest 재스캔), `compare.sh`(이전 스캔과 비교), `aws-check.sh`(ECR 최신 푸시 조회, 읽기 전용) + SSM 경유 수동 `kubectl get pods` |
 | 결과 (10/10) | 운영 reused-api 파드 2개가 모두 digest `a6ffffef…`다. 이미지 revision 라벨 `bb4639b`는 분석 커밋 `6583020`과 소스 트리가 같다. 재스캔 23행이 10/7 스캔과 모두 같다. 따라서 PoC 판정이 실제 배포물에 그대로 적용된다 |
 | 상태 | [부분] api 수동 확인 완료. 자동화는 [계획] |
@@ -339,8 +340,8 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 | 책임 | 대조 결과, reach 결과, 규칙을 합쳐 Finding마다 `status`와 `method`를 정하고 근거를 조립한다 |
 | 입력 | C-02 출력(지금은 Trivy 대조 결과), C-04 출력(reach 결과), `rules.json` |
 | 출력 | Finding별 판정과 근거(C-07로 넘긴다) |
-| 규칙 평가 | 도달 가능 조건 → 도달 불가 조건 → 미확인 조건 → 기본값 순서로 평가한다. 규칙의 참고 사실(`rules.json`의 `info`)은 판정에 쓰지 않고 "참고"로만 보인다. API에서는 Rule의 `info_facts`, Evidence의 `informational`로 나온다. 규칙 형식과 CVE별 내용은 규칙명세서(`RULE-<CVE ID>`)가 정한다 |
-| 사본 처리 | 같은 CVE의 다른 패키지 사본은 별도 행으로 낸다. 판정하지 않은 사본은 `not_analyzed`다. 판정 행은 판정한 패키지의 설치·수정 버전을 쓴다 |
+| 규칙 평가 | 도달 가능 조건 → 도달 불가 조건 → 미확인 조건 → 기본값 순서로 평가한다. 규칙의 참고 사실(`rules.json`의 `info`)은 판정에 쓰지 않고 "참고"로만 보인다. API에서는 Rule의 `infoFacts`, Evidence의 `informational`로 나온다. 규칙 형식과 CVE별 내용은 규칙명세서(`RULE-<CVE ID>`)가 정한다 |
+| 사본 처리 | 같은 CVE의 다른 패키지 사본은 별도 행으로 낸다. 판정하지 않은 사본은 `NOT_ANALYZED`다. 판정 행은 판정한 패키지의 설치·수정 버전을 쓴다 |
 | 근거 조립 | 앱 코드 사실(파일·줄)을 먼저, 호출 경로는 "가장 짧은 후보 경로이며 실제와 다를 수 있음"으로 표시한다. 규칙으로 판정했는데 호출 그래프 결과가 달라 보이면 이유(과대근사, 프레임워크가 실행하는 코드)를 붙인다 |
 | 현재 구현 | Python, 외부 라이브러리 없음 |
 | 상태 | [완료] v0 |
@@ -363,21 +364,22 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 |---|---|
 | 책임 | 판정 결과를 기계용(JSON)과 사람용(Markdown)으로 낸다 |
 | 출력 | `verdicts.json`, `verdicts.md`(머리말에 스캔 요약) |
-| 내용 | Finding마다 CVE, 패키지(purl), 설치·수정 버전, `status`, `method`, 근거. 같은 CVE의 다른 사본과 `not_analyzed` 행(OS 패키지 등)을 숨기지 않는다 |
+| 내용 | Finding마다 CVE, 패키지(purl), 설치·수정 버전, `status`, `method`, 근거. 같은 CVE의 다른 사본과 `NOT_ANALYZED` 행(OS 패키지 등)을 숨기지 않는다 |
 | 현재 구현 | `verdict.py`의 출력 단계. `run-reach.sh`가 `sca-eval/reach/`에 쓴다 |
 | 상태 | [완료] |
 | 관련 | FR-07, API-03, API-04, API-05 |
 | 메모 | L1 결과와 사람 검토는 지금 별도 문서(`l1/result.md`, `answer-key.md`)에 있다. 위험 대응으로 "판정 대상 jar를 보고서에 명시"하기로 했고, 구현 여부는 확인 필요(Q-13) |
 
-#### C-08 API 서버 [계획]
+#### C-08 API (dashboard-backend `reach` 모듈) [계획]
 
 | 항목 | 내용 |
 |---|---|
-| 책임 | 스캔 요청, 결과 조회, 사람 검토 기록, 규칙·데이터 조회를 `/api/v1`로 제공한다 |
-| 엔드포인트 | API-01~12 (API 명세서) |
-| 인증·권한 | Bearer 토큰. `viewer`(조회) / `reviewer`(사람 검토) / `admin`(규칙 관리, 스캔 실행). 토큰 발급과 Logssey 공통 인증 연동은 미결(Q-14) |
+| 책임 | 스캔 요청, 결과 조회, 사람 검토 기록, 규칙·데이터 조회를 `/api/v1/reach`로 제공하고, 러너가 올린 분석 결과를 받아 저장한다 |
+| 위치 | 별도 서버가 아니라 dashboard-backend(Java 21, Spring Boot)의 `reach` 모듈이다(AD-18) |
+| 엔드포인트 | API-01~13 (API 명세서) |
+| 인증·권한 | 대시보드는 공통 로그인 세션 + CSRF(ADR-D003), MVP 권한은 `ADMIN` 하나. CI는 GitHub OIDC 토큰(`aud = logssey-reach`)으로 API-12·13만 부른다. 역할 분리는 다음 단계(API 명세서 2-2) |
 | 지금의 대응 | API-01 → `run-reach.sh`, API-03 → `verdicts.md` 머리말, API-04·05 → `verdicts.json`, API-06 → `answer-key.md`, API-07 → L1 스크립트 + 수동 `kubectl`, API-09 → `data/rules.json`, API-10 → `data/vuln-functions.json` |
-| 실행 방식 | 스캔은 비동기다(`scan_status`: `queued` → `running` → `succeeded` / `failed`). 실제 실행은 CI 러너(C-11)나 별도 작업 실행기에 맡긴다. 어느 쪽인지는 미결(Q-04) |
+| 실행 방식 | 스캔은 비동기다(`scanStatus`: `QUEUED` → `RUNNING` → `SUCCEEDED` / `FAILED`). 분석은 GitHub Actions 러너(C-11)가 하고 결과를 API-13으로 올린다. 대시보드에서 요청한 스캔(API-01)은 서버가 `workflow_dispatch`로 러너를 띄운다(AD-18) |
 | 의존 | C-13 결과 저장소 |
 | 관련 | FR-01, FR-07, FR-08, FR-12 |
 
@@ -386,7 +388,7 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 | 항목 | 내용 |
 |---|---|
 | 화면 | SCR-01 요약 대시보드, SCR-02 Finding 목록, SCR-03 Finding 상세, SCR-04 워크로드·배포 확인, SCR-05 스캔 실행·이력, SCR-06 규칙·취약 함수 데이터 |
-| 레이아웃 | 상단 바(Logssey 로고, 모듈 이름 "Reach", 대상 선택), 왼쪽 메뉴(요약 / Finding / 워크로드 / 스캔 / 규칙). 데스크톱 1440×900 기준 |
+| 레이아웃 | 대시보드 공통 레이아웃(ADR-D007)의 "취약점 관리" 메뉴 안. 하위 메뉴는 요약 / Finding / 워크로드 / 스캔 / 규칙, 상단에 대상 선택. 데스크톱 1440×900 기준 |
 | 데이터 | C-08 API만 쓴다. 파일이나 저장소를 직접 읽지 않는다 |
 | 관련 | FR-12, 화면 명세서. 통합 대시보드와의 관계는 1-4 |
 
@@ -395,7 +397,7 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 | 항목 | 내용 |
 |---|---|
 | 책임 | Finding과 판정·근거를 공통 Finding(OCSF)으로 바꿔 Logssey에 넘긴다 |
-| 엔드포인트 | API-11 `GET /api/v1/exports/ocsf?scanId=` |
+| 엔드포인트 | API-11 `GET /api/v1/reach/exports/ocsf?scanId=` |
 | 전제 | 팀 전체의 공통 Finding/Asset 스키마 합의(제안서 v0 5절). OCSF 클래스와 확장 필드는 합의 후 정한다 |
 | 관련 | FR-10, CON-08, Q-02 |
 
@@ -405,9 +407,9 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 |---|---|
 | 실행 시점 | PR마다 빠른 대조, 이미지 빌드(ECR push 전) 때 이미지 스캔과 L3 능동 관측, 하루 1번 저장된 SBOM 재대조·L1·재판정, 필요할 때 수동 실행. 시점별로 하는 일은 5-3 |
 | 트리거(제안) | `pull_request`(+`push`), `schedule`, `workflow_dispatch`, 배포 파이프라인의 이미지 빌드 단계. 재사용 워크플로(`workflow_call`)로 한 번 정의하고 `service-backend`·`service-frontend`에서 같이 쓴다 |
-| 도입 순서(제안) | 리포트 전용(빌드를 깨지 않음) → 전환 기준을 만족하면 게이트. PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`reachable` CRITICAL·HIGH는 실패, `reachable` MEDIUM 이하·`unknown`·CRITICAL·HIGH인 `not_analyzed`는 경고)다. 전환 기준·예외·되돌리기는 Q-07 |
+| 도입 순서(제안) | 리포트 전용(빌드를 깨지 않음) → 전환 기준을 만족하면 게이트. PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고)다. 전환 기준·예외·되돌리기는 Q-07 |
 | 원칙(제안) | ECR push 전에 로컬 이미지를 스캔한다. 같은 단계에서 백엔드 테스트에 커버리지 에이전트를 붙여 L3 근거를 남긴다(C-12). PR에서는 L3를 돌리지 않는다. 재대조는 저장된 SBOM으로 재빌드 없이 한다. PR 작업에는 자격 증명을 주지 않는다(SR-09) |
-| 엔드포인트 | API-12 `POST /api/v1/ci/checks`(실행), `GET /api/v1/ci/checks/{checkId}`(결과). 목록 조회는 없다 |
+| 엔드포인트 | API-12 `POST /api/v1/reach/ci/checks`(실행), `GET /api/v1/reach/ci/checks/{checkId}`(결과). 목록 조회는 없다 |
 | 메모 | 기존 CI는 새 러너에서 bootJar 하나만 만든다(plain jar를 끔). 이미지에 붙는 revision 라벨을 L1 연결에 그대로 쓸 수 있다 |
 | 관련 | FR-11, FR-14, AD-17, Q-07, C-12, C-15, SR-09 |
 
@@ -415,21 +417,22 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 
 | 항목 | 내용 |
 |---|---|
-| 책임 | 앱을 띄우고 직접 호출·테스트로 취약 메서드(`vuln-functions.json`)가 실제로 실행되는지(커버리지), 취약 네이티브 라이브러리(OS 패키지)가 로드·호출되는지(maps·uprobe) 확인한다. 쓰임새는 `unknown` 해소, L2 후보 경로 검증, 규칙의 '도달 가능' 대조군 실행 확인이다. 운영 트래픽을 계속 감시하는 상시 관측은 하지 않는다(AD-16) |
+| 책임 | 앱을 띄우고 직접 호출·테스트로 취약 메서드(`vuln-functions.json`)가 실제로 실행되는지(커버리지), 취약 네이티브 라이브러리(OS 패키지)가 로드·호출되는지(maps·uprobe) 확인한다. 쓰임새는 `UNKNOWN` 해소, L2 후보 경로 검증, 규칙의 '도달 가능' 대조군 실행 확인이다. 운영 트래픽을 계속 감시하는 상시 관측은 하지 않는다(AD-16) |
 | 입력 | 빌드(jar sha256 또는 이미지 digest), 설정(환경 변수·프로필의 키 이름과 켜짐 여부, 값은 받지 않음), 호출할 API·테스트 목록, 취약 메서드 목록(`vuln-functions.json`), 확인할 네이티브 라이브러리(.so)와 uprobe를 걸 공개 함수 목록 |
 | 방법 | 커버리지 에이전트(예: JaCoCo)로 라이브러리 패키지(`org.bouncycastle.*`, `tools.jackson.*`, `com.fasterxml.jackson.*`, `org.apache.catalina.*`)까지 계측하고, 특정 API를 직접 호출하거나 기존 테스트를 돌린다. 공격 페이로드 없이 취약 메서드까지 가는 정상 입력을 쓴다. 네이티브 라이브러리(OS 패키지, 예: libpng·zlib)는 ① API·테스트 실행 후 `/proc/<java-pid>/maps`에서 해당 .so 로드를 확인하고, ② 함수 호출까지 볼 때만 bpftrace·perf uprobe로 공개 함수(예: `inflate`, `png_read_info`)에 건다. uprobe는 root 권한이 필요하고, Alpine 라이브러리는 공개 심볼만 걸 수 있다 |
-| 출력 | 취약 메서드별 실행 여부(메서드 단위 커버리지), 네이티브 라이브러리별 로드·호출 여부와 근거 기록 항목(빌드, 설정 키와 켜짐 여부, 호출한 API·테스트 목록, 확인 방법(coverage / maps / uprobe), 관측 시각). 실행·로드가 관측되면 `reachable` 근거로 쓰고, 실행되지 않은 결과는 `unreachable` 근거로 쓰지 않는다 |
-| 실행 위치 | CI 러너(기본): 이미지 빌드 단계에서 백엔드 테스트에 커버리지 에이전트를 붙여 실행한다(C-11). 스테이징·로컬(수동): `unknown`이 생기거나 L2 후보 경로를 검증할 때 특정 API를 직접 호출한다. PR마다는 돌리지 않는다. 운영에서는 실행하지 않는다 |
+| 출력 | 취약 메서드별 실행 여부(메서드 단위 커버리지), 네이티브 라이브러리별 로드·호출 여부와 근거 기록 항목(빌드, 설정 키와 켜짐 여부, 호출한 API·테스트 목록, 확인 방법(coverage / maps / uprobe), 관측 시각). 실행·로드가 관측되면 `REACHABLE` 근거로 쓰고, 실행되지 않은 결과는 `UNREACHABLE` 근거로 쓰지 않는다 |
+| 실행 위치 | CI 러너(기본): 이미지 빌드 단계에서 백엔드 테스트에 커버리지 에이전트를 붙여 실행한다(C-11). 스테이징·로컬(수동): `UNKNOWN`이 생기거나 L2 후보 경로를 검증할 때 특정 API를 직접 호출한다. PR마다는 돌리지 않는다. 운영에서는 실행하지 않는다 |
 | 관련 | FR-11, FR-14, AD-16, SR-08, C-11 |
 
-#### C-13 결과 저장소 [계획]
+#### C-13 결과 저장소 (`reach_` 테이블) [계획]
 
 | 항목 | 내용 |
 |---|---|
 | 저장 대상 | 스캔(대상, 상태, 도구·DB 버전), SBOM(재대조용), Finding·판정·근거, 사람 검토 기록과 이력, 스캔끼리 Finding을 잇는 키(서비스·purl·CVE), 워크로드 스냅숏 |
 | 지금 | 작업 PC의 파일(`sca-eval/sbom/`, `vuln/`, `reach/`)과 문서(`answer-key.md`, `l1/result.md`) |
-| 왜 필요한가 | 하루 1번 재대조에는 저장된 SBOM이 필요하다. 사람 검토는 다음 스캔에도 이어져야 한다. `unreachable`은 보류라 같은 Finding이 매일 다시 나오기 때문이다. 같은 키의 Finding이 다시 나오면 검토를 이어받고, 도구 판정이나 근거(사실·호출 경로·적용 규칙)가 바뀌었으면 `unreviewed`로 되돌린다(FR-08). 그래서 이전 스캔의 판정 근거도 비교할 수 있게 남긴다. SBOM을 이미지 digest와 연결해 두면 "어느 이미지에 무엇이 들어갔나"를 바로 답할 수 있다 |
-| 접근 | 읽기는 C-08을 거친다. 쓰기는 C-08, CI 러너의 스캔 작업, L1 수집(C-03)만 한다(7-2, SR-06) |
+| 왜 필요한가 | 하루 1번 재대조에는 저장된 SBOM이 필요하다. 사람 검토는 다음 스캔에도 이어져야 한다. `UNREACHABLE`은 보류라 같은 Finding이 매일 다시 나오기 때문이다. 같은 키의 Finding이 다시 나오면 검토를 이어받고, 도구 판정이나 근거(사실·호출 경로·적용 규칙)가 바뀌었으면 `UNREVIEWED`로 되돌린다(FR-08). 그래서 이전 스캔의 판정 근거도 비교할 수 있게 남긴다. SBOM을 이미지 digest와 연결해 두면 "어느 이미지에 무엇이 들어갔나"를 바로 답할 수 있다 |
+| 위치 | 대시보드 PostgreSQL의 `reach_` 접두 테이블. Flyway 후속 마이그레이션으로 추가하고 공통 V1은 고치지 않는다. 운영 DB 서버 위치는 대시보드 ADR-D005를 따른다(AD-18) |
+| 접근 | 읽고 쓰는 것은 C-08뿐이다. 러너는 API-13으로, L1 수집(C-03)은 내부 API(API 명세서 1-5)로 C-08에 넘긴다(7-2, SR-06) |
 | 관련 | FR-01, FR-08, FR-11, Q-04, Q-05, Q-06 |
 
 #### C-14 검증 세트
@@ -477,13 +480,13 @@ flowchart TD
 | 2 | SBOM 생성 | C-01 | 대상 | CycloneDX SBOM | [완료] |
 | 3 | CVE 대조 | C-02 | SBOM, 스캐너 DB | 구성 요소 × 취약점 목록(Finding 후보) | [부분] Trivy 대조만 \[완료\](C-02) |
 | 4 | L1 | C-03 | 이미지 digest, 파드 `imageID`, revision 라벨 | `deployment`, 대상 ↔ 배포물 일치 여부 | [부분] |
-| 5 | 분석 대상 분류 | C-05 | Finding 후보, `vuln-functions.json`, `rules.json` | 분석 대상 / `not_analyzed` | [완료] |
+| 5 | 분석 대상 분류 | C-05 | Finding 후보, `vuln-functions.json`, `rules.json` | 분석 대상 / `NOT_ANALYZED` | [완료] |
 | 6 | L2 호출 그래프 + 사실 | C-04 | bootJar, 취약 함수, 수집할 사실 목록 | reach 결과 | [완료] v0 |
 | 7 | 규칙 평가 | C-05 | reach 결과, 규칙 | `status`, `method` | [완료] v0 |
 | 8 | 근거 조립 | C-05 | 사실 위치, 후보 경로, 적용 규칙 | 근거 | [완료] |
 | 9 | 출력 | C-07 | 판정과 근거 | `verdicts.json`, `verdicts.md` | [완료] |
 | 10 | 저장·공유 | C-13, C-08, C-10 | 출력 | 저장소, API 응답, OCSF | [계획] |
-| 11 | 사람 검토 | C-08 / 지금은 문서 | 판정과 근거 | `review_state`, 메모 | [부분] |
+| 11 | 사람 검토 | C-08 / 지금은 문서 | 판정과 근거 | `reviewState`, 메모 | [부분] |
 
 ### 5-3. 실행 시점별 흐름 [계획]
 
@@ -494,7 +497,7 @@ PRD 1-2(실행 시점)와 FR-11의 시점별 표를 구조 관점에서 적은 �
 | PR | 레포 SBOM(cdxgen) 생성과 빠른 대조. 새 Finding만 L2로 판정한다. L2는 약 40초라 PR마다 돌릴 수 있다. L1(배포 전)과 L3는 없다 | bootJar 빌드 시간은 별도다. cdxgen(Gradle 빌드) 시간은 측정 필요(Q-15). 자격 증명 없이 돈다(SR-09) |
 | 이미지 빌드(ECR push 전) | 이미지 SBOM(Trivy)을 만들어 digest와 함께 보관(C-13)하고, 대조와 L2를 한다. 백엔드 테스트에 커버리지 에이전트를 붙여 L3 근거를 남긴다(C-12) | 에이전트를 붙인 뒤 테스트 시간(지금 약 5분 49초) 증가는 측정 필요(Q-15) |
 | 하루 1번 | 저장된 SBOM을 최신 DB로 재대조한다. 등록된 서비스(C-15)의 실행 중 digest를 조회하고(L1), 새 Finding을 L2로 재판정한다. 새 CVE만 알린다. L3는 없다 | 재빌드하지 않는다. L2 재판정에는 bootJar나 reach 결과가 필요하다. 보관 방식은 미결(Q-06) |
-| 수동 | 전체 순서를 다시 실행한다. L3는 스테이징·로컬에서 특정 API를 직접 호출해 `unknown` 해소와 L2 후보 경로 검증에 쓴다 | `workflow_dispatch` 또는 API-01 |
+| 수동 | 전체 순서를 다시 실행한다. L3는 스테이징·로컬에서 특정 API를 직접 호출해 `UNKNOWN` 해소와 L2 후보 경로 검증에 쓴다 | `workflow_dispatch` 또는 API-01 |
 
 ## 6. 데이터 모델
 
@@ -520,7 +523,7 @@ erDiagram
   }
   Scan {
     string id
-    string scan_status
+    string scanStatus
   }
   Finding {
     string id
@@ -532,7 +535,7 @@ erDiagram
   Verdict {
     string status
     string method
-    string review_state
+    string reviewState
   }
   Rule {
     string id
@@ -541,19 +544,19 @@ erDiagram
 
 ### 6-2. 개체와 주요 필드
 
-경로 변수는 `scanId`·`findingId`·`ruleId`, 쿼리 필터는 `status`·`severity`·`target`·`deployment`·`review_state`·`package`를 쓴다(API 명세서 4절). 응답 필드는 snake_case다(`id`, `scan_id`, `rule_id`). 6-5의 PoC 계획 단계 예시에 나온 `cve`·`purl`·`evidence`(문자열)는 API에서 `vulnerability.id`·`component.purl`·`verdict.summary`(한 줄 근거)와 `verdict.evidence[]`(근거 목록)로 바뀐다(API 명세서 3-3·3-4). 표의 그 밖의 필드는 한국어로만 적는다. 이름과 JSON 구조는 API 명세서가 정하고, 다르면 API 명세서를 따른다.
+경로 변수는 `scanId`·`findingId`·`ruleId`, 쿼리 필터는 `status`·`severity`·`target`·`deployment`·`reviewState`·`package`를 쓴다(API 명세서 4절). 응답 필드는 camelCase다(`id`, `scanId`, `ruleId`). 6-5의 PoC 계획 단계 예시에 나온 `cve`·`purl`·`evidence`(문자열)는 API에서 `vulnerability.id`·`component.purl`·`verdict.summary`(한 줄 근거)와 `verdict.evidence[]`(근거 목록)로 바뀐다(API 명세서 3-3·3-4). 표의 그 밖의 필드는 한국어로만 적는다. 이름과 JSON 구조는 API 명세서가 정하고, 다르면 API 명세서를 따른다.
 
 | 개체 | 뜻 | 식별 | 주요 필드 | 지금 있는 곳 |
 |---|---|---|---|---|
-| 대상 (Target) | 레포 커밋 또는 컨테이너 이미지 | 종류 + 커밋 SHA 또는 digest | 종류(`repo` / `image`), 레포와 커밋 SHA 또는 이미지와 digest, 앱 이름(api, web, chat) | 스크립트 환경 변수(`REPO`, `IMG`, `JAR`) |
-| 스캔 (Scan) | 대상 하나에 대해 SBOM 생성 → CVE 대조 → 판정까지 한 번 실행한 것 | `id`(경로 변수 `scanId`) | `target`, `scan_status`, 시작·끝 시각, 도구·DB 버전, 규칙·취약 함수 데이터 버전, 상태별·심각도별 개수 | `verdicts.md` 머리말 |
+| 대상 (Target) | 레포 커밋 또는 컨테이너 이미지 | 종류 + 커밋 SHA 또는 digest | 종류(`REPO` / `IMAGE`), 레포와 커밋 SHA 또는 이미지와 digest, 앱 이름(api, web, chat) | 스크립트 환경 변수(`REPO`, `IMG`, `JAR`) |
+| 스캔 (Scan) | 대상 하나에 대해 SBOM 생성 → CVE 대조 → 판정까지 한 번 실행한 것 | `id`(경로 변수 `scanId`) | `target`, `scanStatus`, 시작·끝 시각, 도구·DB 버전, 규칙·취약 함수 데이터 버전, 상태별·심각도별 개수 | `verdicts.md` 머리말 |
 | 구성 요소 (Component) | SBOM의 패키지 하나 | `purl` | `purl`, 패키지 이름(`package` 필터의 대상), 버전, 생태계(maven, apk, npm), 위치(예: `BOOT-INF/lib` 안의 jar 경로) | SBOM |
 | 취약점 (Vulnerability) | CVE 하나와 심각도, 수정 버전 | CVE ID | `id`(CVE ID), `severity`, 수정 버전, 설명 | Trivy·Grype JSON |
-| Finding | 대상 × 구성 요소 × 취약점 한 건 | `id`(경로 변수 `findingId`). (대상, purl, CVE)로 정한다. 스캔끼리는 (서비스, purl, CVE)로 같은 Finding을 잇는다(FR-08) | 대상(`target_id`), 구성 요소(`component.purl`, 설치 버전), 취약점(`vulnerability.id`, `vulnerability.severity`, 수정 버전), `deployment` | `verdicts.json`의 행 |
-| 판정 (Verdict) | Finding에 대한 Reach의 결론 | 스캔마다 Finding당 1개 | `status`, `method`, 한 줄 근거(`summary`), 근거 목록(`evidence[]`), 적용 규칙(`rule_id`), `review_state`, 사람 검토 메모·검토자·시각, 이어받은 검토의 출처(`carried_from`), 되돌린 이유(`reset_reason`)(API 명세서 3-10) | `verdicts.json`. 사람 검토는 `answer-key.md` |
+| Finding | 대상 × 구성 요소 × 취약점 한 건 | `id`(경로 변수 `findingId`). (대상, purl, CVE)로 정한다. 스캔끼리는 (서비스, purl, CVE)로 같은 Finding을 잇는다(FR-08) | 대상(`targetId`), 구성 요소(`component.purl`, 설치 버전), 취약점(`vulnerability.id`, `vulnerability.severity`, 수정 버전), `deployment` | `verdicts.json`의 행 |
+| 판정 (Verdict) | Finding에 대한 Reach의 결론 | 스캔마다 Finding당 1개 | `status`, `method`, 한 줄 근거(`summary`), 근거 목록(`evidence[]`), 적용 규칙(`ruleId`), `reviewState`, 사람 검토 메모·검토자·시각, 이어받은 검토의 출처(`carriedFrom`), 되돌린 이유(`resetReason`)(API 명세서 3-10) | `verdicts.json`. 사람 검토는 `answer-key.md` |
 | 근거 (Evidence) | 판정을 뒷받침하는 것 | 판정에 딸린다 | 사실(이름, 파일, 줄), 판정에 쓰지 않은 참고 사실 표시(`informational`), 후보 경로(약한 경로 여부 포함), 적용 규칙, "확인했지만 없던 것", 메모 | `verdicts.json`, `verdicts.md` |
 | 사실 (Fact) | 앱 코드에서 수집한 관찰값 | `F-<사실 이름>` (예: F-dto.floating.tokens) | 이름, 값, 위치(파일·줄) | reach 결과 |
-| 규칙 (Rule) | CVE별 판정 조건 | `id` = `RULE-<CVE ID>`(경로 변수 `ruleId`) | 조건 4종(도달 가능 / 도달 불가 / 미확인 / 기본값), 참고 사실(`rules.json`의 `info`. API에서는 `info_facts`) | `rules.json` |
+| 규칙 (Rule) | CVE별 판정 조건 | `id` = `RULE-<CVE ID>`(경로 변수 `ruleId`) | 조건 4종(도달 가능 / 도달 불가 / 미확인 / 기본값), 참고 사실(`rules.json`의 `info`. API에서는 `infoFacts`) | `rules.json` |
 | 취약 함수 (Vulnerable function) | 수정으로 바뀐 메서드. 수정 커밋 diff나 취약·수정 버전 소스 diff에서 뽑는다 | CVE + 메서드 | CVE, 패키지, 클래스, 메서드, 시그니처, 수정 커밋, 출처(취약·수정 버전 소스 diff / 수정 커밋 diff) | `vuln-functions.json` |
 | 워크로드 (Workload) | 운영에서 실행 중인 파드와 그 imageID. 대상 목록에 없는 워크로드는 "미등록"이다(FR-15) | 네임스페이스 + 파드 이름 | 네임스페이스, 파드, 이미지 digest(`imageID`), revision 라벨, 조회 시각 | `l1/result.md` |
 | 서비스 (Service) | 레포 · ECR 리포지토리 · 클러스터 워크로드를 묶은 등록 단위(예: api). 매일 스캔과 L1이 무엇을 볼지 정한다 | 서비스 이름 | 레포, ECR 리포지토리, 네임스페이스, 디플로이먼트 | 작업 PC의 `targets.env`. MVP는 레포에 커밋한 설정 파일(C-15, FR-15) |
@@ -565,21 +568,21 @@ API 필드, 화면 표시, 규칙 출력이 모두 같은 값을 쓴다. 값과 
 
 | 필드 | 값 | 정하는 곳 |
 |---|---|---|
-| `status` | `reachable`(도달 가능) / `unreachable`(도달 불가) / `unknown`(미확인) / `not_analyzed`(분석 대상 아님: 취약 함수 데이터 없음, OS 패키지, 판정하지 않은 패키지 사본 등) | C-05 |
-| `method` | `callgraph`(호출 그래프) / `rule`(설정·타입 규칙) / `manual`(사람) | C-05, 사람 |
-| `review_state` | `unreviewed`(검토 전) / `provisional`(잠정) / `confirmed`(확정). 이어받은 검토를 되돌린 이유 `reset_reason`: `verdict_changed` / `evidence_changed` | 사람(API-06). 되돌리기는 스캔 작업 |
-| `deployment` | `running`(실행 중) / `not_running`(실행 안 함) / `unknown`(확인 못 함) | C-03 |
+| `status` | `REACHABLE`(도달 가능) / `UNREACHABLE`(도달 불가) / `UNKNOWN`(미확인) / `NOT_ANALYZED`(분석 대상 아님: 취약 함수 데이터 없음, OS 패키지, 판정하지 않은 패키지 사본 등) | C-05 |
+| `method` | `CALLGRAPH`(호출 그래프) / `RULE`(설정·타입 규칙) / `MANUAL`(사람) | C-05, 사람 |
+| `reviewState` | `UNREVIEWED`(검토 전) / `PROVISIONAL`(잠정) / `CONFIRMED`(확정). 이어받은 검토를 되돌린 이유 `resetReason`: `VERDICT_CHANGED` / `EVIDENCE_CHANGED` | 사람(API-06). 되돌리기는 스캔 작업 |
+| `deployment` | `RUNNING`(실행 중) / `NOT_RUNNING`(실행 안 함) / `UNKNOWN`(확인 못 함) | C-03 |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `UNKNOWN` (스캐너 값 그대로) | C-02 |
-| `scan_status` | `queued` / `running` / `succeeded` / `failed` | C-08 [계획] |
-| 대상 종류 | `repo` / `image` | 스캔 요청 |
+| `scanStatus` | `QUEUED` / `RUNNING` / `SUCCEEDED` / `FAILED` | C-08 [계획] |
+| 대상 종류 | `REPO` / `IMAGE` | 스캔 요청 |
 
 ### 6-4. 모델 규칙
 
 - Finding 하나는 (대상, purl, CVE)다. 같은 CVE라도 purl이 다르면 다른 Finding이다(AD-08).
-- `unreachable`에는 `method`와 근거가 반드시 있다. 근거 없는 `unreachable`은 만들지 않는다.
-- `not_analyzed`는 "판정하지 않았다"는 표시다. 개수를 셀 때 `unreachable`과 섞지 않는다.
+- `UNREACHABLE`에는 `method`와 근거가 반드시 있다. 근거 없는 `UNREACHABLE`은 만들지 않는다.
+- `NOT_ANALYZED`는 "판정하지 않았다"는 표시다. 개수를 셀 때 `UNREACHABLE`과 섞지 않는다.
 - `deployment`는 `status`를 바꾸지 않는다. 둘은 따로 기록한다.
-- `review_state`를 `provisional`·`confirmed`로 바꾸는 것은 사람만 한다. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 검토 상태와 메모를 이어받는다(`carried_from`). 도구 판정이나 근거(사실, 호출 경로, 적용 규칙)가 바뀌면 `unreviewed`로 되돌리고(`reset_reason`), 이전 검토는 이력으로 남긴다(FR-08). 저장 방식은 Q-05.
+- `reviewState`를 `PROVISIONAL`·`CONFIRMED`로 바꾸는 것은 사람만 한다. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 검토 상태와 메모를 이어받는다(`carriedFrom`). 도구 판정이나 근거(사실, 호출 경로, 적용 규칙)가 바뀌면 `UNREVIEWED`로 되돌리고(`resetReason`), 이전 검토는 이력으로 남긴다(FR-08). 저장 방식은 Q-05.
 - `severity`는 스캐너 값을 그대로 둔다. 다른 출처와 다르면 메모로 남긴다.
 
 ### 6-5. 지금 결과로 본 모델
@@ -588,14 +591,14 @@ API 필드, 화면 표시, 규칙 출력이 모두 같은 값을 쓴다. 값과 
 
 | 묶음 | 행 수 | `status` | `method` |
 |---|---|---|---|
-| tomcat-embed-core 11.0.24: CVE-2026-65182, 65905, 68525 (CRITICAL) | 3 | `unreachable` | `rule` |
-| bcprov-jdk18on 1.81: CVE-2025-14813, CVE-2026-8763 (CRITICAL), 13506 (HIGH), 0636 (MEDIUM) | 4 | `unreachable` | `callgraph` |
-| jackson-core 3.1.5: CVE-2026-89407 (HIGH), 89425 (HIGH) | 2 | `unreachable` | 89407 `rule`, 89425 `callgraph` |
-| jackson-databind 3.1.5: CVE-2026-68497, 91776, 91777 (HIGH), 19032, 83557 (MEDIUM) | 5 | `unreachable` | `rule` |
-| Jackson 2.21.5 사본: 같은 CVE 7개 | 7 | `not_analyzed` | - (제안(확정 대기), 표 아래) |
-| OS 패키지: libpng, zlib | 2 | `not_analyzed` | - |
+| tomcat-embed-core 11.0.24: CVE-2026-65182, 65905, 68525 (CRITICAL) | 3 | `UNREACHABLE` | `RULE` |
+| bcprov-jdk18on 1.81: CVE-2025-14813, CVE-2026-8763 (CRITICAL), 13506 (HIGH), 0636 (MEDIUM) | 4 | `UNREACHABLE` | `CALLGRAPH` |
+| jackson-core 3.1.5: CVE-2026-89407 (HIGH), 89425 (HIGH) | 2 | `UNREACHABLE` | 89407 `RULE`, 89425 `CALLGRAPH` |
+| jackson-databind 3.1.5: CVE-2026-68497, 91776, 91777 (HIGH), 19032, 83557 (MEDIUM) | 5 | `UNREACHABLE` | `RULE` |
+| Jackson 2.21.5 사본: 같은 CVE 7개 | 7 | `NOT_ANALYZED` | - (제안(확정 대기), 표 아래) |
+| OS 패키지: libpng, zlib | 2 | `NOT_ANALYZED` | - |
 
-Jackson 2 사본 7행의 도구 판정은 `not_analyzed`(`not_analyzed_reason` = `unanalyzed_copy`, 판정하지 않은 패키지 사본)이고, 검토 상태는 `unreviewed`(검토 전)다. 그 위에 "제안(확정 대기)"과 제안 내용을 함께 보인다. 89407·89425는 도달 불가, 나머지 5개(68497·91776·91777·19032·83557)는 도달 불가(발동 조건 없음)다. 사람이 확정하면 그때 사람 판정(`method` = `manual`)과 `confirmed`가 된다. 제안 내용과 남은 위험은 규칙명세서 9-1, 근거는 PoC 작업 기록 15-7절에 있다(Q-01).
+Jackson 2 사본 7행의 도구 판정은 `NOT_ANALYZED`(`notAnalyzedReason` = `UNANALYZED_COPY`, 판정하지 않은 패키지 사본)이고, 검토 상태는 `UNREVIEWED`(검토 전)다. 그 위에 "제안(확정 대기)"과 제안 내용을 함께 보인다. 89407·89425는 도달 불가, 나머지 5개(68497·91776·91777·19032·83557)는 도달 불가(발동 조건 없음)다. 사람이 확정하면 그때 사람 판정(`method` = `MANUAL`)과 `CONFIRMED`가 된다. 제안 내용과 남은 위험은 규칙명세서 9-1, 근거는 PoC 작업 기록 15-7절에 있다(Q-01).
 
 판정 결과 형식의 예(PoC 계획 단계의 예시). 필드 구성은 API 명세서(API-05)가 정한다(이름 대응은 6-2).
 
@@ -646,10 +649,10 @@ flowchart LR
 
 | 요소 | 위치 | 권한 | 메모 |
 |---|---|---|---|
-| Reach 스캔 작업 (C-01, C-02, C-04, C-05, C-07) | CI 러너 (GitHub Actions) | 레포 읽기, 필요하면 ECR 읽기. 비밀값 없음 | PR·이미지 빌드·매일·수동 실행(C-11). 이미지 빌드 때 L3 프로브(C-12)도 이 러너에서 돈다 |
-| 결과 저장소 (C-13) | 미결(Q-04) | 쓰기는 스캔 작업, L1 수집, API 서버만. 읽기는 API 서버를 거친다 | SBOM 보관 포함 |
-| API 서버 (C-08) | 미결(Q-04) | Bearer 토큰, 역할 3개. 토큰 발급은 미결(Q-14) | OCSF 내보내기(C-10) 포함 |
-| 대시보드 (C-09) | Logssey 공통 레이아웃 안 | API만 쓴다 | SCR-01~06 |
+| Reach 스캔 작업 (C-01, C-02, C-04, C-05, C-07) | CI 러너 (GitHub Actions) | 레포 읽기, 필요하면 ECR 읽기, 결과 업로드용 OIDC 토큰(`id-token: write`). 그 밖의 비밀값 없음 | PR·이미지 빌드·매일·수동 실행(C-11). 이미지 빌드 때 L3 프로브(C-12)도 이 러너에서 돈다 |
+| 결과 저장소 (C-13) | 대시보드 PostgreSQL의 `reach_` 테이블. 운영 DB 서버는 ADR-D005 | C-08만 읽고 쓴다 | SBOM 보관 포함 |
+| API (C-08) | dashboard-backend의 `reach` 모듈 | 대시보드 세션 `ADMIN`, CI는 GitHub OIDC(API-12·13만) | OCSF 내보내기(C-10) 포함 |
+| 대시보드 (C-09) | Logssey 대시보드 공통 레이아웃 안 "취약점 관리" | API만 쓴다 | SCR-01~06 |
 | L1 수집 (C-03) | 7-3 선택지 중 하나 | 읽기 전용 서비스 계정(파드 조회만) | CON-01 |
 
 - 운영 클러스터 API는 내부 로드밸런서 뒤에 있고 VPN·bastion이 없어 외부에서는 SSM을 거쳐야 한다(CON-01).
@@ -662,10 +665,10 @@ flowchart LR
   end
   GH["GitHub 레포"] -.-> JOB
   ECR["ECR · 읽기"] -.-> JOB
-  JOB -.-> ST[("C-13 결과 저장소")]
+  JOB -.->|"API-13 · OIDC"| APIS["C-08 API<br>dashboard-backend reach 모듈"]
   KAPI["운영 Kubernetes API"] -.-> L1C["C-03 L1 수집<br>읽기 전용 서비스 계정"]
-  L1C -.-> ST
-  ST -.-> APIS["C-08 API 서버"]
+  L1C -.->|내부 API| APIS
+  APIS -.-> ST[("C-13 결과 저장소<br>reach_ 테이블")]
   APIS -.-> UI["C-09 대시보드"]
   APIS -.-> OC["C-10 OCSF 내보내기"]
   OC -.-> LG[("Logssey 공통 Finding")]
@@ -698,7 +701,7 @@ flowchart LR
 | `verdicts.md` | C-07 → 사람 | [완료] | 머리말이 스캔 요약이다(API-03에 대응) |
 | OCI 이미지 라벨 | CI → C-03 | [완료] `org.opencontainers.image.revision`<br>[계획] `org.opencontainers.image.source`, `image.base.*`(제안) | revision 라벨로 digest에서 커밋을 바로 찾는다. base 라벨은 base image 역추적용 |
 | Kubernetes 파드 상태 | Kubernetes API → C-03 | [부분] | `status.containerStatuses[].imageID` |
-| REST JSON `/api/v1` | C-08 ↔ C-09, 외부 | [계획] | API 명세서. 오류 코드는 `E-<코드>` |
+| REST JSON `/api/v1/reach` | C-08 ↔ C-09, CI, 외부 | [계획] | API 명세서. 대시보드 공통 규약(camelCase, 대문자 enum, `{code, message}` 오류)을 따른다 |
 | OCSF | C-10 → Logssey | [계획] | 합의 필요(Q-02) |
 | SARIF | C-11 → GitHub Security 탭 | [계획] | Code scanning(SARIF 업로드) 사용 가능 여부는 확인 필요(Q-12) |
 
@@ -725,6 +728,7 @@ flowchart LR
 | AD-15 | 취약 함수는 수정 전후 diff에서 뽑고, 조사 파일에서 생성 | [완료] v0 |
 | AD-16 | L3는 능동 관측을 MVP로, 상시 관측은 하지 않음 | [계획] |
 | AD-17 | CI는 리포트 전용으로 시작해 게이트로 넘어간다 | [계획] |
+| AD-18 | API는 dashboard-backend의 `reach` 모듈, 결과는 `reach_` 테이블, 분석은 GitHub Actions 러너 | [계획] 결정(팀 확인 필요) |
 
 ### 9-2. 결정 상세
 
@@ -803,7 +807,7 @@ flowchart LR
 | 항목 | 내용 |
 |---|---|
 | 맥락 | 배포 이미지에서 Jackson CVE가 `tools.jackson` 3.1.5와 `com.fasterxml.jackson` 2.21.5 양쪽에서 나왔다. 처음 보고서는 CVE당 한 줄이어서, 2.21.5 사본이 판정되지 않았다는 사실이 드러나지 않았다. 판정 행에 다른 패키지의 버전이 표시될 수도 있었다 |
-| 결정 | Finding = 대상 × 구성 요소(purl) × 취약점이다. 판정하지 않은 사본은 `not_analyzed` 행으로 따로 보인다. 판정 행은 판정한 패키지의 버전을 쓴다 |
+| 결정 | Finding = 대상 × 구성 요소(purl) × 취약점이다. 판정하지 않은 사본은 `NOT_ANALYZED` 행으로 따로 보인다. 판정 행은 판정한 패키지의 버전을 쓴다 |
 | 이유 | 빈틈을 숨기지 않는다. 같은 CVE라도 패키지 사본마다 쓰이는 경로가 다르다 |
 | 결과 | 23행 = Java CVE 14개 + Jackson 2.21.5 사본 7행 + OS 패키지 2행. 사본 7행은 제안(확정 대기)이다(Q-01) |
 | 관련 | FR-07, C-05, C-07 |
@@ -833,9 +837,9 @@ flowchart LR
 | 항목 | 내용 |
 |---|---|
 | 맥락 | Spring Boot 내장 Tomcat은 기본 인증기를 넣어 `AuthenticatorBase.invoke`와 `RealmBase.findSecurityConstraints`가 요청마다 실행된다. 함수 도달만 보면 오탐이 난다. Jackson은 readValue를 한 번만 불러도 호출 그래프상 거의 모든 역직렬화기에 닿는다 |
-| 결정 | 우리 코드가 라이브러리를 부르면 호출 그래프(`callgraph`), 프레임워크가 스스로 실행하면 설정·타입 규칙(`rule`)으로 판정한다. 사람이 판정하면 `manual`이다 |
+| 결정 | 우리 코드가 라이브러리를 부르면 호출 그래프(`CALLGRAPH`), 프레임워크가 스스로 실행하면 설정·타입 규칙(`RULE`)으로 판정한다. 사람이 판정하면 `MANUAL`이다 |
 | 이유 | 취약 구간에 실제로 들어가는지는 "앱이 무엇을 설정했나", "어떤 타입을 역직렬화하나"가 정한다 |
-| 결과 | Java CVE 14개 중 `rule` 9개(tomcat 3, jackson-core 1, jackson-databind 5), `callgraph` 5개(bcprov 4, jackson-core 1). 규칙은 CVE마다 사람이 써야 한다(CON-06) |
+| 결과 | Java CVE 14개 중 `RULE` 9개(tomcat 3, jackson-core 1, jackson-databind 5), `CALLGRAPH` 5개(bcprov 4, jackson-core 1). 규칙은 CVE마다 사람이 써야 한다(CON-06) |
 | 관련 | FR-05, FR-06, C-04, C-05, 규칙명세서 |
 
 #### AD-12 진입점 2단계와 약한 경로 분리
@@ -865,7 +869,7 @@ flowchart LR
 | 맥락 | 프레임워크 내부 코드는 앱과 무관하게 같은 일을 한다 |
 | 결정 | 사실은 앱 클래스에서만 모은다 |
 | 이유 | 판정을 가르는 것은 "앱이 무엇을 설정·호출하는가"다 |
-| 결과 | 사실 수집이 작고 빠르다. 대신 같은 CVE의 다른 사본(Jackson 2.21.5)은 지금 규칙으로 자동 판정하지 못해 `not_analyzed`로 남았다(TD-04) |
+| 결과 | 사실 수집이 작고 빠르다. 대신 같은 CVE의 다른 사본(Jackson 2.21.5)은 지금 규칙으로 자동 판정하지 못해 `NOT_ANALYZED`로 남았다(TD-04) |
 | 관련 | FR-06, C-04 |
 
 #### AD-15 취약 함수는 수정 전후 diff에서 뽑고, 조사 파일에서 생성
@@ -875,7 +879,7 @@ flowchart LR
 | 맥락 | 공지의 2%만 취약 함수를 적는다(CON-05). 최근 CVE는 Project KB에 없을 수 있다 |
 | 결정 | 취약·수정 버전 소스 diff나 수정 커밋 diff에서 실제로 바뀐 메서드를 취약 함수로 정하고 `javap`로 시그니처를 확인한다. 처음 10개는 버전 소스 diff(Tomcat은 수정 커밋과 태그 diff를 대조), 13506과 MEDIUM 3개는 수정 커밋 diff로 정했다. 일반 경로와 공유하는 메서드는 오탐 때문에 뺀다(13506의 `ASN1InputStream.buildObject`). 조사 파일이 원본이고, `vuln-functions.json`은 `make_spec.py`로만 만든다 |
 | 이유 | 데이터 생성 경로를 하나로 둔다. 13506을 `vuln-functions.json`에 직접 넣었다가 조사 파일로 옮기고 다시 생성한 적이 있다(기존 10개는 변화 없음) |
-| 결과 | CVE 하나를 더할 때마다 조사 시간이 든다. 데이터가 없으면 `not_analyzed`다 |
+| 결과 | CVE 하나를 더할 때마다 조사 시간이 든다. 데이터가 없으면 `NOT_ANALYZED`다 |
 | 관련 | FR-09, C-06, QA-07 |
 
 #### AD-16 L3는 능동 관측을 MVP로, 상시 관측은 하지 않음 [계획]
@@ -883,9 +887,9 @@ flowchart LR
 | 항목 | 내용 |
 |---|---|
 | 맥락 | JVM은 시작할 때 classpath의 JAR를 거의 모두 연다. 클래스는 실제로 쓸 때 로드되지만, 취약 클래스가 일반 경로에서도 로드된다. 운영 트래픽을 계속 감시하면 운영 부하와 인프라 비용이 크다 |
-| 결정 | L3는 능동 관측을 MVP로 하고, 상시 관측은 하지 않는다(PRD 3-2 비목표). 스테이징·로컬·CI(기본은 이미지 빌드 때 백엔드 테스트)에서 커버리지 에이전트(예: JaCoCo)를 붙이고 직접 호출·테스트로 취약 메서드의 실행을 메서드 단위로 확인한다. 네이티브 라이브러리는 `/proc/<java-pid>/maps`로 로드를 확인하고, 함수 호출까지 볼 때만 uprobe(bpftrace·perf)로 공개 함수에 건다. 파일 로드(`openat`, `mmap`)와 클래스 로드는 판정 기준으로 쓰지 않는다. 실행이 관측되면 `reachable` 근거로 쓰고, 실행되지 않은 결과는 `unreachable` 근거로 쓰지 않는다 |
+| 결정 | L3는 능동 관측을 MVP로 하고, 상시 관측은 하지 않는다(PRD 3-2 비목표). 스테이징·로컬·CI(기본은 이미지 빌드 때 백엔드 테스트)에서 커버리지 에이전트(예: JaCoCo)를 붙이고 직접 호출·테스트로 취약 메서드의 실행을 메서드 단위로 확인한다. 네이티브 라이브러리는 `/proc/<java-pid>/maps`로 로드를 확인하고, 함수 호출까지 볼 때만 uprobe(bpftrace·perf)로 공개 함수에 건다. 파일 로드(`openat`, `mmap`)와 클래스 로드는 판정 기준으로 쓰지 않는다. 실행이 관측되면 `REACHABLE` 근거로 쓰고, 실행되지 않은 결과는 `UNREACHABLE` 근거로 쓰지 않는다 |
 | 이유 | Java 서비스에서 "취약한 JAR가 열렸다"는 거의 항상 참이라 변별력이 없다. 대안과 비교했다. ① 상시 관측(운영 트래픽 감시): 운영 부하·인프라 비용이 크고, 관찰 기간에 안 쓰인 코드를 "안 쓰임"으로 오판할 수 있다. ② 클래스 로드만 보는 방식: 일반 경로에서 로드되는 클래스를 변별하지 못한다. 그래서 메서드 단위 커버리지를 쓴다. ③ Tetragon(커널 수준 관측): JVM 안의 Java 메서드 실행은 보지 못한다. 그래서 Java는 커버리지 에이전트, 네이티브는 maps·uprobe로 보고, Tetragon은 상시 관측과 함께 확장 단계로 보류한다 |
-| 결과 | L3는 `unknown` 해소, L2 후보 경로 검증, 규칙의 '도달 가능' 대조군 실행 확인에 쓴다. 실행되지 않았다는 것만으로는 판정하지 않는다. 스테이징 설정이 운영과 다르면 결과가 달라질 수 있어, 빌드(jar sha256 또는 이미지 digest), 설정 키와 켜짐 여부(값은 기록하지 않음), 호출한 API·테스트 목록, 확인 방법(coverage / maps / uprobe), 관측 시각을 근거에 함께 남긴다(예: LLM 공급자 `anthropic` 설정에 따라 Jackson 2 경로가 생김) |
+| 결과 | L3는 `UNKNOWN` 해소, L2 후보 경로 검증, 규칙의 '도달 가능' 대조군 실행 확인에 쓴다. 실행되지 않았다는 것만으로는 판정하지 않는다. 스테이징 설정이 운영과 다르면 결과가 달라질 수 있어, 빌드(jar sha256 또는 이미지 digest), 설정 키와 켜짐 여부(값은 기록하지 않음), 호출한 API·테스트 목록, 확인 방법(coverage / maps / uprobe), 관측 시각을 근거에 함께 남긴다(예: LLM 공급자 `anthropic` 설정에 따라 Jackson 2 경로가 생김) |
 | 관련 | FR-14, C-12 |
 
 #### AD-17 CI는 리포트 전용으로 시작해 게이트로 넘어간다 [계획]
@@ -893,10 +897,21 @@ flowchart LR
 | 항목 | 내용 |
 |---|---|
 | 맥락 | 처음부터 CRITICAL에 빌드를 깨면 오탐으로 모든 PR이 막힌다 |
-| 결정 | 처음에는 리포트 전용(빌드를 깨지 않음)으로 결과만 쌓는다. 전환 기준을 만족하면 게이트를 건다(Q-07). 게이트는 PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`reachable` CRITICAL·HIGH는 실패, `reachable` MEDIUM 이하·`unknown`·CRITICAL·HIGH인 `not_analyzed`는 경고)다. ECR push 전에 로컬 이미지를 스캔하고, 재대조는 저장된 SBOM으로 한다 |
+| 결정 | 처음에는 리포트 전용(빌드를 깨지 않음)으로 결과만 쌓는다. 전환 기준을 만족하면 게이트를 건다(Q-07). 게이트는 PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고)다. ECR push 전에 로컬 이미지를 스캔하고, 재대조는 저장된 SBOM으로 한다 |
 | 이유 | 도입 비용을 낮추고, 취약한 이미지가 레지스트리에 올라가기 전에 막는다 |
 | 결과 | 게이트 조건은 API 명세서 6-2, 대상·전환 기준·예외·되돌리기는 Q-07에 제안으로 구체화했다. 팀이 확정하기 전까지 CI는 리포트 전용이다 |
 | 관련 | FR-11, C-11 |
+
+#### AD-18 API는 dashboard-backend의 `reach` 모듈, 분석은 GitHub Actions 러너 [계획]
+
+| 항목 | 내용 |
+|---|---|
+| 맥락 | 처음 설계는 별도 API 서버와 결과 저장소를 두고 위치를 미결(Q-04)로 남겼다. 그 사이 시크릿(ADR-S008), IaC(ADR-11), 런타임이 모두 dashboard-backend에 모듈로 들어가기로 했고, 대시보드 공통 규약(ADR-D003 세션 인증, ADR-D008 API 규약)이 정해졌다 |
+| 결정 | ① API는 dashboard-backend(Java 21, Spring Boot)의 `reach` 모듈, 경로는 `/api/v1/reach`다. 형식·이름·오류는 대시보드 공통 규약을 따른다.<br>② 결과는 대시보드 PostgreSQL의 `reach_` 접두 테이블에 둔다. Flyway 후속 마이그레이션으로 추가하고, 사용자는 `dashboard_users`, 자산은 공통 `assets`와 연결한다. 운영 DB 서버 위치는 ADR-D005를 따른다.<br>③ 분석(SBOM 생성, 대조, L2 판정, 보고서)은 GitHub Actions 러너에서 지금 도구(`reach.jar`, `verdict.py`)로 돌리고, 결과만 API-13으로 올린다. 대시보드에서 요청한 스캔은 서버가 `workflow_dispatch`로 러너를 띄운다.<br>④ 사람은 대시보드 세션(`ADMIN`), CI는 GitHub OIDC 토큰으로 인증한다(IaC와 같은 방식) |
+| 이유 | 대시보드가 이미 로그인 세션·사용자·자산을 가지고 있다. 다른 솔루션과 배포 단위·규약을 맞추면 운영할 것이 줄고, 통합 현황 집계를 한 API 안에서 합성할 수 있다. 분석을 러너에 두면 서버가 PR 코드(Gradle 빌드 스크립트)를 실행하지 않고(SR-05, SR-09), 이미지를 ECR push 전에 스캔할 수 있다. 판정 도구는 바꾸지 않는다 |
+| 버린 대안 | 별도 Reach API 서버와 저장소: 인증·사용자·배포를 따로 가져야 하고, 다른 솔루션과 규약이 갈린다. 서버 안 분석 워커(IaC 방식): Reach 분석은 레포 빌드가 필요해 서버에서 PR 코드를 실행하게 된다 |
+| 결과 | Q-04, Q-14를 닫는다. CLI 출력(`verdicts.json`)의 소문자 값은 서버가 저장할 때 대문자로 바꾼다. `verdict.py`는 러너에서 그대로 쓰므로 Python 워커를 서버에 두지 않는다(ADR-S008과 충돌하지 않음). L1 수집 결과를 받는 내부 API는 Q-03이 정해지면 더한다 |
+| 관련 | C-08, C-11, C-13, API 명세서 2절, SR-06, SR-09 |
 
 ## 10. 제약과 가정
 
@@ -921,7 +936,7 @@ flowchart LR
 |---|---|---|---|
 | A-01 | 같은 소스 트리로 CI가 빌드한 bootJar는 분석한 bootJar와 라이브러리 구성이 같다 | 배포 커밋 `bb4639b`와 분석 커밋 `6583020`의 소스 트리가 같고, 재스캔 23행이 일치했다 | 판정 대상과 배포물이 달라진다. 배포 이미지 안 jar의 해시를 직접 비교한다([계획]) |
 | A-02 | 스캐너 DB의 영향 버전과 수정 버전이 맞다 | Trivy와 Grype의 CRITICAL·HIGH가 일치했다(10/9 로컬 이미지) | 대조 단계에서 놓치거나 더한다. Reach는 대조 결과를 고치지 않는다 |
-| A-03 | 수정 전후 diff(수정 커밋 또는 취약·수정 버전 소스)에서 바뀐 메서드가 취약 동작을 대표한다 | 일부 CVE는 같은 결함이 있는 이전 버전 jar로 결함을 재현해 확인했다 | `callgraph` 판정이 틀린다. 대조군으로 확인한다 |
+| A-03 | 수정 전후 diff(수정 커밋 또는 취약·수정 버전 소스)에서 바뀐 메서드가 취약 동작을 대표한다 | 일부 CVE는 같은 결함이 있는 이전 버전 jar로 결함을 재현해 확인했다 | `CALLGRAPH` 판정이 틀린다. 대조군으로 확인한다 |
 | A-04 | 런타임 설정(`java.security`, 환경 변수)은 이미지와 배포값 문서에서 확인한 값과 같다 | 이미지의 보안 provider 순서를 확인했다(SUN 1순위, BouncyCastle 없음, `-Djava.security.*` 옵션 없음) | 설정에 기대는 규칙이 틀린다. 미확인 조건을 보강한다 |
 | A-05 | L1 조회 시점의 워크로드가 결과를 쓰는 시점에도 같다 | 10/10 확인 때 9/29 이후 reused-api 푸시가 없었다 | `deployment`가 낡는다. 매일 다시 조회한다([계획]) |
 
@@ -936,28 +951,28 @@ flowchart LR
 | ID | 자산 | 왜 중요한가 |
 |---|---|---|
 | AS-1 | 결과 데이터(Finding·판정·근거, SBOM) | 어디가 약한지 모은 지도다. 유출되면 공격 우선순위표가 된다 |
-| AS-2 | 판정 입력(`rules.json`, `vuln-functions.json`, 사람 검토, 게이트 예외) | 바뀌면 `reachable`이 `unreachable`이 되어 게이트를 통과한다 |
-| AS-3 | 자격 증명(ECR 읽기, 클러스터 읽기 서비스 계정, API 토큰, AI API 키) | 탈취되면 운영 자산에 접근하는 발판이 된다 |
+| AS-2 | 판정 입력(`rules.json`, `vuln-functions.json`, 사람 검토, 게이트 예외) | 바뀌면 `REACHABLE`이 `UNREACHABLE`이 되어 게이트를 통과한다 |
+| AS-3 | 자격 증명(ECR 읽기, 클러스터 읽기 서비스 계정, 대시보드 세션, CI OIDC 토큰, AI API 키) | 탈취되면 운영 자산에 접근하는 발판이 된다 |
 | AS-4 | 분석 대상(레포, bootJar, 이미지) | 빌드 스크립트가 실행되고, 내용 일부가 AI로 보내질 수 있다 |
 | AS-5 | 도구와 DB(Trivy·Grype·cdxgen·`reach.jar`, 취약점 DB) | 오염되면 결과가 바뀌거나 러너가 장악된다 |
 
 **행위자**: TA-1 외부 PR 작성자(포크 PR 포함, PR의 빌드 스크립트·코드·문자열을 조작할 수 있다) / TA-2 내부 사용자의 실수·남용(규칙·검토·예외를 바꿀 수 있다) / TA-3 오염된 공급망(스캐너 배포물, 취약점 DB) / TA-4 결과나 자격 증명을 노리는 외부 공격자
 
-**신뢰 경계**: TB-1 PR 코드 ↔ CI 러너(PR의 Gradle 스크립트가 러너에서 실행된다) / TB-2 CI 러너 ↔ ECR·레포 / TB-3 운영 클러스터 ↔ L1 수집(C-03) / TB-4 Reach ↔ 도구 배포처·취약점 DB / TB-5 Reach ↔ 외부 LLM(FR-02 구성요소 후보, FR-09 취약 함수 후보) / TB-6 API 서버 ↔ 사용자·Logssey(OCSF)
+**신뢰 경계**: TB-1 PR 코드 ↔ CI 러너(PR의 Gradle 스크립트가 러너에서 실행된다) / TB-2 CI 러너 ↔ ECR·레포 / TB-3 운영 클러스터 ↔ L1 수집(C-03) / TB-4 Reach ↔ 도구 배포처·취약점 DB / TB-5 Reach ↔ 외부 LLM(FR-02 구성요소 후보, FR-09 취약 함수 후보) / TB-6 Reach API(dashboard-backend) ↔ 사용자·CI 러너·Logssey(OCSF)
 
 **위협과 통제**
 
 | ID | STRIDE | 위협 | 경계·자산 | 통제 |
 |---|---|---|---|---|
 | TM-01 | 권한 상승, 정보 노출 | 악의적인 PR의 빌드 스크립트가 CI에서 실행돼 자격 증명을 빼낸다 | TB-1, AS-3 | SR-05, SR-09 |
-| TM-02 | 변조 | 규칙·취약 함수 데이터를 바꿔 판정을 `unreachable`로 만든다 | AS-2, TA-2 | SR-07, SR-10 |
-| TM-03 | 권한 상승 | 게이트 예외나 사람 검토를 남용해 `reachable`을 통과시킨다 | AS-2, TA-2 | SR-07, SR-10 |
+| TM-02 | 변조 | 규칙·취약 함수 데이터를 바꿔 판정을 `UNREACHABLE`로 만든다 | AS-2, TA-2 | SR-07, SR-10 |
+| TM-03 | 권한 상승 | 게이트 예외나 사람 검토를 남용해 `REACHABLE`을 통과시킨다 | AS-2, TA-2 | SR-07, SR-10 |
 | TM-04 | 변조 | 오염된 스캐너·DB가 결과를 바꾸거나 러너를 장악한다 | TB-4, AS-5 | SR-04 |
 | TM-05 | 정보 노출 | 결과 데이터·SBOM이 권한 없는 사람에게 노출된다 | TB-6, AS-1 | SR-03, SR-06 |
 | TM-06 | 권한 상승 | 클러스터·ECR 자격 증명을 탈취해 쓰기 권한까지 얻는다 | TB-2, TB-3, AS-3 | SR-01, SR-02 |
 | TM-07 | 정보 노출, 변조 | AI 호출로 내부 코드 정보가 나가거나, 분석 대상 안의 문자열이 AI를 속여 잘못된 후보를 만든다(프롬프트 주입) | TB-5, AS-4 | SR-11 |
 | TM-08 | 부인 | 누가 규칙·검토·예외를 바꿨는지 부인한다 | AS-2 | SR-07 |
-| TM-09 | 서비스 거부 | 클러스터 조회·스캔 실패가 `not_running`이나 통과로 오인된다 | TB-3 | FR-04(조회 실패는 `unknown`), API 명세서 6-3(스캔 실패는 경고) |
+| TM-09 | 서비스 거부 | 클러스터 조회·스캔 실패가 `NOT_RUNNING`이나 통과로 오인된다 | TB-3 | FR-04(조회 실패는 `UNKNOWN`), API 명세서 6-3(스캔 실패는 경고) |
 | TM-10 | 서비스 거부 | L3 프로브(에이전트, uprobe)가 운영에 붙어 성능·안정성에 영향을 준다 | C-12 | SR-08 |
 
 ### 11-2. 보안 요구 목록
@@ -971,10 +986,10 @@ Reach는 Trivy 같은 오픈 소스 스캐너에 기대고, 운영 클러스터�
 | SR-03 | **비밀값 비노출.** Reach는 비밀값 파일과 비밀 저장소를 입력으로 쓰지 않는다. 보고서, 로그, 공유 문서에 비밀값, 계정 ID, 내부 IP, 인스턴스 ID를 넣지 않는다. 공유 문서에는 digest 앞 8자리까지만 쓴다 | [부분] 작업 규칙으로 지킨다(비밀값 파일을 열지 않는다) | [계획] 출력에 민감 정보가 없는지 검사한다 | NFR-05 |
 | SR-04 | **도구 공급망 무결성.** 스캐너, 분석 도구, DB의 버전을 고정하고 설치 전에 체크섬·서명을 확인한다. 스캔 기록에 도구·DB 버전을 남긴다 | [부분] 버전은 손으로 기록했다(Trivy 0.75.0, Syft 1.54.1, cdxgen 12.8.5, ASM 9.8). 설치 경로와 무결성 검증 기록은 원자료에 없다(확인 필요). `verdict.py`는 외부 라이브러리가 없고, `reach.jar`는 ASM만 쓴다 | [계획] 버전 고정 + 체크섬·서명 확인. 실패하면 실행을 멈춘다 | NFR-05, R-06, TD-05 |
 | SR-05 | **분석 대상 코드를 실행하지 않는다.** L2는 바이트코드를 읽기만 하는 정적 분석이다 | [완료] L2. 예외: bootJar 빌드와 cdxgen은 대상 레포의 Gradle 빌드 스크립트를 실행한다. 주입 실험은 실험용 clone에서만 했다 | [계획] 빌드와 cdxgen은 비밀값 없는 격리 러너에서 실행한다 | NFR-05, AD-04 |
-| SR-06 | **결과 데이터 접근 제어.** Finding 목록은 어디가 약한지를 모은 정보다. 인증한 사용자만 보고, 역할로 나눈다: `viewer` 조회, `reviewer` 사람 검토, `admin` 규칙 관리·스캔 실행. 자산 대장을 팀 내부에서만 공유하는 것과 같은 원칙이다 | [부분] 결과는 작업 PC의 파일로만 있다 | [계획] Bearer 토큰 + 역할. 저장소 읽기는 C-08을 거친다. 쓰기는 C-08, CI 러너의 스캔 작업, L1 수집(C-03)만 한다(7-2). 토큰 발급과 공통 인증 연동은 미결(Q-14) | API 명세서, C-08, C-13, Q-14 |
-| SR-07 | **검토·규칙 변경 기록.** 사람 검토(`review_state`)와 규칙·데이터 변경은 누가 언제 바꿨는지 남긴다 | [부분] 문서(`answer-key.md`)로 관리한다 | [계획] 저장소에 변경 기록 | FR-08, API-06 |
+| SR-06 | **결과 데이터 접근 제어.** Finding 목록은 어디가 약한지를 모은 정보다. 대시보드에 로그인한 사용자만 본다. 자산 대장을 팀 내부에서만 공유하는 것과 같은 원칙이다 | [부분] 결과는 작업 PC의 파일로만 있다 | [계획] 대시보드 세션(MVP는 `ADMIN` 하나, ADR-D003). CI OIDC 토큰은 검사 등록·결과 업로드(API-12·13)만 하고 조회·사람 검토는 못 한다. 저장소는 C-08만 읽고 쓴다(7-2). 조회 전용·검토자 역할 분리는 다음 단계 | API 명세서 2-2, C-08, C-13, AD-18 |
+| SR-07 | **검토·규칙 변경 기록.** 사람 검토(`reviewState`)와 규칙·데이터 변경은 누가 언제 바꿨는지 남긴다 | [부분] 문서(`answer-key.md`)로 관리한다 | [계획] 저장소에 변경 기록 | FR-08, API-06 |
 | SR-08 | **L3 프로브의 범위.** 커버리지 에이전트는 스테이징·로컬과 CI 러너(이미지 빌드 단계의 테스트 실행)에만 붙이고, 운영 노드나 JVM에는 붙이지 않는다. CI 러너에서는 기본 브랜치 작업에서만 돈다(SR-09). 근거에 설정 값은 기록하지 않는다. uprobe(bpftrace·perf)는 root 권한이 필요하므로 스테이징·로컬에서만 쓰고 운영 노드에는 쓰지 않는다 | 없음 | [계획] | FR-14, C-12 |
-| SR-09 | **PR 작업 격리.** PR(특히 포크 PR) 작업에는 자격 증명을 주지 않는다. `pull_request_target`으로 PR 코드를 실행하지 않는다. ECR 읽기와 결과 저장소 쓰기는 기본 브랜치 작업(이미지 빌드, 매일, 수동)에서만 한다 | 없음(CI 연동 전) | [계획] PR 워크플로 권한을 `contents: read`로 두고, 비밀값은 기본 브랜치 작업에만 연결한다. PR 결과는 저장소에 쓰지 않고 PR 결과로만 남긴다 | FR-11, SR-05, TM-01 |
+| SR-09 | **PR 작업 격리.** PR(특히 포크 PR) 작업에는 자격 증명을 주지 않는다. `pull_request_target`으로 PR 코드를 실행하지 않는다. ECR 읽기는 기본 브랜치 작업(이미지 빌드, 매일, 수동)에서만 한다 | 없음(CI 연동 전) | [계획] PR 워크플로 권한은 `contents: read`와 결과 업로드용 `id-token: write`뿐이고, 비밀값은 기본 브랜치 작업에만 연결한다. 포크 PR은 OIDC 토큰을 받지 않아 결과를 올리지 않는다. PR 결과는 그 PR의 CI 검사 결과로만 두고 요약 집계와 사람 검토 이어받기에 넣지 않는다(AD-18) | FR-11, SR-05, TM-01 |
 | SR-10 | **판정 입력 변경 통제.** 규칙(`rules.json`)과 취약 함수 데이터는 PR 리뷰와 검증 세트(C-14) 통과 후에만 반영한다. 게이트 예외는 사유와 만료일이 필수이고, PR 작성자 본인이 승인할 수 없다 | [부분] 회귀 테스트(C-14)는 있다. 리뷰 필수·승인 분리는 없다 | [계획] 규칙·데이터 파일에 CODEOWNERS 리뷰 필수, CI에서 검증 세트 실행, 예외 자기 승인 금지 | FR-06, FR-08, FR-09, FR-11, Q-07, TM-02, TM-03 |
 | SR-11 | **AI 호출 데이터 범위.** AI에는 패키지·클래스 이름, jar 안 파일 경로, 버전 문자열, 공개 공지와 수정 커밋만 보낸다. 우리 앱 소스 코드, 비밀값, 내부 식별자(계정 ID, 내부 IP)는 보내지 않는다. AI 응답은 후보로만 쓰고 사람이 확인한다. 분석 대상에서 온 문자열은 지시가 아닌 데이터로 다룬다 | [부분] 취약 함수 후보에 사람 확인 원칙만 있다(FR-09) | [계획] 보내는 필드 허용 목록, 호출 기록(모델·프롬프트 버전, 입력 SHA-1) | FR-02, FR-09, NFR-04, TM-07 |
 
@@ -987,7 +1002,7 @@ Reach는 Trivy 같은 오픈 소스 스캐너에 기대고, 운영 클러스터�
 | R-01 | 리플렉션·의존성 주입·동적 프록시 | 거짓 unreachable이 나올 수 있다. 주입 실험에서 `Class.forName`으로 만든 취약 객체와 문자열로 정한 역직렬화 타입을 실제로 놓쳤다 | 2단계 진입점과 규칙으로 보완한다. 놓치는 경우를 회귀 테스트(`app-blindspots`)로 고정해 한계를 문서와 맞춘다 | 남음(알려진 한계) |
 | R-02 | 프레임워크가 부르는 라이브러리 | Spring MVC가 부르는 Jackson처럼 우리 코드 기준 경로에 나오지 않는다 | 프레임워크 규칙(@RequestBody 등) | 대응함(AD-11) |
 | R-03 | 호출 경로 과대근사 | 판정이 맞아도 보고서의 경로가 실제와 다를 수 있다 | 사실을 먼저 보이고 경로는 후보로 표시한다 | 대응함(AD-13) |
-| R-04 | 취약 함수 데이터 없음·오류 | 최근 CVE는 Project KB에 없을 수 있다. 데이터가 틀리면 `callgraph` 판정이 틀린다 | 수정 커밋이나 버전 소스 diff에서 직접 뽑고 대조군으로 확인한다(AD-15). 없으면 `not_analyzed` | 남음 |
+| R-04 | 취약 함수 데이터 없음·오류 | 최근 CVE는 Project KB에 없을 수 있다. 데이터가 틀리면 `CALLGRAPH` 판정이 틀린다 | 수정 커밋이나 버전 소스 diff에서 직접 뽑고 대조군으로 확인한다(AD-15). 없으면 `NOT_ANALYZED` | 남음 |
 | R-05 | 판정 대상과 배포물 불일치 | 실제로 로컬 이미지 jar(102개)와 레포 bootJar(185개, 10/10 `verify-laptop.sh` 확인. 184개와의 차이는 AD-09)가 달랐다 | 실행 중 digest 기준 L1. 판정 대상 jar를 보고서에 명시한다 | api는 대응함. 자동화 [계획] |
 | R-06 | 스캐너 배포 체계 침해 | 변조된 도구나 DB가 결과를 바꾸거나 실행 환경을 공격한다(2026년 3월 Trivy 사례) | SR-04 | [계획] |
 | R-07 | 부재 확인의 오류 | 검색 도구가 바이너리 파일을 조용히 건너뛰어 "0건"이 나온 적이 있다. 그대로 쓰면 거짓 unreachable의 근거가 된다 | 반드시 걸려야 하는 패턴(양성 대조군)으로 검색 자체를 먼저 검증한다 | 작업 규칙으로 적용 |
@@ -1001,7 +1016,7 @@ Reach는 Trivy 같은 오픈 소스 스캐너에 기대고, 운영 클러스터�
 | ID | 부채 | 생긴 이유 | 갚는 방법 | 관련 |
 |---|---|---|---|---|
 | TD-01 | 호출 그래프를 ASM으로 직접 구현했다 | 작업 공간에서 SootUp을 받을 수 없었다 | 정밀도가 더 필요하면 SootUp으로 교체한다(선택) | AD-01, Q-11 |
-| TD-02 | 결과가 파일과 문서로만 남는다(스캔 이력, 사람 검토, L1) | PoC | 결과 저장소와 API 서버 | C-08, C-13, FR-01, FR-08 |
+| TD-02 | 결과가 파일과 문서로만 남는다(스캔 이력, 사람 검토, L1) | PoC | 결과 저장소와 API(AD-18) | C-08, C-13, FR-01, FR-08 |
 | TD-03 | L1이 수동이고 관리자 kubeconfig를 쓴다 | 자동화용 조회 권한이 없다 | 읽기 전용 서비스 계정과 수집 위치 결정(7-3) | FR-04, SR-01, Q-03 |
 | TD-04 | 같은 CVE의 다른 사본(Jackson 2.21.5)을 자동 판정하지 못한다 | 규칙이 앱 코드 사실과 판정한 패키지(Jackson 3) 기준이다(AD-14) | 다른 사본을 판정하는 방법을 정한다. Jackson 2 사본 확정 결과(Q-01)를 보고 설계한다 | AD-08, AD-14 |
 | TD-05 | 도구·DB 버전 고정과 무결성 검증 절차가 정해져 있지 않다(검증 기록이 원자료에 없다) | PoC 범위 밖이었다 | SR-04 | NFR-05 |
@@ -1014,17 +1029,17 @@ Reach는 Trivy 같은 오픈 소스 스캐너에 기대고, 운영 클러스터�
 | Q-01 | Jackson 2.21.5 사본 7행의 판정 | 10/11 제안(확정 대기): 89407·89425는 도달 불가, 나머지 5개는 도달 불가(발동 조건 없음). 사람이 확정한다. 제안 내용과 남은 위험은 규칙명세서 9-1, 근거는 PoC 작업 기록 15-7절 | AD-08, TD-04, 6-5 |
 | Q-02 | 공통 Finding 스키마(OCSF)의 클래스와 필드, 통합 대시보드의 주인 | 팀 합의 | C-10, CON-08 |
 | Q-03 | L1 자동화 방식(클러스터 안 수집기 / SSM 경유 / 모니터링 메트릭)과 클러스터 조회 권한. 제안은 A 권장, B 차선(제한 3가지 전제)이다(7-3, PRD 12절) | 인프라 담당과 합의 | 7-3, SR-01 |
-| Q-04 | API 서버, 결과 저장소, 작업 실행기의 위치 | Logssey 플랫폼 담당과 합의 | C-08, C-13 |
+| Q-04 | ~~API 서버, 결과 저장소, 작업 실행기의 위치~~ 닫음(10/18): AD-18. 운영 DB 서버 위치만 대시보드 ADR-D005에 남는다 | - | C-08, C-13, AD-18 |
 | Q-05 | Finding의 스캔 간 이력 관리(같은 Finding 갱신 / 스캔마다 새로)의 저장 방식. 사람 검토를 잇는 키(서비스·purl·CVE)와 되돌리는 조건(도구 판정·근거 변경)은 FR-08과 API 명세서 3-10으로 정했다 | API 명세서와 함께 정한다 | 6-2, 6-4 |
 | Q-06 | 매일 재판정에 쓸 bootJar 또는 reach 결과의 보관 방식(결과 저장소에 함께 보관 / 실행 중 digest의 이미지를 ECR에서 받아 꺼냄) | 설계 | 5-3, C-13 |
-| Q-07 | PR 게이트 조건과 전환. 처음에는 리포트 전용이다(AD-17). 제안(PRD FR-11 "게이트 전환"):<br>① 대상: PR에서 새로 생긴 Finding만. 기존 Finding으로 PR을 막지 않는다<br>② 조건: API 명세서 6-2(`reachable` CRITICAL·HIGH는 실패, `reachable` MEDIUM 이하·`unknown`·`not_analyzed` CRITICAL·HIGH는 경고, 나머지 통과)<br>③ 전환 기준: 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `reachable` 오탐 0건, 경고 Finding 모두 검토됨<br>④ 예외: `reviewer`가 사유와 만료일을 남기면 통과. PR 작성자 본인은 승인할 수 없다(SR-10). 기록은 Finding 검토 이력에 남고 만료되면 다시 게이트 대상<br>⑤ 되돌리기: 전환 뒤 오탐으로 막히면 그 조건만 경고로 내리고 검증 세트(C-14)에 추가 | 팀. 전환 기준을 만족하면 확정한다. 예외 기록을 받는 API(API-06 또는 API-12)는 설계 필요 | C-11, AD-17 |
+| Q-07 | PR 게이트 조건과 전환. 처음에는 리포트 전용이다(AD-17). 제안(PRD FR-11 "게이트 전환"):<br>① 대상: PR에서 새로 생긴 Finding만. 기존 Finding으로 PR을 막지 않는다<br>② 조건: API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·`NOT_ANALYZED` CRITICAL·HIGH는 경고, 나머지 통과)<br>③ 전환 기준: 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `REACHABLE` 오탐 0건, 경고 Finding 모두 검토됨<br>④ 예외: 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과. PR 작성자 본인은 승인할 수 없다(SR-10). 기록은 Finding 검토 이력에 남고 만료되면 다시 게이트 대상<br>⑤ 되돌리기: 전환 뒤 오탐으로 막히면 그 조건만 경고로 내리고 검증 세트(C-14)에 추가 | 팀. 전환 기준을 만족하면 확정한다. 예외 기록을 받는 API(API-06 또는 API-12)는 설계 필요 | C-11, AD-17 |
 | Q-08 | purl 기준 자동 병합의 구현 여부, Trivy와 Grype 결과가 다를 때의 병합 규칙 | 확인 필요 | C-02, AD-03 |
 | Q-09 | 업그레이드 적용 여부 | 팀 결정. 적용한다면 `marketplaceE2E`와 실제 기동 확인이 먼저다 | FR-13, CON-09 |
 | Q-10 | npm(web, chat) 분석기 설계 | 확장 단계 | QA-07, CON-10 |
 | Q-11 | OSV-Scanner 세 번째 교차 확인, SootUp 교체 | 선택. 정밀도와 범위를 더 높일 때 | AD-01, AD-03 |
 | Q-12 | GitHub Code scanning(SARIF 업로드) 사용 가능 여부, Dependency graph 켜기 | 조직 설정이라 팀 합의 | C-11, 8절 |
 | Q-13 | `rules.json`의 현재 사실·규칙 개수(10/10 밤 이후), 보고서의 "판정 대상 jar 명시" 구현 여부 | 확인 필요 | C-06, C-07 |
-| Q-14 | 토큰 발급과 Logssey 공통 인증 연동(사람 토큰, CI 서비스 계정 토큰 범위) | Logssey 플랫폼 담당과 합의 | C-08, SR-06 |
+| Q-14 | ~~토큰 발급과 Logssey 공통 인증 연동~~ 닫음(10/18): 사람은 대시보드 세션(ADR-D003), CI는 GitHub OIDC(AD-18). 역할 분리는 대시보드 공통 역할 체계와 함께 정한다 | - | C-08, SR-06, AD-18 |
 | Q-15 | PR 대조의 cdxgen(Gradle 빌드) 시간, 이미지 빌드 테스트에 L3 에이전트를 붙였을 때 늘어나는 시간(지금 약 5분 49초). 빌드에 넣을지 별도 작업으로 돌릴지 | 측정 후 팀 결정(PRD 12절) | 5-3, C-11, C-12 |
 | Q-16 | 이미지 SBOM의 hibernate-core groupId가 `org.hibernate`(실제 `org.hibernate.orm`)다. 올바른 좌표로 다시 대조해 놓친 CVE가 있는지 | 보안 담당자 확인(PRD 12절) | C-01, C-02 |
 
@@ -1032,4 +1047,4 @@ Reach는 Trivy 같은 오픈 소스 스캐너에 기대고, 운영 클러스터�
 |---|---|
 | 작성자 | 김진섭 |
 | 작성일 | 2026-10-11 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-10-18 |
