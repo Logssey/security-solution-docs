@@ -97,7 +97,7 @@
 
 | 파라미터 | 설명 |
 |---|---|
-| `size` | 한 번에 받을 개수. 기본 20, 최대 100 |
+| `size` | 한 번에 받을 개수. 기본 20, 최대 100. 1보다 작거나 100보다 크면 400 `INVALID_INPUT` |
 | `cursor` | 직전 응답의 `nextCursor` 값을 그대로 넣는다. 불투명 문자열이다 |
 | `include=total` | 필터를 건 전체 개수 `totalCount`를 함께 준다. 기본으로는 주지 않는다(Reach 추가) |
 
@@ -111,7 +111,7 @@
 
 - `hasNext`가 false면 마지막 페이지이고 `nextCursor`는 null이다.
 - 커서는 처음 요청의 필터·정렬과 묶인다. 커서를 넣으면서 필터나 정렬을 바꾸면 400 `INVALID_INPUT`이다.
-- 커서는 24시간 동안 쓸 수 있다(초안 값).
+- 커서는 24시간 동안 쓸 수 있다(초안 값). [계획] 지금 구현(API-02, API-04)은 기간을 두지 않는다.
 
 **커서 방식으로 정한 이유**
 
@@ -142,7 +142,7 @@
 - 서로 다른 파라미터는 모두 맞아야 한다(AND).
 - 시각 범위는 `from`(포함), `to`(제외)로 준다.
 - purl처럼 `:`, `/`, `@`가 들어간 값은 URL 인코딩한다.
-- 모르는 파라미터나 열거값 밖의 값은 400 `INVALID_INPUT`다. `details.param`에 파라미터 이름을 준다.
+- 모르는 파라미터나 열거값 밖의 값은 400 `INVALID_INPUT`다. `details.param`에 파라미터 이름을 준다. [계획] 지금 구현은 모르는 파라미터를 무시하고 열거값 밖의 값만 400으로 준다(`details`는 2-6처럼 아직 없다).
 - 예외: 스캔 ID 쿼리는 경로 변수와 맞춰 `scanId`로 쓴다(API-11의 `?scanId=` 표기). 비교 방식을 이름에 담은 쿼리도 있다: `firstSeenAfter`(이 시각 뒤), `cveContains`(부분 일치). 둘 다 API-04에서 쓴다.
 
 예: `GET /api/v1/reach/findings?status=REACHABLE,UNKNOWN&severity=CRITICAL,HIGH&sort=-status,-severity,cve`
@@ -702,14 +702,14 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `target` | integer | 아니요 | Target ID |
+| `target` | integer | 아니요 | Target ID. 없는 대상이면 404 `NOT_FOUND`(2-6), 스캔이 없는 대상이면 빈 목록 |
 | `scanStatus` | enum 목록 | 아니요 | `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED` |
 | `trigger` | enum 목록 | 아니요 | `MANUAL`, `PR`, `IMAGE_BUILD`, `SCHEDULE` |
-| `from`, `to` | date-time | 아니요 | `createdAt` 범위 |
-| `sort` | string | 아니요 | 기본 `-createdAt`. 허용: `createdAt`, `finishedAt` |
+| `from`, `to` | date-time | 아니요 | `createdAt` 범위(2-5: `from` 포함, `to` 제외). `from`이 `to`보다 늦으면 400 `INVALID_INPUT` |
+| `sort` | string | 아니요 | 기본 `-createdAt`. 허용: `createdAt`, `-createdAt`, `finishedAt`, `-finishedAt`. 같은 시각이면 스캔 ID 순(같은 방향). 안 끝난 스캔(`QUEUED`·`RUNNING`)은 `finishedAt`이 없어 `-finishedAt`에서 맨 위, `finishedAt`에서 맨 아래 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
-목록 항목은 Scan(3-1)과 같은 모양이다. 대상은 `displayName`과 digest·커밋까지 준다.
+목록 항목은 Scan(3-1)과 같은 모양이다(API-03 응답과 같은 필드, `counts`는 `SUCCEEDED` 항목에만). 대상은 `displayName`과 digest·커밋까지 준다.
 
 요청 예시: `GET /api/v1/reach/scans?target=1&scanStatus=SUCCEEDED&size=20`
 
@@ -744,7 +744,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 }
 ```
 
-**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `NOT_FOUND`(없는 `target`), `RATE_LIMITED`
 
 ### API-03 스캔 상태·요약
 
