@@ -84,7 +84,7 @@
 | 시각 | ISO 8601, UTC, 초 단위, 끝에 `Z`. 예: `2026-09-29T07:46:33Z` | 공통 |
 | 기간 | 초 단위 숫자. 필드 이름은 `Seconds`로 끝난다(`durationSeconds`) | Reach |
 | ID | 숫자(DB의 `BIGINT`). 스캔, 대상, Finding, 워크로드, 취약 함수, CI 검사, 이벤트가 각자 번호를 쓴다. 사용자 ID는 대시보드 공통 `dashboard_users`의 번호다 | 시크릿·IaC·런타임과 같음 |
-| 값이 없는 선택 필드 | 응답에서 뺀다. 클라이언트는 없는 필드를 null로 본다 | Reach |
+| 값이 없는 선택 필드 | 응답에서 빼거나 `null`로 준다. 클라이언트는 둘을 같게(`null`로) 본다. 지금 구현(dashboard-backend `reach`)은 `null`로 준다. 이 문서의 응답 예시는 짧게 쓰려고 뺐다 | Reach |
 | 단건 응답 | 리소스 객체를 그대로 준다 | 공통 |
 | 목록 응답 | `items` 배열, `nextCursor`, `hasNext`(2-4) | Re:Used 공통(`CursorPageResponse`) |
 | 선택 하위 객체 | `include=a,b`로 붙인다. 허용 값은 엔드포인트마다 다르다(4절) | Reach |
@@ -242,9 +242,9 @@ flowchart LR
 | `stages` | object 배열 | 예 | 단계별 진행. `name`(`SBOM` / `MATCH` / `L1` / `L2` / `REPORT`), `status`(`scanStatus` 값), `startedAt`, `finishedAt`, `durationSeconds`, `message` |
 | `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion` |
 | `analysis` | object | 아니요 | L2 분석 규모. `appClasses`, `libraryJars`, `reachedMethods`, `jarSha256`(판정한 jar. 판정 대상을 결과에 남긴다) |
-| `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState` |
+| `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState`. 그 스캔이 낸 도구 판정을 센다. Finding의 마지막 스캔이 아니라 판정의 스캔으로 세서, 같은 Finding이 다음 스캔에 다시 나와도 이 스캔의 개수는 그대로다. 사람 판정(`MANUAL`)은 세지 않는다. 스캔 결과는 스캔이 낸 값으로 두고, 사람 판정은 요약(API-08)에만 반영된다. 값은 0까지 채운다. `byReviewState`는 지금의 검토 상태다(검토는 Finding마다 한 행뿐) |
 | `failure` | object | 아니요 | `FAILED`일 때만. `code`(E-코드), `stage`, `message` |
-| `requestedBy` | object | 예 | 요청한 주체. 대시보드 요청은 `userId`(`dashboard_users` 번호), CI 요청은 `repository`와 OIDC `sub` |
+| `requestedBy` | object | 예 | 요청한 주체. `kind`(`USER` 대시보드 / `CI` / `SYSTEM` 하루 1번 재대조 등)를 함께 준다. `USER`면 `userId`(`dashboard_users` 번호), `CI`면 `repository`와 `subject`(OIDC `sub`), `SYSTEM`은 `kind`만 있다 |
 | `createdAt` | date-time | 예 | 요청을 받은 시각 |
 | `startedAt`, `finishedAt` | date-time | 아니요 | 시작·끝 시각 |
 
@@ -661,7 +661,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
     },
     "displayName": "reused-api @ a6ffffef"
   },
-  "requestedBy": { "userId": 1 },
+  "requestedBy": { "kind": "USER", "userId": 1 },
   "createdAt": "2026-10-11T01:00:00Z"
 }
 ```
@@ -805,7 +805,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
     "byStatus": { "REACHABLE": 0, "UNREACHABLE": 14, "UNKNOWN": 0, "NOT_ANALYZED": 9 },
     "byReviewState": { "UNREVIEWED": 9, "PROVISIONAL": 1, "CONFIRMED": 13 }
   },
-  "requestedBy": { "userId": 1 },
+  "requestedBy": { "kind": "USER", "userId": 1 },
   "createdAt": "2026-10-11T01:00:00Z",
   "startedAt": "2026-10-11T01:00:05Z",
   "finishedAt": "2026-10-11T01:01:20Z"
