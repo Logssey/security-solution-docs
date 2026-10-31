@@ -164,7 +164,7 @@
 
 - `code`: 아래 표의 값이다. 클라이언트는 이 값으로 분기한다.
 - `message`: 사람이 읽는 한국어 문장이다. 문구는 바뀔 수 있다.
-- `details`: 코드별 추가 정보다. 없으면 뺀다.
+- `details`: 코드별 추가 정보다. 없으면 뺀다. [계획] 지금 대시보드 공통 오류 응답은 `code`·`message`만 주고 `details`는 주지 않는다. 409 `CONFLICT`를 받으면 클라이언트는 상세(API-05)를 다시 읽어 현재 `version`을 얻는다.
 
 | 코드 | HTTP | 뜻 | `details` | 주로 나오는 API | 구분 |
 |---|---|---|---|---|---|
@@ -491,7 +491,7 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 |---|---|---|---|
 | `reviewState` | enum | 예 | `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED` |
 | `status` | enum | 아니요 | 사람이 본 판정. `REACHABLE` / `UNREACHABLE` / `UNKNOWN` |
-| `note` | string | 아니요 | 근거 메모. 2,000자 이하 |
+| `note` | string | 아니요 | 근거 메모. 2,000자 이하(글자 수로 센다. 이모지도 한 글자) |
 | `reviewer` | object | 기록이 있으면 | 마지막으로 기록한 사람. `id`(`dashboard_users` 번호), `name`. 서버가 세션에서 채운다 |
 | `reviewedAt` | date-time | 기록이 있으면 | 마지막으로 기록한 시각. 서버 시각이다 |
 | `version` | integer | 예 | 처음은 1이고 고칠 때마다 1씩 오른다 |
@@ -1112,15 +1112,16 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `findingId` | 경로 | integer | 예 | Finding ID |
 | `reviewState` | 본문 | enum | 예 | `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED` |
 | `status` | 본문 | enum | `PROVISIONAL`·`CONFIRMED`일 때 | 사람이 본 판정: `REACHABLE` / `UNREACHABLE` / `UNKNOWN` |
-| `note` | 본문 | string | `PROVISIONAL`·`CONFIRMED`일 때 | 근거 메모. 2,000자 이하. 사람 판정(확정·잠정)에는 근거를 남겨야 한다(NFR-02). 도구 판정과 다르면 다르게 본 이유를 쓴다 |
+| `note` | 본문 | string | `PROVISIONAL`·`CONFIRMED`일 때 | 근거 메모. 2,000자 이하(글자 수로 센다. 이모지도 한 글자). 사람 판정(확정·잠정)에는 근거를 남겨야 한다(NFR-02). 도구 판정과 다르면 다르게 본 이유를 쓴다 |
 | `proposal` | 본문 | object | 아니요 | 확정 전 판정 제안: `status`, `summary`, `reference`(3-10). `reviewState`가 `UNREVIEWED`일 때만 받는다 |
 | `version` | 본문 | integer | 예 | 지금 `review.version`. 다르면 409 `CONFLICT` |
 
 처리 규칙
 
 - 도구가 판정한 Finding(`NOT_ANALYZED`가 아닌 것)의 `verdict`는 바꾸지 않는다(NFR-04). 사람 판정이 다르면 `disagreesWithTool`이 true가 되고, 화면은 다시 볼 대상으로 올린다.
-- 예외: 도구가 판정하지 않은 Finding(`NOT_ANALYZED`)에 사람이 `status`를 넣으면, `verdict`를 그 값과 `method: MANUAL`로 기록한다(FR-08). 도구의 원래 판정은 판정 이력(`include=verdictHistory`)에 남고, `disagreesWithTool`은 false다. `UNREVIEWED`로 되돌리면 `verdict`도 도구의 원래 판정으로 돌아간다.
-- `proposal`은 `reviewState`와 `verdict`를 바꾸지 않는다. `UNREVIEWED`가 아닌데 `proposal`을 보내면 400 `INVALID_INPUT`다. `PROVISIONAL`·`CONFIRMED`로 저장하면 제안은 현재 값에서 빠지고 이력에만 남는다.
+- 예외: 도구가 판정하지 않은 Finding(`NOT_ANALYZED`)에 사람이 `status`를 넣으면, `verdict`를 그 값과 `method: MANUAL`로 기록한다(FR-08). 이때 `verdict.summary`는 `note` 앞 500자다. 도구의 원래 판정은 판정 이력(`include=verdictHistory`)에 남고, `disagreesWithTool`은 false다. `UNREVIEWED`로 되돌리면 `verdict`도 도구의 원래 판정으로 돌아간다.
+- `proposal`은 `reviewState`와 `verdict`를 바꾸지 않는다. `UNREVIEWED`가 아닌데 `proposal`을 보내면 400 `INVALID_INPUT`다. `proposal`을 보낼 때는 `status`와 `summary`가 필수다. `PROVISIONAL`·`CONFIRMED`로 저장하면 제안은 현재 값에서 빠지고 이력에만 남는다.
+- `UNREVIEWED`로 되돌릴 때는 `status`·`note`를 보내지 않는다. 보내면 400 `INVALID_INPUT`다.
 - `reviewer`(세션 사용자)와 `reviewedAt`(서버 시각)은 서버가 채운다. 본문으로 받지 않는다.
 - 모든 변경은 이력으로 남는다(`include=reviewHistory`). `UNREVIEWED`로 되돌리기도 받으며, 되돌려도 이력은 남는다.
 - 이어받기(FR-08 수용 기준 7): 새 스캔에서 같은 서비스의 같은 purl·CVE를 가진 이전 Finding에 검토가 있으면, 서버가 검토 상태·사람 판정·메모를 이어받고 `carriedFrom`을 채운다. 이어받기는 이 API가 아니라 스캔 처리(API-01) 중에 일어난다.
