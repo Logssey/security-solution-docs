@@ -174,7 +174,7 @@
 | `NOT_FOUND` | 404 | 리소스가 없음 | `resource`, `id` | 단건 조회, `scanId`·`target`을 지정한 조회 | 공통 |
 | `CONFLICT` | 409 | 검토 `version`이 현재 값과 다름(다른 사람이 먼저 고침), 이미 결과를 올린 CI 검사에 다시 업로드 | `currentVersion` | API-06, API-13 | 공통 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄 | `key` | API-01, API-12 | Reach 추가 |
-| `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
+| `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현(API-11)은 `CONFLICT`로 준다 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
 | `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상) | `field` | API-01, API-12 | Reach 추가 |
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드한 결과 묶음이 한도를 넘음 | `limitBytes` | API-13 | Reach 추가(IaC와 같은 이름) |
 | `RATE_LIMITED` | 429 | 속도 제한을 넘음 | `retryAfterSeconds` | 전체 | 공통 |
@@ -1474,7 +1474,7 @@ Content-Type: application/json; charset=utf-8
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 예 | 내보낼 스캔. `SUCCEEDED`여야 한다 |
+| `scanId` | integer | 예 | 내보낼 스캔. `SUCCEEDED`여야 한다(아니면 409). 없으면 400, 없는 스캔이면 404 |
 | `status` | enum 목록 | 아니요 | 판정 상태로 거른다. 기본은 전체 |
 | `size`, `cursor` | - | 아니요 | 2-4. 목록 응답과 같은 `items`·`nextCursor`·`hasNext` 모양이다 |
 
@@ -1500,6 +1500,10 @@ Content-Type: application/json; charset=utf-8
   "hasNext": false
 }
 ```
+
+- 항목은 그 스캔이 낸 도구 판정으로 만든다. API-03 `counts`와 같은 기준이라, 같은 Finding이 다음 스캔에서 바뀌어도 지난 스캔은 그때의 판정으로 나온다. 사람 판정(`MANUAL`)은 넣지 않는다. `unmapped.reach.reviewState`만 지금 검토 상태다.
+- 정렬은 Finding ID 순이다. 커서는 `scanId`·`status`와 묶인다(2-4).
+- `finding_info.title`은 `<CVE> <패키지 이름> <버전>`이다. `resources[].uid`는 이미지면 `<저장소>@<digest>`, 레포면 `<레포 이름>[/<하위 경로>]@<커밋>`이다(Logssey 자산 ID 형식 합의 전).
 
 **오류**: `INVALID_INPUT`(`scanId` 없음), `NOT_FOUND`, `SCAN_NOT_READY`, `UNAUTHENTICATED`, `RATE_LIMITED`
 
