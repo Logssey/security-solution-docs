@@ -313,7 +313,7 @@ Finding에 대한 Reach의 결론이다.
 | `summary` | string | 예 | 한 줄 근거. 예: "FORM 인증(LoginConfig) 설정 없음" |
 | `notAnalyzedReason` | enum | `NOT_ANALYZED`일 때 | `NO_VULN_FUNCTION_DATA`(취약 함수 데이터 없음) / `OS_PACKAGE`(OS 패키지) / `UNANALYZED_COPY`(판정하지 않은 패키지 사본) / `UNSUPPORTED_ECOSYSTEM`(L2를 아직 지원하지 않는 생태계) |
 | `ruleId` | string | 아니요 | 적용한 규칙 `RULE-<CVE ID>` |
-| `rule` | Rule | 아니요 | `include=rule`일 때(API-05). `ruleId`의 규칙 객체(3-7) |
+| `rule` | Rule | 아니요 | `include=RULE`일 때(API-05). `ruleId`의 규칙 객체(3-7) |
 | `vulnFunctionIds` | integer 배열 | 아니요 | 판정에 쓴 취약 함수 |
 | `vulnFunctions` | VulnFunction 배열 | 아니요 | `include=vulnFunctions`일 때(API-05). `vulnFunctionIds`의 취약 함수 객체(3-8) |
 | `callgraph` | object | 아니요 | `packageReached`, `vulnFunctionPresent`(jar에 취약 메서드가 있나), `vulnFunctionReached`, `entryStage`(1 또는 2), `weakOnly`(약한 경로로만 닿음) |
@@ -497,9 +497,9 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 | `version` | integer | 예 | 처음은 1이고 고칠 때마다 1씩 오른다 |
 | `disagreesWithTool` | boolean | 예 | `status`가 도구 판정과 다르면 true. 도구가 판정하지 않아 사람 판정이 `verdict`가 된 경우(API-06 예외)는 false다. true인 Finding은 검증 세트(ARD C-14)에 추가할 후보다(FR-08) |
 | `proposal` | object | 아니요 | 사람 확정을 기다리는 판정 제안. `status`(제안한 판정: `REACHABLE` / `UNREACHABLE` / `UNKNOWN`), `summary`(한 줄 근거. 발동 조건 자체가 없어 도달 불가로 본 제안은 "발동 조건 없음"으로 시작한다), `reference`(근거 문서). `reviewState`와 `verdict`를 바꾸지 않는다. `PROVISIONAL`·`CONFIRMED`로 저장하면 현재 값에서 빠지고 이력에 남는다 |
-| `carriedFrom` | object | 아니요 | 이 검토를 이어받은 이전 Finding. `findingId`, `scanId`, `reviewedAt`. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 서버가 채운다(FR-08 수용 기준 7). 이어받지 않았으면 없다 |
+| `carriedFrom` | object | 아니요 | 이 검토를 이어받은 이전 Finding. `findingId`, `scanId`, `reviewedAt`. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 서버가 채운다(FR-08 수용 기준 7). 이어받지 않았으면 없다. `reviewedAt`은 이전 Finding의 검토 시각이다. 사람이 다시 기록하면(API-06) 빈다 |
 | `resetReason` | enum | 아니요 | 이어받을 검토를 `UNREVIEWED`로 되돌린 이유. `VERDICT_CHANGED`(도구 판정이 바뀜) / `EVIDENCE_CHANGED`(사실·호출 경로·적용 규칙이 바뀜). 되돌리기 전 기록은 `history`에 남는다(FR-08 수용 기준 8). 사람이 다시 기록하면 빈다 |
-| `history` | object 배열 | 아니요 | `include=reviewHistory`일 때. 이전 기록을 새것부터 준다. 항목은 `reviewState`, `status`, `note`, `proposal`, `reviewer`, `reviewedAt`, `version`이다 |
+| `history` | object 배열 | 아니요 | `include=reviewHistory`일 때. 기록을 새것부터 준다. 지금 기록도 들어 있어 첫 항목의 `version`이 `review.version`과 같다. Finding을 만들 때의 검토 전 기록(version 1)은 없고, 기록이 없으면 빈 배열이다. 항목은 `reviewState`, `status`, `note`, `proposal`, `reviewer`, `reviewedAt`, `version`, `changeKind`(`HUMAN` 사람 기록 / `CARRIED` 이어받음 / `RESET` 서버가 되돌림. `RESET`은 `reviewer`가 없다)다 |
 
 ### 3-11. 열거값
 
@@ -977,7 +977,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | 파라미터 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
 | `findingId` | 경로 | integer | 예 | Finding ID |
-| `include` | 쿼리 | string 목록 | 아니요 | `RULE`(적용 규칙 객체, `verdict.rule`), `vulnFunctions`(취약 함수 객체, `verdict.vulnFunctions`), `reviewHistory`(검토 이력, `review.history`), `verdictHistory`(판정 이력, `verdict.history`) |
+| `include` | 쿼리 | string 목록 | 아니요 | `RULE`(적용 규칙 객체, `verdict.rule`), `vulnFunctions`(취약 함수 객체, `verdict.vulnFunctions`), `reviewHistory`(검토 이력, `review.history`), `verdictHistory`(판정 이력, `verdict.history`). 네 값 밖이면 400 `INVALID_INPUT`(대소문자를 구분한다). [계획] 지금 구현은 `reviewHistory`만 채우고 나머지 셋은 받기만 한다 |
 
 요청 예시: `GET /api/v1/reach/findings/2`
 
