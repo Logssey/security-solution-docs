@@ -198,6 +198,7 @@
 | 같은 키가 동시에 두 번 | 하나만 처리하고, 다른 하나는 같은 응답을 받는다 |
 
 - 다시 줄 때는 같은 검사·스캔을 지금 상태(`scanStatus`)로 준다.
+- API-01과 API-12는 키를 같이 쓴다. 한 호출 주체가 API-12에 쓴 키를 API-01에 다시 쓰면 본문이 달라 409다.
 
 - API-06(PATCH)은 `version`으로 충돌을 막는다. 같은 본문을 다시 보내면 `version`이 이미 올라가 409 `CONFLICT`가 난다. 클라이언트는 현재 값을 다시 읽는다.
 
@@ -617,8 +618,8 @@ stateDiagram-v2
 | `target.repo.name`, `target.repo.commit` | 본문 | string | `type=REPO`일 때 | 레포 이름과 커밋 SHA(40자) |
 | `target.repo.path` | 본문 | string | 아니요 | 레포 안 하위 경로. chat은 `chat-server` |
 | `target.image.repository`, `target.image.digest` | 본문 | string | `type=IMAGE`일 때 | 이미지 저장소와 digest. 태그는 받지 않는다 |
-| `rescanOf` | 본문 | integer | 아니요 | 이전 스캔 ID. 그 스캔의 저장된 SBOM으로 대조부터 다시 한다. `target`과 함께 쓰지 않는다 |
-| `options.crossCheck` | 본문 | string 배열 | 아니요 | 교차 확인 스캐너. 기본 `["GRYPE"]`(FR-03) |
+| `rescanOf` | 본문 | integer | 아니요 | 이전 스캔 ID. 그 스캔의 저장된 SBOM으로 대조부터 다시 한다. `target`과 함께 쓰지 않는다(둘 다 있거나 없으면 400). 그 스캔이 `SUCCEEDED`가 아니면 422 |
+| `options.crossCheck` | 본문 | string 배열 | 아니요 | 교차 확인 스캐너. 기본 `["GRYPE"]`(FR-03). 지금 받는 값은 `GRYPE`뿐이다 |
 | `options.l1`, `options.l2` | 본문 | boolean | 아니요 | 배포 여부 확인과 판정. 기본 둘 다 true. `options.l2`가 false면 대조까지만 한다. 이때 스캔의 `stages`에 `L2`가 없다 |
 
 요청 예시(배포 이미지)
@@ -649,7 +650,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 }
 ```
 
-응답 예시(202 Accepted, 헤더 `Location: /api/v1/reach/scans/1`)
+응답 예시(202 Accepted, 헤더 `Location: /api/v1/reach/scans/1`). 응답은 Scan(3-1)이고 API-03과 같은 필드를 준다. 아래는 줄인 것이다
 
 ```json
 {
@@ -691,7 +692,8 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 - 레포 대상은 cdxgen이 Gradle 빌드를 실행한다. 간접 의존성까지 잡지만 빌드 스크립트를 실행하므로, 빌드는 러너에서만 하고 서버는 PR 코드를 실행하지 않는다(ARD AD-18, SR-09).
 - `rescanOf`는 재빌드 없이 저장된 SBOM을 최신 DB로 다시 대조한다. 하루 1번 재대조(FR-11)에 쓴다.
-- 어떤 서비스를 스캔할지는 PRD FR-15의 대상(서비스) 등록 목록(레포에 커밋한 설정 파일)이 정한다. 하루 1번 재대조(`trigger=SCHEDULE`)는 이 목록의 서비스를 대상으로 한다. 등록하지 않은 대상을 API-01로 요청했을 때 받을지는 정하지 않았다.
+- 어떤 서비스를 스캔할지는 PRD FR-15의 대상(서비스) 등록 목록(레포에 커밋한 설정 파일)이 정한다. 하루 1번 재대조(`trigger=SCHEDULE`)는 이 목록의 서비스를 대상으로 한다. 등록하지 않은 대상을 API-01로 요청했을 때 받을지는 정하지 않았다. [계획] 지금 구현은 `app`을 정할 수 있으면(3-2) 받는다.
+- 서버는 요청과 함께 `mode=MANUAL`인 CI 검사를 만들고 `options`를 거기에 남긴다(러너가 읽는다). [계획] 지금 구현은 `workflow_dispatch`를 부르지 않아 스캔이 `QUEUED`에 머문다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`
 
