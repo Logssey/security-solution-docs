@@ -29,6 +29,7 @@ Secret 기능은 `/api/v1/secrets` 아래에서 승인된 수집 범위, 키 인
 | `GET /api/v1/secrets/matrix` | 동일 currentCases 스냅샷의 심각도·유효성 교차 분포와 미평가·확인 범위 |
 | `GET /api/v1/secrets/cases` | `origin`, `scope=currentCases\|history`, `stages`, `assignmentStatus`, `assignee`, 소스·환경·발급자·심각도·검증·예외·변경 기간 필터. 현재·과거 대응 건은 단위를 유지 |
 | `GET /api/v1/secrets/cases/{caseId}` | 마스킹 키·개설 결정·단계·건 조정 담당자·버전·권한 있는 위치·capabilities. 상세는 최신 readAt와 changedSinceSnapshot 제공 |
+| `GET /api/v1/secrets/cases/{caseId}/guide` | 외부 호출 없는 발급자·단계별 기본 안내와 선택 AI의 현재 사용 조건. 3.3절 |
 | `GET /api/v1/secrets/cases/{caseId}/activities` | 허용된 담당·조치·체크리스트·재검사·예외·해결의 시간순 이력. happenedAt DESC, activityId DESC, 페이지 분리 |
 | `GET /api/v1/secrets/assignees?caseId=&occurrenceId=` | 해당 위치 연결의 적격 REMEDIATOR와 활성 팀 소속. SECURITY 권한과 후보 대상의 역할을 서버에서 확인 |
 | `GET /api/v1/secrets/cases/{caseId}/revalidations` | 허용 위치의 재검사 이력. revalidationId·occurrenceId·runId·canViewRun·jobStatus·result·failureCode·requestedAt·finishedAt. 실행 링크는 canViewRun=true일 때만 제공 |
@@ -67,13 +68,38 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | `GET /cases/{caseId}/exceptions` | 현재·과거 예외, 허용 위치 ID, `currentlyApplicable`, `canApprove`, `allowedReasonCodes`, `allowedRevokeReasonCodes`, `eligibleOccurrences`, `maxDurationDays`, `fullyRiskAccepted`, `restrictedCoverage`. 승인·취소·만료·범위 변경 상태를 구분 |
 | `POST /cases/{caseId}/exceptions` | 위치 집합·사유 코드·안전한 근거·만료 시각·기대 버전. SECURITY가 위치별 범위·승인 권한·중복 활성 예외 검사 |
 | `POST /cases/{caseId}/exceptions/revoke` | 예외 ID·취소 사유·기대 버전. 만료·취소 뒤 남은 위험에 맞게 조치 재개 |
-| `POST /cases/{caseId}/guide` | 본문 없이 허용 사용자에게 버전 고정 안내 반환. 상태·DB 변경 없음 |
+| `POST /cases/{caseId}/guide` | 본문 없이 선택 AI를 명시적으로 요청. 허용 조건·설정·응답 검사를 통과하지 못하면 기본 안내 반환. 상태·DB 변경 없음. 3.3절 |
 
 외부 조치 종류는 ROTATED·REVOKED·REMOVED_FROM_SOURCE·PERMISSION_REDUCED다. 외부 수행 시각은 요청보다 최대 5분 뒤부터 최근 30일 사이만 허용한다. 한 위치에 여러 기록을 남길 수 있고 PERMISSION_REDUCED는 임시 완화일 뿐 제거·폐기 증거를 대신하지 않는다. 체크리스트 기본 코드는 IDENTIFY_OWNER·ROTATE_OR_REVOKE·REMOVE_EXPOSURE·CHECK_ACCESS_LOGS이며 상태는 TODO·DONE이다. 체크리스트는 조치 주기·재검사·해결의 필수 사실을 대체하지 않는다.
 
 재검사 작업 상태는 PENDING·LEASED·SUCCEEDED·FAILED·CANCELLED, 결과는 PENDING·PRESENT·MISSING·UNKNOWN이다. MISSING은 마지막 실질 조치 이후 같은 승인 범위 revision을 정상 읽고 필수 탐지가 성공했으며 설정·엔진·HMAC 버전이 비교 가능한 경우에만 인정한다. 불완전·실패·비교 불가는 UNKNOWN과 안전한 사유다. 한 위치 결과를 전체 원천·과거 Git 이력·다른 복사본의 해소로 확장하지 않는다. 지원하지 않는 원천의 재검사는 capability=false로 등록을 거부한다.
 
-가이드 응답은 `{version,source:"DEFAULT|GROQ",title,steps:[{code,title,description}],notice}`다. 기본 가이드는 외부 API 없이 동작한다. 선택 AI는 별도 활성화·키·확인된 합성 TEST 조건을 모두 충족할 때만 호출하며 장애 시 기본 안내로 대체한다. 키 원문·마스킹 끝자리·HMAC·저장소·계정·경로·자유 메모는 외부 AI에 보내지 않는다.
+### 3.3. 기본 대응 안내와 선택 AI
+
+가이드 응답은 `{version,source:"DEFAULT|GROQ",title,steps:[{code,title,description}],notice,readiness}`다. `version=secret-response-guide-v2`는 발급자·진행 단계별 안내의 버전이며 심각도 정책과 저장된 체크리스트 `guideVersion=S2_V1`을 변경하지 않는다. 안내는 발급 서비스의 키 교체·폐기, 발견 위치의 원문 제거·안전한 저장 전환, 조치 기록과 재검사를 구분한다. 재검사 대기·해결 상태에서는 기존 근거 확인을 안내하며 새 조치나 완료 사실을 생성하지 않는다.
+
+`GET /cases/{caseId}/guide`는 현재 건을 읽을 수 있는 사용자에게 `source=DEFAULT`와 사용 조건을 반환한다. 외부 호출·AI 예산 소비·이전 AI 결과 재생이 없으며 `aiRequested=false,providerCalled=false,cached=false`다. `POST`는 기존 세션·CSRF·대상 권한으로 선택 AI를 명시적으로 요청하고, 제한·비활성·설정 부족·공급자 실패에도 사용 가능한 기본 안내를 반환한다. 두 경로 모두 키·건 상태·체크리스트·감사를 변경하지 않는다.
+
+`readiness={status,reasonCode,aiAvailable,aiRequested,providerCalled,cached}`다. 상태는 `READY|UNAVAILABLE|GENERATED|FALLBACK`이며 `aiAvailable`은 현재 대상·로컬 설정이 요청을 허용한다는 뜻이다. 공급자 인증·할당량·네트워크 성공을 보장하지 않는다. `providerCalled`는 해당 요청의 공급자 통신 시도, `cached`는 이전 결과 또는 실패 대기 상태의 재사용 여부다. 수용된 AI 선택만 `source=GROQ`이며 캐시 재사용은 `CACHE_HIT,providerCalled=false`다. 실패 캐시는 원래 실패 사유와 `source=DEFAULT,cached=true,providerCalled=false`를 유지하므로 AI 결과 생성으로 표시하지 않는다.
+
+AI는 AWS·GitHub 발급자, TEST 건, 현재 유효한 키별 합성 표본 근거, 실키 확인 근거 부재, 모든 관련 위치의 열람 권한, 서버 opt-in과 유효한 키 설정을 모두 요구한다. 저장소 이름이나 TEST 표지만으로 허용하지 않으며 캐시 사용 전에도 대상 조건을 다시 검사한다. 사유는 `TEST_ONLY|SYNTHETIC_FIXTURE_REQUIRED|ALL_LOCATIONS_ACCESS_REQUIRED|UNSUPPORTED_ISSUER`, `DISABLED|KEY_MISSING|KEY_INVALID|ENDPOINT_NOT_ALLOWED|MODEL_NOT_ALLOWED|CONFIGURATION_INVALID`, `REQUEST_IN_PROGRESS|CALL_BUDGET_EXHAUSTED` 및 `PROVIDER_TIMEOUT|PROVIDER_REJECTED|PROVIDER_RATE_LIMITED|PROVIDER_UNAVAILABLE|PROVIDER_INVALID_RESPONSE|PROVIDER_RESPONSE_TOO_LARGE|PROVIDER_INTERRUPTED`로 구분한다. 공급자 원문 오류와 설정값은 반환하지 않는다. 전송·응답·호출량 경계는 [보안 실행 정책](security-and-runtime.md#선택-ai-가이드)을 따른다.
+
+### 3.4. 발견 키 권한 자료와 담당자 확인
+
+다음 경로는 `/api/v1/secrets/occurrences/{occurrenceId}/permission-assistance` 아래의 기존 위치별 자원이다. 조회는 현재 위치 열람 권한, 요청·확인·제외는 해당 연결 SECURITY·CSRF와 최신 context·근거 revision을 검사한다. 키 원문·principal ARN·계정 식별자·사용자 이름·정책 원문·임의 endpoint는 입력·응답에 포함하지 않는다.
+
+| Method·하위 경로 | 계약 |
+|---|---|
+| `GET` | 현재 `identity`, `collectorOptions`, `latestRequest`, `latestObservation`, `supplementation`, `capabilities`와 `requestReadiness` 반환. 외부 호출 없음 |
+| `POST /requests` | `{expectedContextVersion,idempotencyKey,collectorConnectionId?}`로 `ENRICH/PERMISSION_ASSISTANCE` 작업 등록. 202와 requestId·jobId·상태. 수집 연결이 하나로 확정되지 않으면 적격 연결을 명시 |
+| `GET /requests/{requestId}` | 같은 위치의 작업 상태·안전한 실패 사유·관측 후보 조회 |
+| `GET /observations/{observationId}/preview` | 현재 contextVersion·evidenceRevision, 후보·범위 한계, 실제 사용 가능한 부모 근거와 확인/제외 조건 조회 |
+| `POST /observations/{observationId}/confirm` | `{expectedContextVersion,expectedEvidenceRevision,idempotencyKey,attestation:true,evidenceRef,observedAt,validUntil,facts,sourceRefs}`. 별도 자료를 검토한 사람의 수동 근거 제출 |
+| `POST /observations/{observationId}/reject` | `{expectedContextVersion,idempotencyKey,reasonCode}`. 사유는 NOT_APPLICABLE·INSUFFICIENT_EVIDENCE·IDENTITY_MISMATCH |
+
+`requestReadiness={nextAction,checks:[{code,status,action}]}`는 기능 설정·SECURITY 역할·지원 유형·완전한 키 구성·원천 접근·현재 키 주체·승인 조회 연결의 기존 요청 조건을 설명한다. 상태는 `READY|BLOCKED|WAITING|UNSUPPORTED`다. 실제 최신 검증에 결합된 주체가 없으면 `KEY_IDENTITY`는 BLOCKED, `COLLECTOR`는 WAITING이며 먼저 `VALIDATE_CREDENTIAL`을 안내한다. 이때 적격 연결을 아직 대조할 수 없으므로 `APPROVED_COLLECTOR_REQUIRED`로 단정하지 않는다. 주체 확인 뒤 실제 승인 연결이 없을 때 `CHOOSE_APPROVED_COLLECTOR`를 안내한다. 준비 완료는 권한 수집·확정 완료가 아니다.
+
+AWS는 확인한 주체와 같은 계정의 승인 연결로 결합된 사용자·역할 정책만 읽는다. GitHub는 발견 PAT의 실제 검증에서 얻은 사용자·정규화된 scope를 사용하며 수집 App의 권한을 대신하지 않는다. 자동 관측은 PARTIAL 후보이며 전체 유효 권한·영향·심각도를 확정하지 않는다. 확인에는 관측에 있는 capability와 기존 `PERMISSION_MAPPING`의 네 coverage에 대한 COMPLETE 근거, 현재 키 주체를 결합한 실제 검증 시도, 승인된 자산 분류, 수락된 조사 자료 등 적격 `sourceRefs`를 요구한다. 체크박스나 후보 이름 변경으로 이를 대신하지 못한다. 사람의 수동 근거만 기존 평가·보류·독립 검토 절차로 전달하며 [심각도 평가 계약](risk-assessment-contract.md)의 v2 정책과 신규 720개 정책 보류를 변경하지 않는다.
 
 ## 4. 공유 데이터 경계
 
@@ -255,6 +281,8 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 ### 5.7. 키별 위치 시각화의 안전한 읽기 모델
 
 `GET /api/v1/secrets/{id}/locations?origin=PRODUCTION&source=&environment=&presence=&page=&size=`를 키 독립 상세 `/secrets/:secretId`의 집계 경로로 둔다. 위치 권한은 서버에서 적용한다. 이 경로는 `SECURITY`가 허용된 위치, 또는 현재 할당받고 해당 연결의 `REMEDIATOR` 권한이 있는 위치에 접근할 때만 사용할 수 있다. `OPERATIONS`만으로 키 상세·판정·대응 증거의 읽기 권한이 생기지 않는다. 전체 연결 조회의 권한을 발견 키 조회 권한으로 확장하지 않는다.
+
+키 상세에서는 대응 건이 없어도 AWS·GitHub의 기본 조치 절차를 외부 호출 없이 확인할 수 있다. 안내를 여는 동작은 대응 건 생성·노출 판정·조치 기록·AI 요청이 아니며, 건별 가이드 API를 쓰기 위해 건을 임의 생성하지 않는다. 실제 유효성·합성 표본·권한·해결 근거는 각 자원에서 별도로 확인한다.
 
 응답은 `{credential,filters,visibleLocationCount,locationStateCounts,items,total,page,size,readAt,detailVersion,restrictedCoverage,capabilities}`다. `page`는 0부터, `size`는 1–100(기본 20)이며 `total=visibleLocationCount`는 같은 권한·필터로 허용된 위치의 수다. 정렬은 현재 미해결 위치 우선, `lastSeenAt DESC,occurrenceId DESC`로 고정한다. 같은 응답의 대표 위치·상태 수·총수·페이지는 하나의 DB 읽기 시점을 사용한다. 한 페이지의 길이를 전체 위치 수로 쓰지 않는다. 후속 페이지는 첫 응답의 `expectedDetailVersion`을 전달한다. 허용된 위치·권한·정렬 사실이 바뀌면 409 `DETAIL_CHANGED`로 첫 페이지 재조회를 요구해 이전 페이지와 최신 페이지의 중복·누락을 막는다. 이 버전은 허용된 사실의 불투명 버전값이며 숨겨진 위치 활동으로 바뀌지 않는다.
 
