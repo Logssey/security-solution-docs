@@ -72,6 +72,7 @@
 - 세션이 없거나 만료되면 401 `UNAUTHENTICATED`다. CSRF 토큰이 없거나 다르면 403 `FORBIDDEN`이다(공통).
 - OIDC 토큰 검증에 실패하면 401 `UNAUTHENTICATED`, 허용 목록 밖의 레포·이벤트면 403 `FORBIDDEN`이다.
 - 쓰기 요청(API-01, API-06, API-12, API-13)은 누가·언제 했는지 남긴다(`requestedBy`, `reviewer`, `reviewedAt`). CI 요청은 OIDC 토큰의 `repository`와 `sub`를 남긴다.
+- [계획] 지금 구현은 OIDC 검증을 아직 붙이지 않아 CI 경로(API-12, API-13)도 대시보드 `ADMIN` 세션으로 받는다. 그래서 CI 검사가 만든 스캔도 `requestedBy.kind`가 `USER`다.
 
 ### 2-3. 요청·응답 형식
 
@@ -173,9 +174,9 @@
 | `FORBIDDEN` | 403 | CSRF 토큰 누락·불일치, 허용 목록 밖의 레포·이벤트, CI 토큰으로 대시보드 API 호출 | `reason` | 전체 | 공통 |
 | `NOT_FOUND` | 404 | 리소스가 없음 | `resource`, `id` | 단건 조회, `scanId`·`target`을 지정한 조회 | 공통 |
 | `CONFLICT` | 409 | 검토 `version`이 현재 값과 다름(다른 사람이 먼저 고침), 이미 결과를 올린 CI 검사에 다시 업로드 | `currentVersion` | API-06, API-13 | 공통 |
-| `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄 | `key` | API-01, API-12 | Reach 추가 |
+| `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 `CONFLICT`로 준다 | `key` | API-01, API-12 | Reach 추가 |
 | `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현(API-11)은 `CONFLICT`로 준다 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
-| `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상) | `field` | API-01, API-12 | Reach 추가 |
+| `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상). [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 공통 `UNPROCESSABLE`(422)로 준다 | `field` | API-01, API-12 | Reach 추가 |
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드한 결과 묶음이 한도를 넘음 | `limitBytes` | API-13 | Reach 추가(IaC와 같은 이름) |
 | `RATE_LIMITED` | 429 | 속도 제한을 넘음 | `retryAfterSeconds` | 전체 | 공통 |
 | `INTERNAL_ERROR` | 500 | 서버 오류 | - | 전체 | 공통 |
@@ -187,7 +188,7 @@
 
 - 스캔을 만드는 요청(API-01, API-12 실행)은 `Idempotency-Key` 헤더가 필수다. 없으면 400 `INVALID_INPUT`다.
 - 값은 클라이언트가 만든 고유 문자열이다(1~64자, UUID 권장). CI는 다시 실행해도 같은 값이 나오게 만든다. 예: `service-backend-pr-123-bb4639b`.
-- 서버는 키를 호출 주체(대시보드 사용자, CI 레포)별로 24시간 보관한다(초안 값).
+- 서버는 키를 호출 주체(대시보드 사용자, CI 레포)별로 24시간 보관한다(초안 값). [계획] 지금 구현은 기간 없이 보관한다.
 
 | 경우 | 응답 |
 |---|---|
@@ -195,6 +196,8 @@
 | 같은 키, 같은 본문 | 처음 응답을 그대로 다시 준다(같은 `id`, 같은 상태 코드). `Idempotent-Replayed: true` 헤더를 붙인다 |
 | 같은 키, 다른 본문 | 409 `IDEMPOTENCY_CONFLICT` |
 | 같은 키가 동시에 두 번 | 하나만 처리하고, 다른 하나는 같은 응답을 받는다 |
+
+- 다시 줄 때는 같은 검사·스캔을 지금 상태(`scanStatus`)로 준다.
 
 - API-06(PATCH)은 `version`으로 충돌을 막는다. 같은 본문을 다시 보내면 `version`이 이미 올라가 409 `CONFLICT`가 난다. 클라이언트는 현재 값을 다시 읽는다.
 
@@ -272,6 +275,8 @@ flowchart LR
 
 - 이미지는 digest로만 가리킨다. ECR 태그는 MUTABLE이라 태그로는 실행 중인 이미지를 확정하지 못한다.
 - `image.repository`에는 레지스트리 호스트를 넣지 않는다.
+- 요청(API-01, API-12)의 커밋은 40자, digest는 `sha256:`과 64자다. 대문자로 와도 소문자로 저장한다. 형식이 틀리거나 `image.repository`에 태그(`:`)·digest(`@`)를 붙이면 400 `INVALID_INPUT`이다.
+- `app`을 주지 않았는데 아래 표에 없는 레포·저장소면 422 `TARGET_UNRESOLVED`다. 이미 있는 대상(같은 digest, 또는 같은 레포·하위 경로·커밋)을 다른 `app`으로 요청해도 422다.
 
 | `app` | 레포 | 이미지 저장소 | 주력 스캔 | L2 판정 |
 |---|---|---|---|---|
@@ -1522,12 +1527,12 @@ Content-Type: application/json; charset=utf-8
 | `Idempotency-Key` | 헤더 | string | 예(실행) | 2-7. 예: `service-backend-pr-123-bb4639b` |
 | `mode` | 본문 | enum | 예 | `PR`(PR, 레포 SBOM) / `IMAGE_BUILD`(이미지 빌드, ECR push 전) / `SCHEDULE`(하루 1번) / `MANUAL`(수동 실행) |
 | `repository` | 본문 | string | 예 | 예: `service-backend` |
-| `headCommit` | 본문 | string | `mode=PR`일 때 | 검사할 커밋 SHA |
+| `headCommit` | 본문 | string | `mode=PR`일 때 | 검사할 커밋 SHA(40자) |
 | `pullRequest` | 본문 | object | 아니요 | `number`, `baseRef`(예: `main`), `headRef`(예: `develop`) |
-| `target` | 본문 | object | `rescanOf`가 없으면 | API-01의 `target`과 같다. `mode=PR`이면 레포 대상(`type=REPO`, 커밋은 `headCommit`), `mode=IMAGE_BUILD`이면 빌드한 이미지의 digest다(6-1) |
-| `rescanOf` | 본문 | integer | 아니요 | `mode=SCHEDULE`에서 저장된 SBOM으로 재대조·재판정할 스캔 |
+| `target` | 본문 | object | `rescanOf`가 없으면 | API-01의 `target`과 같다. `mode=PR`이면 레포 대상(`type=REPO`, 커밋은 `headCommit`), `mode=IMAGE_BUILD`이면 빌드한 이미지의 digest다(6-1). 맞지 않으면 400 |
+| `rescanOf` | 본문 | integer | 아니요 | `mode=SCHEDULE`에서 저장된 SBOM으로 재대조·재판정할 스캔. `target`과 함께 쓰지 않는다(둘 다 있거나 없으면 400). 지금 구현은 `SCHEDULE`·`MANUAL`에서만 받고, 그 스캔이 `SUCCEEDED`가 아니면 422 |
 | `policy` | 본문 | enum | 아니요 | `REPORT_ONLY`(기본) / `GATE` |
-| `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. 없으면 `baseRef`의 최신 `SUCCEEDED` 스캔을 쓴다 |
+| `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. `SUCCEEDED`여야 한다(아니면 400). 없으면 `baseRef`의 최신 `SUCCEEDED` 스캔을 쓴다. [계획] 스캔에 브랜치 정보가 없어 지금 구현은 찾지 않고 기준 없이(모든 Finding을 새 것으로) 본다. OIDC 토큰의 `ref`를 남길 때 한다 |
 | `checkId` | 경로 | integer | 예 | CI 검사 ID |
 
 요청 예시(실행)
@@ -1598,6 +1603,8 @@ Idempotency-Key: service-backend-pr-123-bb4639b
   "finishedAt": "2026-10-11T03:01:20Z"
 }
 ```
+
+- `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. [계획] API-04는 아직 `scanId`를 받지 않아, 지금은 `findingsUrl`로 열면 기준 범위(대상마다 최신 스캔) 목록이 나온다.
 
 **오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
 
@@ -1749,7 +1756,7 @@ sequenceDiagram
 
 | 단계 | `policy` | 동작 |
 |---|---|---|
-| 1. 리포트 전용 | `REPORT_ONLY` | 결과만 남긴다. 항상 `PASS`, `exitCode` 0 |
+| 1. 리포트 전용 | `REPORT_ONLY` | 결과만 남긴다. 항상 `PASS`, `exitCode` 0. 걸린 조건(`reasons`)은 그대로 준다. 전환 기준의 "경고에 걸린 Finding"을 보려는 것이다 |
 | 2. 게이트 | `GATE` | 아래 조건을 적용한다. PRD FR-11의 전환 기준(제안: 리포트 전용으로 4주 이상 운영, 그 기간 `REACHABLE` 오탐 0건, 경고에 걸린 Finding 모두 검토)을 만족하면 팀이 전환한다 |
 
 | 조건(`reasons[].condition`) | 대상 | 결과 | 이유 |
@@ -1762,7 +1769,7 @@ sequenceDiagram
 
 - 여러 조건이 맞으면 가장 나쁜 결과를 따른다: `FAIL > WARN > PASS`.
 - `exitCode`는 `FAIL`이면 1, 아니면 0이다.
-- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11).
+- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 다른 대상(예: main의 커밋)이어도 purl과 CVE로 비교한다. 사람 판정(`MANUAL`)은 세지 않는다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11).
 - API-12 예시의 첫 실행 결과는 `WARN`이다. `REACHABLE`과 `UNKNOWN`은 0이고, `NOT_ANALYZED`인 HIGH 5건(Jackson 2 사본, 제안(확정 대기))이 경고 조건에 걸린다.
 - 예외: `FAIL`인 PR이라도 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 그 Finding의 검토 기록에 남고, 만료되면 다시 게이트 대상이 된다(PRD FR-11). 예외를 기록하는 API와 형식은 아직 정하지 않았다(1-5, ARD Q-07).
 - 되돌리기: 전환 뒤 오탐으로 머지가 막히면 그 조건만 `WARN`으로 내리고, 사례를 검증 세트(ARD C-14)에 추가한다(PRD FR-11).
