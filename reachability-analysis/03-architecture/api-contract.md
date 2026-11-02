@@ -503,7 +503,7 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 | `version` | integer | 예 | 처음은 1이고 고칠 때마다 1씩 오른다 |
 | `disagreesWithTool` | boolean | 예 | `status`가 도구 판정과 다르면 true. 도구가 판정하지 않아 사람 판정이 `verdict`가 된 경우(API-06 예외)는 false다. true인 Finding은 검증 세트(ARD C-14)에 추가할 후보다(FR-08) |
 | `proposal` | object | 아니요 | 사람 확정을 기다리는 판정 제안. `status`(제안한 판정: `REACHABLE` / `UNREACHABLE` / `UNKNOWN`), `summary`(한 줄 근거. 발동 조건 자체가 없어 도달 불가로 본 제안은 "발동 조건 없음"으로 시작한다), `reference`(근거 문서). `reviewState`와 `verdict`를 바꾸지 않는다. `PROVISIONAL`·`CONFIRMED`로 저장하면 현재 값에서 빠지고 이력에 남는다 |
-| `carriedFrom` | object | 아니요 | 이 검토를 이어받은 이전 Finding. `findingId`, `scanId`, `reviewedAt`. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 서버가 채운다(FR-08 수용 기준 7). 이어받지 않았으면 없다. `reviewedAt`은 이전 Finding의 검토 시각이다. 사람이 다시 기록하면(API-06) 빈다. 같은 purl·CVE의 이전 Finding이 여럿이면 가장 최근에 나온(`lastSeenAt`) 하나만 보고, 그 Finding이 검토 전이면 이어받지 않는다(더 오래된 검토를 찾지 않는다). 판정·메모와 함께 검토자·검토 시각도 옮기고, 이어받은 뒤 되돌려도(`resetReason`) 남는다 |
+| `carriedFrom` | object | 아니요 | 이 검토를 이어받은 이전 Finding. `findingId`, `scanId`, `reviewedAt`. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 서버가 채운다(FR-08 수용 기준 7). 이어받지 않았으면 없다. `reviewedAt`은 이전 Finding의 검토 시각이다. 사람이 다시 기록하면(API-06) 빈다. 같은 purl·CVE의 이전 Finding이 여럿이면 가장 최근에 나온(`lastSeenAt`) 하나만 보고, 그 Finding이 검토 전이면 이어받지 않는다(더 오래된 검토를 찾지 않는다). 판정·메모와 함께 검토자·검토 시각도 옮기고, 이어받은 뒤 되돌려도(`resetReason`) 남는다. PR 검사(`mode=PR`)의 Finding은 이어받지 않고, PR 스캔에서만 나온 Finding은 이어받을 원본이 되지 않는다(ARD SR-09). 이때 `scanId`는 원본 Finding이 나온 PR이 아닌 마지막 스캔이다 |
 | `resetReason` | enum | 아니요 | 이어받을 검토를 `UNREVIEWED`로 되돌린 이유. `VERDICT_CHANGED`(도구 판정이 바뀜) / `EVIDENCE_CHANGED`(사실·호출 경로·적용 규칙이 바뀜). 되돌리기 전 기록은 `history`에 남는다(FR-08 수용 기준 8). 사람이 다시 기록하면 빈다. 비교 대상은 검토할 때 본 도구 판정이다. 근거는 근거 목록과 `callgraph`로 비교하고, 판정 시각·엔진 버전만 바뀐 것은 되돌리지 않는다 |
 | `history` | object 배열 | 아니요 | `include=reviewHistory`일 때. 기록을 새것부터 준다. 지금 기록도 들어 있어 첫 항목의 `version`이 `review.version`과 같다. Finding을 만들 때의 검토 전 기록(version 1)은 없고, 기록이 없으면 빈 배열이다. 항목은 `reviewState`, `status`, `note`, `proposal`, `reviewer`, `reviewedAt`, `version`, `changeKind`(`HUMAN` 사람 기록 / `CARRIED` 이어받음 / `RESET` 서버가 되돌림. `RESET`은 `reviewer`가 없다)다 |
 
@@ -839,7 +839,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 대상마다 최신 `SUCCEEDED` 스캔을 쓴다 |
+| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 대상마다 최신 `SUCCEEDED` 스캔을 쓴다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다 |
 | `target` | integer | 아니요 | Target ID |
 | `status` | enum 목록 | 아니요 | 판정 상태 |
 | `severity` | enum 목록 | 아니요 | 심각도 |
@@ -1288,7 +1288,7 @@ Content-Type: application/json; charset=utf-8
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `target` | integer | 아니요 | Target ID. 없으면 모든 대상을 합친다 |
-| `scanId` | integer | 아니요 | 기준 스캔. 없으면 대상마다 최신 `SUCCEEDED` 스캔 |
+| `scanId` | integer | 아니요 | 기준 스캔. 없으면 대상마다 최신 `SUCCEEDED` 스캔(PR 검사의 스캔은 넣지 않는다, ARD SR-09) |
 | `deployment` | enum 목록 | 아니요 | 예: `RUNNING`만 집계 |
 | `include` | string 목록 | 아니요 | `matrix`(심각도 × 상태) |
 
@@ -1606,7 +1606,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 }
 ```
 
-- `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. [계획] API-04는 아직 `scanId`를 받지 않아, 지금은 `findingsUrl`로 열면 기준 범위(대상마다 최신 스캔) 목록이 나온다.
+- `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. [계획] API-04는 아직 `scanId`를 받지 않아, 지금은 `findingsUrl`로 열면 기준 범위(대상마다 PR이 아닌 최신 스캔) 목록이 나온다. 그래서 PR 검사의 결과는 이 목록에 보이지 않는다.
 
 **오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
 
