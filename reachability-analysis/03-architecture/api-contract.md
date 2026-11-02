@@ -175,7 +175,7 @@
 | `NOT_FOUND` | 404 | 리소스가 없음 | `resource`, `id` | 단건 조회, `scanId`·`target`을 지정한 조회 | 공통 |
 | `CONFLICT` | 409 | 검토 `version`이 현재 값과 다름(다른 사람이 먼저 고침), 이미 결과를 올린 CI 검사에 다시 업로드 | `currentVersion` | API-06, API-13 | 공통 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 `CONFLICT`로 준다 | `key` | API-01, API-12 | Reach 추가 |
-| `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현(API-11)은 `CONFLICT`로 준다 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
+| `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현(API-04, API-08, API-11)은 `CONFLICT`로 준다 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
 | `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상). [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 공통 `UNPROCESSABLE`(422)로 준다 | `field` | API-01, API-12 | Reach 추가 |
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드한 결과 묶음이 한도를 넘음 | `limitBytes` | API-13 | Reach 추가(IaC와 같은 이름) |
 | `RATE_LIMITED` | 429 | 속도 제한을 넘음 | `retryAfterSeconds` | 전체 | 공통 |
@@ -476,7 +476,7 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 
 | 이름 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scope` | object | 예 | `targetId`(없으면 전체 대상), `scanId`(기준 스캔) |
+| `scope` | object | 예 | `targetId`(없으면 전체 대상), `scanId`(기준 스캔). API-08에 `target`·`scanId`를 주지 않으면 둘 다 없다(지금 구현은 `null`. 대상이 여럿이라 기준 스캔이 하나가 아니다). `target`만 주면 그 대상의 기준 스캔이고, 그 대상에 성공한 스캔이 없으면 `scanId`가 없다. `scanId`만 주면 `targetId`는 그 스캔의 대상이다 |
 | `totals` | object | 예 | `findings` |
 | `byStatus` | object | 예 | 네 값을 모두 키로 준다(0 포함) |
 | `byNotAnalyzedReason` | object | 예 | `NOT_ANALYZED`의 사유별 개수. 네 사유를 모두 키로 준다(0 포함) |
@@ -839,8 +839,8 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 대상마다 최신 `SUCCEEDED` 스캔을 쓴다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다 |
-| `target` | integer | 아니요 | Target ID |
+| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 대상마다 최신 `SUCCEEDED` 스캔을 쓴다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). 목록 항목의 `verdict`·`review`는 지금 판정·검토다(API-05와 같음). 그 스캔이 낸 판정 그대로의 개수는 API-03 `counts`로 본다 |
+| `target` | integer | 아니요 | Target ID. 기준 범위를 이 대상으로 좁힌다. 없는 대상이면 404, 성공한 스캔이 없는 대상이면 빈 목록이다. `scanId`와 함께 주면 그 스캔이 이 대상의 것이어야 한다(아니면 400 `INVALID_INPUT`). 커서는 `scanId`·`target`과도 묶인다(2-4) |
 | `status` | enum 목록 | 아니요 | 판정 상태 |
 | `severity` | enum 목록 | 아니요 | 심각도 |
 | `deployment` | enum 목록 | 아니요 | 배포 상태 |
@@ -1287,8 +1287,8 @@ Content-Type: application/json; charset=utf-8
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `target` | integer | 아니요 | Target ID. 없으면 모든 대상을 합친다 |
-| `scanId` | integer | 아니요 | 기준 스캔. 없으면 대상마다 최신 `SUCCEEDED` 스캔(PR 검사의 스캔은 넣지 않는다, ARD SR-09) |
+| `target` | integer | 아니요 | Target ID. 없으면 모든 대상을 합친다. 없는 대상이면 404, 성공한 스캔이 없는 대상이면 모두 0이다 |
+| `scanId` | integer | 아니요 | 기준 스캔. 없으면 대상마다 최신 `SUCCEEDED` 스캔(PR 검사의 스캔은 넣지 않는다, ARD SR-09). 규칙은 API-04 `scanId`·`target`과 같다(404, 409 `SCAN_NOT_READY`, 다른 대상이면 400). `scope`는 3-9 |
 | `deployment` | enum 목록 | 아니요 | 예: `RUNNING`만 집계 |
 | `include` | string 목록 | 아니요 | `matrix`(심각도 × 상태) |
 
@@ -1606,7 +1606,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 }
 ```
 
-- `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. [계획] API-04는 아직 `scanId`를 받지 않아, 지금은 `findingsUrl`로 열면 기준 범위(대상마다 PR이 아닌 최신 스캔) 목록이 나온다. 그래서 PR 검사의 결과는 이 목록에 보이지 않는다.
+- `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. `findingsUrl`(API-04 `?scanId=`)로 열면 그 검사의 스캔 Finding이 나온다. PR 검사의 결과는 기준 범위에 없어서(ARD SR-09) 이렇게 본다.
 
 **오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
 
