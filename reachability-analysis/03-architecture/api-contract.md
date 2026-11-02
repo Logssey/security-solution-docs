@@ -72,6 +72,7 @@
 - 세션이 없거나 만료되면 401 `UNAUTHENTICATED`다. CSRF 토큰이 없거나 다르면 403 `FORBIDDEN`이다(공통).
 - OIDC 토큰 검증에 실패하면 401 `UNAUTHENTICATED`, 허용 목록 밖의 레포·이벤트면 403 `FORBIDDEN`이다.
 - 쓰기 요청(API-01, API-06, API-12, API-13)은 누가·언제 했는지 남긴다(`requestedBy`, `reviewer`, `reviewedAt`). CI 요청은 OIDC 토큰의 `repository`와 `sub`를 남긴다.
+- [계획] 지금 구현은 OIDC 검증을 아직 붙이지 않아 CI 경로(API-12, API-13)도 대시보드 `ADMIN` 세션으로 받는다. 그래서 CI 검사가 만든 스캔도 `requestedBy.kind`가 `USER`다.
 
 ### 2-3. 요청·응답 형식
 
@@ -84,7 +85,7 @@
 | 시각 | ISO 8601, UTC, 초 단위, 끝에 `Z`. 예: `2026-09-29T07:46:33Z` | 공통 |
 | 기간 | 초 단위 숫자. 필드 이름은 `Seconds`로 끝난다(`durationSeconds`) | Reach |
 | ID | 숫자(DB의 `BIGINT`). 스캔, 대상, Finding, 워크로드, 취약 함수, CI 검사, 이벤트가 각자 번호를 쓴다. 사용자 ID는 대시보드 공통 `dashboard_users`의 번호다 | 시크릿·IaC·런타임과 같음 |
-| 값이 없는 선택 필드 | 응답에서 뺀다. 클라이언트는 없는 필드를 null로 본다 | Reach |
+| 값이 없는 선택 필드 | 응답에서 빼거나 `null`로 준다. 클라이언트는 둘을 같게(`null`로) 본다. 지금 구현(dashboard-backend `reach`)은 `null`로 준다. 이 문서의 응답 예시는 짧게 쓰려고 뺐다 | Reach |
 | 단건 응답 | 리소스 객체를 그대로 준다 | 공통 |
 | 목록 응답 | `items` 배열, `nextCursor`, `hasNext`(2-4) | Re:Used 공통(`CursorPageResponse`) |
 | 선택 하위 객체 | `include=a,b`로 붙인다. 허용 값은 엔드포인트마다 다르다(4절) | Reach |
@@ -97,7 +98,7 @@
 
 | 파라미터 | 설명 |
 |---|---|
-| `size` | 한 번에 받을 개수. 기본 20, 최대 100 |
+| `size` | 한 번에 받을 개수. 기본 20, 최대 100. 1보다 작거나 100보다 크면 400 `INVALID_INPUT` |
 | `cursor` | 직전 응답의 `nextCursor` 값을 그대로 넣는다. 불투명 문자열이다 |
 | `include=total` | 필터를 건 전체 개수 `totalCount`를 함께 준다. 기본으로는 주지 않는다(Reach 추가) |
 
@@ -111,7 +112,7 @@
 
 - `hasNext`가 false면 마지막 페이지이고 `nextCursor`는 null이다.
 - 커서는 처음 요청의 필터·정렬과 묶인다. 커서를 넣으면서 필터나 정렬을 바꾸면 400 `INVALID_INPUT`이다.
-- 커서는 24시간 동안 쓸 수 있다(초안 값).
+- 커서는 24시간 동안 쓸 수 있다(초안 값). [계획] 지금 구현(API-02, API-04)은 기간을 두지 않는다.
 
 **커서 방식으로 정한 이유**
 
@@ -142,7 +143,7 @@
 - 서로 다른 파라미터는 모두 맞아야 한다(AND).
 - 시각 범위는 `from`(포함), `to`(제외)로 준다.
 - purl처럼 `:`, `/`, `@`가 들어간 값은 URL 인코딩한다.
-- 모르는 파라미터나 열거값 밖의 값은 400 `INVALID_INPUT`다. `details.param`에 파라미터 이름을 준다.
+- 모르는 파라미터나 열거값 밖의 값은 400 `INVALID_INPUT`다. `details.param`에 파라미터 이름을 준다. [계획] 지금 구현은 모르는 파라미터를 무시하고 열거값 밖의 값만 400으로 준다(`details`는 2-6처럼 아직 없다).
 - 예외: 스캔 ID 쿼리는 경로 변수와 맞춰 `scanId`로 쓴다(API-11의 `?scanId=` 표기). 비교 방식을 이름에 담은 쿼리도 있다: `firstSeenAfter`(이 시각 뒤), `cveContains`(부분 일치). 둘 다 API-04에서 쓴다.
 
 예: `GET /api/v1/reach/findings?status=REACHABLE,UNKNOWN&severity=CRITICAL,HIGH&sort=-status,-severity,cve`
@@ -164,7 +165,7 @@
 
 - `code`: 아래 표의 값이다. 클라이언트는 이 값으로 분기한다.
 - `message`: 사람이 읽는 한국어 문장이다. 문구는 바뀔 수 있다.
-- `details`: 코드별 추가 정보다. 없으면 뺀다.
+- `details`: 코드별 추가 정보다. 없으면 뺀다. [계획] 지금 대시보드 공통 오류 응답은 `code`·`message`만 주고 `details`는 주지 않는다. 409 `CONFLICT`를 받으면 클라이언트는 상세(API-05)를 다시 읽어 현재 `version`을 얻는다.
 
 | 코드 | HTTP | 뜻 | `details` | 주로 나오는 API | 구분 |
 |---|---|---|---|---|---|
@@ -173,9 +174,9 @@
 | `FORBIDDEN` | 403 | CSRF 토큰 누락·불일치, 허용 목록 밖의 레포·이벤트, CI 토큰으로 대시보드 API 호출 | `reason` | 전체 | 공통 |
 | `NOT_FOUND` | 404 | 리소스가 없음 | `resource`, `id` | 단건 조회, `scanId`·`target`을 지정한 조회 | 공통 |
 | `CONFLICT` | 409 | 검토 `version`이 현재 값과 다름(다른 사람이 먼저 고침), 이미 결과를 올린 CI 검사에 다시 업로드 | `currentVersion` | API-06, API-13 | 공통 |
-| `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄 | `key` | API-01, API-12 | Reach 추가 |
-| `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
-| `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상) | `field` | API-01, API-12 | Reach 추가 |
+| `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 `CONFLICT`로 준다 | `key` | API-01, API-12 | Reach 추가 |
+| `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현(API-11)은 `CONFLICT`로 준다 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
+| `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상). [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 공통 `UNPROCESSABLE`(422)로 준다 | `field` | API-01, API-12 | Reach 추가 |
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드한 결과 묶음이 한도를 넘음 | `limitBytes` | API-13 | Reach 추가(IaC와 같은 이름) |
 | `RATE_LIMITED` | 429 | 속도 제한을 넘음 | `retryAfterSeconds` | 전체 | 공통 |
 | `INTERNAL_ERROR` | 500 | 서버 오류 | - | 전체 | 공통 |
@@ -187,7 +188,7 @@
 
 - 스캔을 만드는 요청(API-01, API-12 실행)은 `Idempotency-Key` 헤더가 필수다. 없으면 400 `INVALID_INPUT`다.
 - 값은 클라이언트가 만든 고유 문자열이다(1~64자, UUID 권장). CI는 다시 실행해도 같은 값이 나오게 만든다. 예: `service-backend-pr-123-bb4639b`.
-- 서버는 키를 호출 주체(대시보드 사용자, CI 레포)별로 24시간 보관한다(초안 값).
+- 서버는 키를 호출 주체(대시보드 사용자, CI 레포)별로 24시간 보관한다(초안 값). [계획] 지금 구현은 기간 없이 보관한다.
 
 | 경우 | 응답 |
 |---|---|
@@ -195,6 +196,9 @@
 | 같은 키, 같은 본문 | 처음 응답을 그대로 다시 준다(같은 `id`, 같은 상태 코드). `Idempotent-Replayed: true` 헤더를 붙인다 |
 | 같은 키, 다른 본문 | 409 `IDEMPOTENCY_CONFLICT` |
 | 같은 키가 동시에 두 번 | 하나만 처리하고, 다른 하나는 같은 응답을 받는다 |
+
+- 다시 줄 때는 같은 검사·스캔을 지금 상태(`scanStatus`)로 준다.
+- API-01과 API-12는 키를 같이 쓴다. 한 호출 주체가 API-12에 쓴 키를 API-01에 다시 쓰면 본문이 달라 409다.
 
 - API-06(PATCH)은 `version`으로 충돌을 막는다. 같은 본문을 다시 보내면 `version`이 이미 올라가 409 `CONFLICT`가 난다. 클라이언트는 현재 값을 다시 읽는다.
 
@@ -242,9 +246,9 @@ flowchart LR
 | `stages` | object 배열 | 예 | 단계별 진행. `name`(`SBOM` / `MATCH` / `L1` / `L2` / `REPORT`), `status`(`scanStatus` 값), `startedAt`, `finishedAt`, `durationSeconds`, `message` |
 | `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion` |
 | `analysis` | object | 아니요 | L2 분석 규모. `appClasses`, `libraryJars`, `reachedMethods`, `jarSha256`(판정한 jar. 판정 대상을 결과에 남긴다) |
-| `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState` |
+| `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState`. 그 스캔이 낸 도구 판정을 센다. Finding의 마지막 스캔이 아니라 판정의 스캔으로 세서, 같은 Finding이 다음 스캔에 다시 나와도 이 스캔의 개수는 그대로다. 사람 판정(`MANUAL`)은 세지 않는다. 스캔 결과는 스캔이 낸 값으로 두고, 사람 판정은 요약(API-08)에만 반영된다. 값은 0까지 채운다. `byReviewState`는 지금의 검토 상태다(검토는 Finding마다 한 행뿐) |
 | `failure` | object | 아니요 | `FAILED`일 때만. `code`(E-코드), `stage`, `message` |
-| `requestedBy` | object | 예 | 요청한 주체. 대시보드 요청은 `userId`(`dashboard_users` 번호), CI 요청은 `repository`와 OIDC `sub` |
+| `requestedBy` | object | 예 | 요청한 주체. `kind`(`USER` 대시보드 / `CI` / `SYSTEM` 하루 1번 재대조 등)를 함께 준다. `USER`면 `userId`(`dashboard_users` 번호), `CI`면 `repository`와 `subject`(OIDC `sub`), `SYSTEM`은 `kind`만 있다 |
 | `createdAt` | date-time | 예 | 요청을 받은 시각 |
 | `startedAt`, `finishedAt` | date-time | 아니요 | 시작·끝 시각 |
 
@@ -272,6 +276,8 @@ flowchart LR
 
 - 이미지는 digest로만 가리킨다. ECR 태그는 MUTABLE이라 태그로는 실행 중인 이미지를 확정하지 못한다.
 - `image.repository`에는 레지스트리 호스트를 넣지 않는다.
+- 요청(API-01, API-12)의 커밋은 40자, digest는 `sha256:`과 64자다. 대문자로 와도 소문자로 저장한다. 형식이 틀리거나 `image.repository`에 태그(`:`)·digest(`@`)를 붙이면 400 `INVALID_INPUT`이다.
+- `app`을 주지 않았는데 아래 표에 없는 레포·저장소면 422 `TARGET_UNRESOLVED`다. 이미 있는 대상(같은 digest, 또는 같은 레포·하위 경로·커밋)을 다른 `app`으로 요청해도 422다.
 
 | `app` | 레포 | 이미지 저장소 | 주력 스캔 | L2 판정 |
 |---|---|---|---|---|
@@ -313,7 +319,7 @@ Finding에 대한 Reach의 결론이다.
 | `summary` | string | 예 | 한 줄 근거. 예: "FORM 인증(LoginConfig) 설정 없음" |
 | `notAnalyzedReason` | enum | `NOT_ANALYZED`일 때 | `NO_VULN_FUNCTION_DATA`(취약 함수 데이터 없음) / `OS_PACKAGE`(OS 패키지) / `UNANALYZED_COPY`(판정하지 않은 패키지 사본) / `UNSUPPORTED_ECOSYSTEM`(L2를 아직 지원하지 않는 생태계) |
 | `ruleId` | string | 아니요 | 적용한 규칙 `RULE-<CVE ID>` |
-| `rule` | Rule | 아니요 | `include=rule`일 때(API-05). `ruleId`의 규칙 객체(3-7) |
+| `rule` | Rule | 아니요 | `include=RULE`일 때(API-05). `ruleId`의 규칙 객체(3-7) |
 | `vulnFunctionIds` | integer 배열 | 아니요 | 판정에 쓴 취약 함수 |
 | `vulnFunctions` | VulnFunction 배열 | 아니요 | `include=vulnFunctions`일 때(API-05). `vulnFunctionIds`의 취약 함수 객체(3-8) |
 | `callgraph` | object | 아니요 | `packageReached`, `vulnFunctionPresent`(jar에 취약 메서드가 있나), `vulnFunctionReached`, `entryStage`(1 또는 2), `weakOnly`(약한 경로로만 닿음) |
@@ -491,15 +497,15 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 |---|---|---|---|
 | `reviewState` | enum | 예 | `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED` |
 | `status` | enum | 아니요 | 사람이 본 판정. `REACHABLE` / `UNREACHABLE` / `UNKNOWN` |
-| `note` | string | 아니요 | 근거 메모. 2,000자 이하 |
+| `note` | string | 아니요 | 근거 메모. 2,000자 이하(글자 수로 센다. 이모지도 한 글자) |
 | `reviewer` | object | 기록이 있으면 | 마지막으로 기록한 사람. `id`(`dashboard_users` 번호), `name`. 서버가 세션에서 채운다 |
 | `reviewedAt` | date-time | 기록이 있으면 | 마지막으로 기록한 시각. 서버 시각이다 |
 | `version` | integer | 예 | 처음은 1이고 고칠 때마다 1씩 오른다 |
 | `disagreesWithTool` | boolean | 예 | `status`가 도구 판정과 다르면 true. 도구가 판정하지 않아 사람 판정이 `verdict`가 된 경우(API-06 예외)는 false다. true인 Finding은 검증 세트(ARD C-14)에 추가할 후보다(FR-08) |
 | `proposal` | object | 아니요 | 사람 확정을 기다리는 판정 제안. `status`(제안한 판정: `REACHABLE` / `UNREACHABLE` / `UNKNOWN`), `summary`(한 줄 근거. 발동 조건 자체가 없어 도달 불가로 본 제안은 "발동 조건 없음"으로 시작한다), `reference`(근거 문서). `reviewState`와 `verdict`를 바꾸지 않는다. `PROVISIONAL`·`CONFIRMED`로 저장하면 현재 값에서 빠지고 이력에 남는다 |
-| `carriedFrom` | object | 아니요 | 이 검토를 이어받은 이전 Finding. `findingId`, `scanId`, `reviewedAt`. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 서버가 채운다(FR-08 수용 기준 7). 이어받지 않았으면 없다 |
-| `resetReason` | enum | 아니요 | 이어받을 검토를 `UNREVIEWED`로 되돌린 이유. `VERDICT_CHANGED`(도구 판정이 바뀜) / `EVIDENCE_CHANGED`(사실·호출 경로·적용 규칙이 바뀜). 되돌리기 전 기록은 `history`에 남는다(FR-08 수용 기준 8). 사람이 다시 기록하면 빈다 |
-| `history` | object 배열 | 아니요 | `include=reviewHistory`일 때. 이전 기록을 새것부터 준다. 항목은 `reviewState`, `status`, `note`, `proposal`, `reviewer`, `reviewedAt`, `version`이다 |
+| `carriedFrom` | object | 아니요 | 이 검토를 이어받은 이전 Finding. `findingId`, `scanId`, `reviewedAt`. 같은 서비스의 같은 purl·CVE가 다음 스캔에 다시 나오면 서버가 채운다(FR-08 수용 기준 7). 이어받지 않았으면 없다. `reviewedAt`은 이전 Finding의 검토 시각이다. 사람이 다시 기록하면(API-06) 빈다. 같은 purl·CVE의 이전 Finding이 여럿이면 가장 최근에 나온(`lastSeenAt`) 하나만 보고, 그 Finding이 검토 전이면 이어받지 않는다(더 오래된 검토를 찾지 않는다). 판정·메모와 함께 검토자·검토 시각도 옮기고, 이어받은 뒤 되돌려도(`resetReason`) 남는다 |
+| `resetReason` | enum | 아니요 | 이어받을 검토를 `UNREVIEWED`로 되돌린 이유. `VERDICT_CHANGED`(도구 판정이 바뀜) / `EVIDENCE_CHANGED`(사실·호출 경로·적용 규칙이 바뀜). 되돌리기 전 기록은 `history`에 남는다(FR-08 수용 기준 8). 사람이 다시 기록하면 빈다. 비교 대상은 검토할 때 본 도구 판정이다. 근거는 근거 목록과 `callgraph`로 비교하고, 판정 시각·엔진 버전만 바뀐 것은 되돌리지 않는다 |
+| `history` | object 배열 | 아니요 | `include=reviewHistory`일 때. 기록을 새것부터 준다. 지금 기록도 들어 있어 첫 항목의 `version`이 `review.version`과 같다. Finding을 만들 때의 검토 전 기록(version 1)은 없고, 기록이 없으면 빈 배열이다. 항목은 `reviewState`, `status`, `note`, `proposal`, `reviewer`, `reviewedAt`, `version`, `changeKind`(`HUMAN` 사람 기록 / `CARRIED` 이어받음 / `RESET` 서버가 되돌림. `RESET`은 `reviewer`가 없다)다 |
 
 ### 3-11. 열거값
 
@@ -612,8 +618,8 @@ stateDiagram-v2
 | `target.repo.name`, `target.repo.commit` | 본문 | string | `type=REPO`일 때 | 레포 이름과 커밋 SHA(40자) |
 | `target.repo.path` | 본문 | string | 아니요 | 레포 안 하위 경로. chat은 `chat-server` |
 | `target.image.repository`, `target.image.digest` | 본문 | string | `type=IMAGE`일 때 | 이미지 저장소와 digest. 태그는 받지 않는다 |
-| `rescanOf` | 본문 | integer | 아니요 | 이전 스캔 ID. 그 스캔의 저장된 SBOM으로 대조부터 다시 한다. `target`과 함께 쓰지 않는다 |
-| `options.crossCheck` | 본문 | string 배열 | 아니요 | 교차 확인 스캐너. 기본 `["GRYPE"]`(FR-03) |
+| `rescanOf` | 본문 | integer | 아니요 | 이전 스캔 ID. 그 스캔의 저장된 SBOM으로 대조부터 다시 한다. `target`과 함께 쓰지 않는다(둘 다 있거나 없으면 400). 그 스캔이 `SUCCEEDED`가 아니면 422 |
+| `options.crossCheck` | 본문 | string 배열 | 아니요 | 교차 확인 스캐너. 기본 `["GRYPE"]`(FR-03). 지금 받는 값은 `GRYPE`뿐이다 |
 | `options.l1`, `options.l2` | 본문 | boolean | 아니요 | 배포 여부 확인과 판정. 기본 둘 다 true. `options.l2`가 false면 대조까지만 한다. 이때 스캔의 `stages`에 `L2`가 없다 |
 
 요청 예시(배포 이미지)
@@ -644,7 +650,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 }
 ```
 
-응답 예시(202 Accepted, 헤더 `Location: /api/v1/reach/scans/1`)
+응답 예시(202 Accepted, 헤더 `Location: /api/v1/reach/scans/1`). 응답은 Scan(3-1)이고 API-03과 같은 필드를 준다. 아래는 줄인 것이다
 
 ```json
 {
@@ -661,7 +667,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
     },
     "displayName": "reused-api @ a6ffffef"
   },
-  "requestedBy": { "userId": 1 },
+  "requestedBy": { "kind": "USER", "userId": 1 },
   "createdAt": "2026-10-11T01:00:00Z"
 }
 ```
@@ -686,7 +692,8 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 - 레포 대상은 cdxgen이 Gradle 빌드를 실행한다. 간접 의존성까지 잡지만 빌드 스크립트를 실행하므로, 빌드는 러너에서만 하고 서버는 PR 코드를 실행하지 않는다(ARD AD-18, SR-09).
 - `rescanOf`는 재빌드 없이 저장된 SBOM을 최신 DB로 다시 대조한다. 하루 1번 재대조(FR-11)에 쓴다.
-- 어떤 서비스를 스캔할지는 PRD FR-15의 대상(서비스) 등록 목록(레포에 커밋한 설정 파일)이 정한다. 하루 1번 재대조(`trigger=SCHEDULE`)는 이 목록의 서비스를 대상으로 한다. 등록하지 않은 대상을 API-01로 요청했을 때 받을지는 정하지 않았다.
+- 어떤 서비스를 스캔할지는 PRD FR-15의 대상(서비스) 등록 목록(레포에 커밋한 설정 파일)이 정한다. 하루 1번 재대조(`trigger=SCHEDULE`)는 이 목록의 서비스를 대상으로 한다. 등록하지 않은 대상을 API-01로 요청했을 때 받을지는 정하지 않았다. [계획] 지금 구현은 `app`을 정할 수 있으면(3-2) 받는다.
+- 서버는 요청과 함께 `mode=MANUAL`인 CI 검사를 만들고 `options`를 거기에 남긴다(러너가 읽는다). [계획] 지금 구현은 `workflow_dispatch`를 부르지 않아 스캔이 `QUEUED`에 머문다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`
 
@@ -702,14 +709,14 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `target` | integer | 아니요 | Target ID |
+| `target` | integer | 아니요 | Target ID. 없는 대상이면 404 `NOT_FOUND`(2-6), 스캔이 없는 대상이면 빈 목록 |
 | `scanStatus` | enum 목록 | 아니요 | `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED` |
 | `trigger` | enum 목록 | 아니요 | `MANUAL`, `PR`, `IMAGE_BUILD`, `SCHEDULE` |
-| `from`, `to` | date-time | 아니요 | `createdAt` 범위 |
-| `sort` | string | 아니요 | 기본 `-createdAt`. 허용: `createdAt`, `finishedAt` |
+| `from`, `to` | date-time | 아니요 | `createdAt` 범위(2-5: `from` 포함, `to` 제외). `from`이 `to`보다 늦으면 400 `INVALID_INPUT` |
+| `sort` | string | 아니요 | 기본 `-createdAt`. 허용: `createdAt`, `-createdAt`, `finishedAt`, `-finishedAt`. 같은 시각이면 스캔 ID 순(같은 방향). 안 끝난 스캔(`QUEUED`·`RUNNING`)은 `finishedAt`이 없어 `-finishedAt`에서 맨 위, `finishedAt`에서 맨 아래 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
-목록 항목은 Scan(3-1)과 같은 모양이다. 대상은 `displayName`과 digest·커밋까지 준다.
+목록 항목은 Scan(3-1)과 같은 모양이다(API-03 응답과 같은 필드, `counts`는 `SUCCEEDED` 항목에만). 대상은 `displayName`과 digest·커밋까지 준다.
 
 요청 예시: `GET /api/v1/reach/scans?target=1&scanStatus=SUCCEEDED&size=20`
 
@@ -744,7 +751,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 }
 ```
 
-**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `NOT_FOUND`(없는 `target`), `RATE_LIMITED`
 
 ### API-03 스캔 상태·요약
 
@@ -805,7 +812,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
     "byStatus": { "REACHABLE": 0, "UNREACHABLE": 14, "UNKNOWN": 0, "NOT_ANALYZED": 9 },
     "byReviewState": { "UNREVIEWED": 9, "PROVISIONAL": 1, "CONFIRMED": 13 }
   },
-  "requestedBy": { "userId": 1 },
+  "requestedBy": { "kind": "USER", "userId": 1 },
   "createdAt": "2026-10-11T01:00:00Z",
   "startedAt": "2026-10-11T01:00:05Z",
   "finishedAt": "2026-10-11T01:01:20Z"
@@ -977,7 +984,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | 파라미터 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
 | `findingId` | 경로 | integer | 예 | Finding ID |
-| `include` | 쿼리 | string 목록 | 아니요 | `RULE`(적용 규칙 객체, `verdict.rule`), `vulnFunctions`(취약 함수 객체, `verdict.vulnFunctions`), `reviewHistory`(검토 이력, `review.history`), `verdictHistory`(판정 이력, `verdict.history`) |
+| `include` | 쿼리 | string 목록 | 아니요 | `RULE`(적용 규칙 객체, `verdict.rule`), `vulnFunctions`(취약 함수 객체, `verdict.vulnFunctions`), `reviewHistory`(검토 이력, `review.history`), `verdictHistory`(판정 이력, `verdict.history`). 네 값 밖이면 400 `INVALID_INPUT`(대소문자를 구분한다). [계획] 지금 구현은 `reviewHistory`만 채우고 나머지 셋은 받기만 한다 |
 
 요청 예시: `GET /api/v1/reach/findings/2`
 
@@ -1112,15 +1119,16 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `findingId` | 경로 | integer | 예 | Finding ID |
 | `reviewState` | 본문 | enum | 예 | `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED` |
 | `status` | 본문 | enum | `PROVISIONAL`·`CONFIRMED`일 때 | 사람이 본 판정: `REACHABLE` / `UNREACHABLE` / `UNKNOWN` |
-| `note` | 본문 | string | `PROVISIONAL`·`CONFIRMED`일 때 | 근거 메모. 2,000자 이하. 사람 판정(확정·잠정)에는 근거를 남겨야 한다(NFR-02). 도구 판정과 다르면 다르게 본 이유를 쓴다 |
+| `note` | 본문 | string | `PROVISIONAL`·`CONFIRMED`일 때 | 근거 메모. 2,000자 이하(글자 수로 센다. 이모지도 한 글자). 사람 판정(확정·잠정)에는 근거를 남겨야 한다(NFR-02). 도구 판정과 다르면 다르게 본 이유를 쓴다 |
 | `proposal` | 본문 | object | 아니요 | 확정 전 판정 제안: `status`, `summary`, `reference`(3-10). `reviewState`가 `UNREVIEWED`일 때만 받는다 |
 | `version` | 본문 | integer | 예 | 지금 `review.version`. 다르면 409 `CONFLICT` |
 
 처리 규칙
 
 - 도구가 판정한 Finding(`NOT_ANALYZED`가 아닌 것)의 `verdict`는 바꾸지 않는다(NFR-04). 사람 판정이 다르면 `disagreesWithTool`이 true가 되고, 화면은 다시 볼 대상으로 올린다.
-- 예외: 도구가 판정하지 않은 Finding(`NOT_ANALYZED`)에 사람이 `status`를 넣으면, `verdict`를 그 값과 `method: MANUAL`로 기록한다(FR-08). 도구의 원래 판정은 판정 이력(`include=verdictHistory`)에 남고, `disagreesWithTool`은 false다. `UNREVIEWED`로 되돌리면 `verdict`도 도구의 원래 판정으로 돌아간다.
-- `proposal`은 `reviewState`와 `verdict`를 바꾸지 않는다. `UNREVIEWED`가 아닌데 `proposal`을 보내면 400 `INVALID_INPUT`다. `PROVISIONAL`·`CONFIRMED`로 저장하면 제안은 현재 값에서 빠지고 이력에만 남는다.
+- 예외: 도구가 판정하지 않은 Finding(`NOT_ANALYZED`)에 사람이 `status`를 넣으면, `verdict`를 그 값과 `method: MANUAL`로 기록한다(FR-08). 이때 `verdict.summary`는 `note` 앞 500자다. 도구의 원래 판정은 판정 이력(`include=verdictHistory`)에 남고, `disagreesWithTool`은 false다. `UNREVIEWED`로 되돌리면 `verdict`도 도구의 원래 판정으로 돌아간다.
+- `proposal`은 `reviewState`와 `verdict`를 바꾸지 않는다. `UNREVIEWED`가 아닌데 `proposal`을 보내면 400 `INVALID_INPUT`다. `proposal`을 보낼 때는 `status`와 `summary`가 필수다. `PROVISIONAL`·`CONFIRMED`로 저장하면 제안은 현재 값에서 빠지고 이력에만 남는다.
+- `UNREVIEWED`로 되돌릴 때는 `status`·`note`를 보내지 않는다. 보내면 400 `INVALID_INPUT`다.
 - `reviewer`(세션 사용자)와 `reviewedAt`(서버 시각)은 서버가 채운다. 본문으로 받지 않는다.
 - 모든 변경은 이력으로 남는다(`include=reviewHistory`). `UNREVIEWED`로 되돌리기도 받으며, 되돌려도 이력은 남는다.
 - 이어받기(FR-08 수용 기준 7): 새 스캔에서 같은 서비스의 같은 purl·CVE를 가진 이전 Finding에 검토가 있으면, 서버가 검토 상태·사람 판정·메모를 이어받고 `carriedFrom`을 채운다. 이어받기는 이 API가 아니라 스캔 처리(API-01) 중에 일어난다.
@@ -1473,7 +1481,7 @@ Content-Type: application/json; charset=utf-8
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 예 | 내보낼 스캔. `SUCCEEDED`여야 한다 |
+| `scanId` | integer | 예 | 내보낼 스캔. `SUCCEEDED`여야 한다(아니면 409). 없으면 400, 없는 스캔이면 404 |
 | `status` | enum 목록 | 아니요 | 판정 상태로 거른다. 기본은 전체 |
 | `size`, `cursor` | - | 아니요 | 2-4. 목록 응답과 같은 `items`·`nextCursor`·`hasNext` 모양이다 |
 
@@ -1500,6 +1508,10 @@ Content-Type: application/json; charset=utf-8
 }
 ```
 
+- 항목은 그 스캔이 낸 도구 판정으로 만든다. API-03 `counts`와 같은 기준이라, 같은 Finding이 다음 스캔에서 바뀌어도 지난 스캔은 그때의 판정으로 나온다. 사람 판정(`MANUAL`)은 넣지 않는다. `unmapped.reach.reviewState`만 지금 검토 상태다.
+- 정렬은 Finding ID 순이다. 커서는 `scanId`·`status`와 묶인다(2-4).
+- `finding_info.title`은 `<CVE> <패키지 이름> <버전>`이다. `resources[].uid`는 이미지면 `<저장소>@<digest>`, 레포면 `<레포 이름>[/<하위 경로>]@<커밋>`이다(Logssey 자산 ID 형식 합의 전).
+
 **오류**: `INVALID_INPUT`(`scanId` 없음), `NOT_FOUND`, `SCAN_NOT_READY`, `UNAUTHENTICATED`, `RATE_LIMITED`
 
 ### API-12 CI 검사
@@ -1517,12 +1529,12 @@ Content-Type: application/json; charset=utf-8
 | `Idempotency-Key` | 헤더 | string | 예(실행) | 2-7. 예: `service-backend-pr-123-bb4639b` |
 | `mode` | 본문 | enum | 예 | `PR`(PR, 레포 SBOM) / `IMAGE_BUILD`(이미지 빌드, ECR push 전) / `SCHEDULE`(하루 1번) / `MANUAL`(수동 실행) |
 | `repository` | 본문 | string | 예 | 예: `service-backend` |
-| `headCommit` | 본문 | string | `mode=PR`일 때 | 검사할 커밋 SHA |
+| `headCommit` | 본문 | string | `mode=PR`일 때 | 검사할 커밋 SHA(40자) |
 | `pullRequest` | 본문 | object | 아니요 | `number`, `baseRef`(예: `main`), `headRef`(예: `develop`) |
-| `target` | 본문 | object | `rescanOf`가 없으면 | API-01의 `target`과 같다. `mode=PR`이면 레포 대상(`type=REPO`, 커밋은 `headCommit`), `mode=IMAGE_BUILD`이면 빌드한 이미지의 digest다(6-1) |
-| `rescanOf` | 본문 | integer | 아니요 | `mode=SCHEDULE`에서 저장된 SBOM으로 재대조·재판정할 스캔 |
+| `target` | 본문 | object | `rescanOf`가 없으면 | API-01의 `target`과 같다. `mode=PR`이면 레포 대상(`type=REPO`, 커밋은 `headCommit`), `mode=IMAGE_BUILD`이면 빌드한 이미지의 digest다(6-1). 맞지 않으면 400 |
+| `rescanOf` | 본문 | integer | 아니요 | `mode=SCHEDULE`에서 저장된 SBOM으로 재대조·재판정할 스캔. `target`과 함께 쓰지 않는다(둘 다 있거나 없으면 400). 지금 구현은 `SCHEDULE`·`MANUAL`에서만 받고, 그 스캔이 `SUCCEEDED`가 아니면 422 |
 | `policy` | 본문 | enum | 아니요 | `REPORT_ONLY`(기본) / `GATE` |
-| `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. 없으면 `baseRef`의 최신 `SUCCEEDED` 스캔을 쓴다 |
+| `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. `SUCCEEDED`여야 한다(아니면 400). 없으면 `baseRef`의 최신 `SUCCEEDED` 스캔을 쓴다. [계획] 스캔에 브랜치 정보가 없어 지금 구현은 찾지 않고 기준 없이(모든 Finding을 새 것으로) 본다. OIDC 토큰의 `ref`를 남길 때 한다 |
 | `checkId` | 경로 | integer | 예 | CI 검사 ID |
 
 요청 예시(실행)
@@ -1594,6 +1606,8 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 }
 ```
 
+- `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. [계획] API-04는 아직 `scanId`를 받지 않아, 지금은 `findingsUrl`로 열면 기준 범위(대상마다 최신 스캔) 목록이 나온다.
+
 **오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
 
 ### API-13 분석 결과 업로드
@@ -1601,7 +1615,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | 항목 | 내용 |
 |---|---|
 | 메서드·경로 | `PUT /api/v1/reach/ci/checks/{checkId}/results` |
-| 권한 | CI(GitHub OIDC). 검사를 등록한 레포의 토큰만 받는다 |
+| 권한 | CI(GitHub OIDC). 검사를 등록한 레포의 토큰만 받는다. [계획] 지금 구현은 대시보드 `ADMIN` 세션으로 받아(2-2) 레포를 확인하지 않는다. 그래서 `FORBIDDEN`(다른 레포의 검사)도 아직 없다 |
 | 설명 | 러너가 돌린 `SBOM`·`MATCH`·`L2`·`REPORT` 단계의 결과를 올린다. 서버는 받은 결과를 `reach_` 테이블에 저장하고, `L1`을 채우고, 사람 검토를 이어받은 뒤(FR-08) 스캔을 `SUCCEEDED`로 바꾼다. 분석은 서버에서 다시 하지 않는다(ARD AD-18) |
 | 관련 | FR-01, FR-07, FR-11 · 화면 없음 |
 | 지금 같은 일 | `run-reach.sh`가 만드는 `verdicts.json`, `reach-result.json`과 스캐너 결과 파일 [부분] |
@@ -1609,17 +1623,37 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | 이름 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
 | `checkId` | 경로 | integer | 예 | API-12가 준 CI 검사 ID |
-| `Content-Encoding` | 헤더 | string | 예 | `gzip`. 압축한 본문은 20MB 이하(초안 값, IaC와 같음) |
-| `sbom` | 본문 | object | 예 | CycloneDX JSON. digest당 한 번 만들고 서버가 보관해 재대조(`rescanOf`)에 쓴다 |
-| `matches` | 본문 | object | 예 | 스캐너 원본 결과. `trivy`, `grype`(교차 확인을 했으면) |
-| `verdicts` | 본문 | object 배열 | `options.l2`가 true면 | `verdict.py`가 만든 판정. CLI 출력의 소문자 값은 서버가 저장할 때 대문자로 바꾼다(PRD 1절) |
-| `reachResult` | 본문 | object | `options.l2`가 true면 | `reach.jar` 결과(사실, 후보 경로, 호출 그래프 요약) |
+| `Content-Encoding` | 헤더 | string | 예 | `gzip`. 압축한 본문은 20MB 이하(초안 값, IaC와 같음). 없거나 `gzip`이 아니면 400, 넘으면 413 `PAYLOAD_TOO_LARGE`. 지금 구현은 푼 본문도 100MB(초안 값)로 막는다 |
+| `sbom` | 본문 | object | 예 | CycloneDX JSON. digest당 한 번 만들고 서버가 보관해 재대조(`rescanOf`)에 쓴다. [계획] 지금 구현은 객체인지만 보고 보관하지 않는다(보관 방식 ARD Q-06) |
+| `matches` | 본문 | object | 예 | 스캐너 원본 결과. `trivy`, `grype`(교차 확인을 했으면). [계획] 지금 구현은 보관하지 않는다 |
+| `verdicts` | 본문 | object 배열 | `options.l2`가 true면 | `verdict.py`가 만든 판정. CLI 출력의 소문자 값은 서버가 저장할 때 대문자로 바꾼다(PRD 1절). 한 항목이 Finding 하나다(아래 "결과 묶음 형식"). [계획] 지금 구현은 늘 필요하다(대조만 한 묶음은 아직 받지 않는다) |
+| `reachResult` | 본문 | object | `options.l2`가 true면 | `reach.jar` 결과(사실, 후보 경로, 호출 그래프 요약). [계획] 지금 구현은 보관하지 않는다 |
 | `tools`, `analysis` | 본문 | object | 예 | 3-1의 같은 이름 필드 |
-| `stages` | 본문 | object 배열 | 예 | 러너에서 돈 단계의 `name`, `status`, `durationSeconds`, `message`. 실패했으면 `failure`도 준다 |
+| `stages` | 본문 | object 배열 | 예 | 러너에서 돈 단계의 `name`, `status`, `durationSeconds`, `message`. 실패했으면 본문에 `failure`(`code`, `stage`, `message`, 3-1)도 준다. 이때는 `tools`·`stages`만 있으면 되고 스캔은 `FAILED`로 끝난다 |
 
-- 응답은 202와 `{ "id": 1, "scanId": 2, "scanStatus": "RUNNING" }`이다. 저장과 게이트 계산이 끝나면 API-12 결과 조회에 반영된다.
+- 응답은 202와 `{ "id": 1, "scanId": 2, "scanStatus": "RUNNING" }`이다. 저장과 게이트 계산이 끝나면 API-12 결과 조회에 반영된다. [계획] 지금 구현은 요청 안에서 저장까지 끝내 `SUCCEEDED`(실패 묶음이면 `FAILED`)를 준다.
 - 같은 검사에 두 번 올리면 409 `CONFLICT`다. 다시 돌리려면 API-12로 새 검사를 등록한다.
 - 결과 묶음 형식(필드 이름과 CLI 파일의 대응)은 `run-reach.sh`를 러너용으로 바꿀 때 확정한다.
+
+**결과 묶음 형식(지금 구현)**
+
+`run-reach.sh`를 러너용으로 바꿀 때까지 쓰는 형식이다. `verdicts`의 한 항목이 Finding 하나이고, 필드 이름은 3-3·3-4·3-5(API-05 상세)와 같다.
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `component` | 예 | `purl`, `name`, `version`, `ecosystem`(없으면 purl 타입), `path` |
+| `vulnerability` | 예 | `id`, `severity`, `severityNote`, `title`, `description`, `affectedFeature`, `fixedVersions`, `cwe`, `references` |
+| `sources` | 예 | `TRIVY`, `GRYPE` 중 하나 이상 |
+| `deployment` | 아니요 | 없으면 `UNKNOWN`(L1 자동화 전) |
+| `upgrade` | 아니요 | 3-3 `upgrade` |
+| `verdict` | 예 | `status`, `method`, `summary`, `notAnalyzedReason`, `ruleId`, `vulnFunctionIds`, `callgraph`, `evidence`, `analyzedAt`(없으면 받은 시각), `engine`(필수) |
+| `proposal` | 아니요 | 검토 전 제안(3-10 `proposal`). 새 Finding과 되돌린 검토에만 넣고, 이미 있던 검토 전 Finding의 제안은 바꾸지 않는다 |
+
+- 소문자 열거값은 대문자로 바꾼다: 심각도, `sources`, `deployment`, 판정 `status`·`method`·`notAnalyzedReason`, 근거 `kind`·`matchedCondition`·`pathTarget`·`observationMethod`, 단계 `name`·`status`.
+- 근거의 `order`는 배열 순서로 다시 매긴다.
+- 400 `INVALID_INPUT`: 같은 purl × 취약점 ID가 두 번 나옴, 근거 없는 `UNREACHABLE`(ARD 6-4), 방식이 `MANUAL`(사람 판정), `NOT_ANALYZED`인데 방식이 있거나 사유가 없음(그 반대도), `FACT`에 `factId`가 없음, `RULE`에 `ruleId`가 없음. 검사는 저장 전에 모두 해서 400이면 아무것도 저장하지 않는다.
+- 사람 판정이 남아 있고 새 도구 판정이 다시 `NOT_ANALYZED`면 사람 판정(`MANUAL`)이 계속 `verdict`다(API-06 예외). 이어받은 Finding도 같다.
+- 저장 중 서버 오류가 나면 저장한 것을 되돌리고 스캔만 `FAILED`(`failure.code`는 `INTERNAL_ERROR`, `stage`는 `REPORT`)로 남긴다. 이 검사에 다시 올리면 409다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포의 검사), `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`
 
@@ -1744,7 +1778,7 @@ sequenceDiagram
 
 | 단계 | `policy` | 동작 |
 |---|---|---|
-| 1. 리포트 전용 | `REPORT_ONLY` | 결과만 남긴다. 항상 `PASS`, `exitCode` 0 |
+| 1. 리포트 전용 | `REPORT_ONLY` | 결과만 남긴다. 항상 `PASS`, `exitCode` 0. 걸린 조건(`reasons`)은 그대로 준다. 전환 기준의 "경고에 걸린 Finding"을 보려는 것이다 |
 | 2. 게이트 | `GATE` | 아래 조건을 적용한다. PRD FR-11의 전환 기준(제안: 리포트 전용으로 4주 이상 운영, 그 기간 `REACHABLE` 오탐 0건, 경고에 걸린 Finding 모두 검토)을 만족하면 팀이 전환한다 |
 
 | 조건(`reasons[].condition`) | 대상 | 결과 | 이유 |
@@ -1757,7 +1791,7 @@ sequenceDiagram
 
 - 여러 조건이 맞으면 가장 나쁜 결과를 따른다: `FAIL > WARN > PASS`.
 - `exitCode`는 `FAIL`이면 1, 아니면 0이다.
-- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11).
+- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 다른 대상(예: main의 커밋)이어도 purl과 CVE로 비교한다. 사람 판정(`MANUAL`)은 세지 않는다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11).
 - API-12 예시의 첫 실행 결과는 `WARN`이다. `REACHABLE`과 `UNKNOWN`은 0이고, `NOT_ANALYZED`인 HIGH 5건(Jackson 2 사본, 제안(확정 대기))이 경고 조건에 걸린다.
 - 예외: `FAIL`인 PR이라도 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 그 Finding의 검토 기록에 남고, 만료되면 다시 게이트 대상이 된다(PRD FR-11). 예외를 기록하는 API와 형식은 아직 정하지 않았다(1-5, ARD Q-07).
 - 되돌리기: 전환 뒤 오탐으로 머지가 막히면 그 조건만 `WARN`으로 내리고, 사례를 검증 세트(ARD C-14)에 추가한다(PRD FR-11).
