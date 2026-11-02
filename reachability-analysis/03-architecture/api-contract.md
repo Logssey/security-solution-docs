@@ -134,7 +134,7 @@
 | `severity` | `CRITICAL > HIGH > MEDIUM > LOW > UNKNOWN` |
 | `status` | `REACHABLE > UNKNOWN > UNREACHABLE > NOT_ANALYZED` |
 
-- Finding 기본 정렬(API-04)은 상태(`REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED`), 심각도(CRITICAL → UNKNOWN), CVE(연도·번호를 숫자로 비교) 순서다. 목록 화면(SCR-02)도 같은 순서를 쓴다.
+- Finding 기본 정렬(API-04)은 상태(`REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED`), 심각도(CRITICAL → UNKNOWN), CVE(연도·번호를 숫자로 비교) 순서다. CVE가 아닌 ID(GHSA 등)와 연도·번호가 9자리를 넘는 ID는 맨 뒤에 온다. 목록 화면(SCR-02)도 같은 순서를 쓴다.
 
 **필터**
 
@@ -839,8 +839,8 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 대상마다 최신 `SUCCEEDED` 스캔을 쓴다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). 목록 항목의 `verdict`·`review`는 지금 판정·검토다(API-05와 같음). 그 스캔이 낸 판정 그대로의 개수는 API-03 `counts`로 본다 |
-| `target` | integer | 아니요 | Target ID. 기준 범위를 이 대상으로 좁힌다. 없는 대상이면 404, 성공한 스캔이 없는 대상이면 빈 목록이다. `scanId`와 함께 주면 그 스캔이 이 대상의 것이어야 한다(아니면 400 `INVALID_INPUT`). 커서는 `scanId`·`target`과도 묶인다(2-4) |
+| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 `app`·대상 종류(`REPO`/`IMAGE`)마다 최신 `SUCCEEDED` 스캔 하나를 쓴다. 이미지를 다시 빌드하면 digest마다 대상이 생기는데, 대상마다로 두면 옛 이미지의 Finding이 계속 쌓이기 때문이다. 옛 대상은 `target`으로 본다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). 목록 항목의 `verdict`·`review`는 지금 판정·검토다(API-05와 같음). 그래서 이미 스캔한 레포 커밋을 PR로 다시 스캔한 결과를 `scanId`로 보면, 기준 범위에도 있는 Finding은 기준 스캔의 판정으로 보인다(API-13 PR 규칙). 그 스캔이 낸 판정 그대로의 개수는 API-03 `counts`로 본다 |
+| `target` | integer | 아니요 | Target ID. 기준 범위를 이 대상의 PR이 아닌 최신 `SUCCEEDED` 스캔으로 바꾼다(그 `app`의 최신 대상이 아니어도 된다). 없는 대상이면 404, 성공한 스캔이 없는 대상이면 빈 목록이다. `scanId`와 함께 주면 그 스캔이 이 대상의 것이어야 한다(아니면 400 `INVALID_INPUT`). 커서는 `scanId`·`target`과도 묶인다(2-4) |
 | `status` | enum 목록 | 아니요 | 판정 상태 |
 | `severity` | enum 목록 | 아니요 | 심각도 |
 | `deployment` | enum 목록 | 아니요 | 배포 상태 |
@@ -1288,7 +1288,7 @@ Content-Type: application/json; charset=utf-8
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `target` | integer | 아니요 | Target ID. 없으면 모든 대상을 합친다. 없는 대상이면 404, 성공한 스캔이 없는 대상이면 모두 0이다 |
-| `scanId` | integer | 아니요 | 기준 스캔. 없으면 대상마다 최신 `SUCCEEDED` 스캔(PR 검사의 스캔은 넣지 않는다, ARD SR-09). 규칙은 API-04 `scanId`·`target`과 같다(404, 409 `SCAN_NOT_READY`, 다른 대상이면 400). `scope`는 3-9 |
+| `scanId` | integer | 아니요 | 기준 스캔. 없으면 `app`·대상 종류(`REPO`/`IMAGE`)마다 최신 `SUCCEEDED` 스캔 하나(PR 검사의 스캔은 넣지 않는다, ARD SR-09). 규칙은 API-04 `scanId`·`target`과 같다(404, 409 `SCAN_NOT_READY`, 다른 대상이면 400). `scope`는 3-9 |
 | `deployment` | enum 목록 | 아니요 | 예: `RUNNING`만 집계 |
 | `include` | string 목록 | 아니요 | `matrix`(심각도 × 상태) |
 
@@ -1651,7 +1651,8 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 - 소문자 열거값은 대문자로 바꾼다: 심각도, `sources`, `deployment`, 판정 `status`·`method`·`notAnalyzedReason`, 근거 `kind`·`matchedCondition`·`pathTarget`·`observationMethod`, 단계 `name`·`status`.
 - 근거의 `order`는 배열 순서로 다시 매긴다.
-- 400 `INVALID_INPUT`: 같은 purl × 취약점 ID가 두 번 나옴, 근거 없는 `UNREACHABLE`(ARD 6-4), 방식이 `MANUAL`(사람 판정), `NOT_ANALYZED`인데 방식이 있거나 사유가 없음(그 반대도), `FACT`에 `factId`가 없음, `RULE`에 `ruleId`가 없음. 검사는 저장 전에 모두 해서 400이면 아무것도 저장하지 않는다.
+- 400 `INVALID_INPUT`: 같은 purl × 취약점 ID가 두 번 나옴, 근거 없는 `UNREACHABLE`(ARD 6-4), 방식이 `MANUAL`(사람 판정), `NOT_ANALYZED`인데 방식이 있거나 사유가 없음(그 반대도), `FACT`에 `factId`가 없음, `RULE`에 `ruleId`가 없음, 배열(`fixedVersions`·`cwe`·`references`·`vulnFunctionIds`)에 `null`이나 빈 문자열이 있음. 검사는 저장 전에 모두 해서 400이면 아무것도 저장하지 않는다.
+- PR 검사의 결과가 이미 스캔한 레포 커밋(같은 대상)의 Finding을 만나면, 그 스캔의 도구 판정만 남긴다. Finding의 스캐너 값·`scanId`·`lastSeenAt`, 지금 판정(`verdict`), 사람 검토는 기준 스캔의 것을 그대로 둔다(ARD SR-09). PR 결과 개수와 게이트는 그 스캔의 판정으로 센다.
 - 사람 판정이 남아 있고 새 도구 판정이 다시 `NOT_ANALYZED`면 사람 판정(`MANUAL`)이 계속 `verdict`다(API-06 예외). 이어받은 Finding도 같다.
 - 저장 중 서버 오류가 나면 저장한 것을 되돌리고 스캔만 `FAILED`(`failure.code`는 `INTERNAL_ERROR`, `stage`는 `REPORT`)로 남긴다. 이 검사에 다시 올리면 409다.
 
