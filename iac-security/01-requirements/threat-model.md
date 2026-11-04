@@ -63,7 +63,7 @@
 |---|---|---|---|---|---|
 | TM-1 | 오염된 원격 모듈 (Coder형) | 2b: init 후 내려받은 모듈에 Conftest, 실행 구문이면 plan 전 차단. 같은 버전·다른 내용이면 경고 + 보안 리뷰 | ② 통과 전 자격 증명 없음, plan 역할 읽기 전용·시크릿 거부, 로컬은 컨테이너 | PR 코멘트·대시보드 ② 영역 | 규칙에 없는 새 실행 수법 |
 | TM-2 | 악성 PR 코드 (외부 기여자, 탈취된 팀원 GitHub 계정) | ② 관문 2: `data "external"`·`http`·`dns`, provisioner, Lambda 호출, 허용 안 된 프로바이더 차단 | 같음. 포크 PR에는 자격 증명 미제공 | ② 결과, 차단 이력 | 새 실행 수법 |
-| TM-3 | CI 공급망 (Trivy형: Action·도구 변조) | Action·이미지 커밋 SHA·버전 고정, `pull_request_target` 금지, 워크플로 변경은 보안 리뷰 필수, lock 파일 해시 검증 | 러너 자격 증명 최소화(레포 범위 토큰, 읽기 전용 plan 역할) | `gate.workflow_changed`, `gate.lock_changed` | 고정한 버전 자체가 이미 오염된 경우 |
+| TM-3 | CI 공급망 (Trivy형: Action·도구 변조) | Action·이미지 커밋 SHA·버전 고정, `pull_request_target` 금지, 워크플로 변경은 보안 리뷰 필수, lock 파일 해시 검증 | 러너 자격 증명 최소화(레포 범위 토큰, 읽기 전용 plan 역할) | `gate.workflow_changed`, `gate.lock_changed`, `gate.check_code_changed`(PR이 `.github/`·`policy/`를 바꾸면 그 PR의 검사 결과를 믿지 않고 차단, 11/04) | 고정한 버전 자체가 이미 오염된 경우. CODEOWNERS 승인 필수는 승인자가 생기면 켬 |
 | TM-4 | 위험한 인프라 변경 (실수나 의도로 경로를 여는 PR) | ① 1등급 데이터까지 새 경로면 병합 차단(시뮬레이터 확인) | 리뷰 필수 | 대시보드 열린 경로 | 그래프에 없는 관계로 생기는 경로, 그래프 최신성(24시간) |
 | TM-5 | 길 밖 변경 (콘솔 수정, 로컬 apply) | 사람에게 쓰기 권한 없음 (ADR-12, 범위 밖) | break-glass는 MFA·사용 즉시 알림 (ADR-12) | ③ 매일 드리프트 | 다음 날까지 모름, CloudTrail 없으면 행위자 모름 |
 | TM-6 | State 노출 (읽기 주체 증가, 평문 시크릿 추가) | PR에서 `state.reader_increase`·`state.secret_added` 경고, write-only·`manage_*` 제안 | State에 실제 시크릿을 두지 않음 | ③ 매일 State 점검 | 이미 읽은 사람은 되돌릴 수 없음 |
@@ -135,4 +135,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-13 |
-| 수정일 | 2026-10-15 |
+| 수정일 | 2026-11-04 |

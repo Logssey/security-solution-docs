@@ -114,6 +114,7 @@
       "evidence": { "simulator": { "before": "explicitDeny", "after": "allowed" } }
     }
   ],
+  "resourceFindings": [],
   "resources": { "add": 0, "change": 0, "delete": 1 },
   "state": { "ruleId": "state.reader_increase", "severity": "HIGH", "readersBefore": 5, "readersAfter": 6, "secretsAdded": 0 }
 }
@@ -123,6 +124,7 @@
 - 문구는 화면과 코멘트가 `ruleId`·`templateKey`로 각자 생성. API는 데이터만 반환 (다음 할 일도 `ruleId`로 화면이 만듦)
 - `cause.action`은 plan의 변경 종류(`CREATE`, `UPDATE`, `DELETE`, `REPLACE`). 저장은 `iac_run_path_changes.evidence.causeAction`
 - `evidence.simulator` 값은 IAM 시뮬레이터 응답의 `EvalDecision` 값을 그대로 씀
+- `resourceFindings`는 경로 없이 리소스 하나에 걸리는 ① 발견 건 (`path.imds_v1_added`). 항목은 `ruleId`, `enforcement`, `severity`, `address`, `action`(`cause.action`과 같은 값). 경로 발견 건은 `paths`에만 나옴 (11/04)
 - `resources`는 plan의 추가·변경·삭제 수만. plan 원문과 리소스 값은 내려주지 않음
 - `title`은 아직 받지 않아 `null` (CI 요청에 PR 제목이 없음). 화면은 제목 없이 번호·커밋만 표시
 - ②에서 막힌 run은 `gate.status`가 `BLOCK`이고 `paths`·`state`·`resources`가 비어 있음 (계산 안 함)
@@ -131,4 +133,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-21 |
+| 수정일 | 2026-11-04 |

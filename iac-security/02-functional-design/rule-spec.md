@@ -50,15 +50,17 @@
 | `gate.module_unpinned` | Conftest | git 모듈 `?ref=` 없음, 레지스트리 모듈 `version` 없음 | 경고 | MEDIUM | 10/14 구현 (단위 테스트) |
 | `gate.backend_changed` | git diff + hcl2 파싱 | `backend`·`cloud` 블록 변경 (같은 파일의 다른 설정 변경은 제외) | 차단 (plan 중단) | HIGH | 10/14 구현, CI 검증 (테스트 PR) |
 | `gate.lock_changed` | git diff | `.terraform.lock.hcl` 변경 | 경고 + 보안 리뷰 필수 | MEDIUM | 10/14 구현 (로컬 시나리오) |
-| `gate.workflow_changed` | git diff + CODEOWNERS | `.github/workflows/` 변경 | 경고 + 보안 리뷰 필수 | HIGH | 10/14 구현 (로컬 시나리오) |
+| `gate.workflow_changed` | git diff + CODEOWNERS | `.github/workflows/` 변경 | 경고 + 보안 리뷰 필수 | HIGH | 10/14 구현 (로컬 시나리오). PR 검사 결과는 아래 `gate.check_code_changed`로 차단됨 |
+| `gate.check_code_changed` | `iac-report`(main 코드) + PR 변경 파일 API | PR이 검사 코드(`.github/`, `policy/`)를 바꿈. 그 PR의 결과는 바뀐 검사 코드로 만든 것이라 믿지 않음 | 차단 (보안 리뷰 후 ruleset 우회 권한이 있는 관리자가 병합) | HIGH | 11/04 구현 (`report.sh` 로컬 시나리오). main에 반영된 뒤부터 동작 |
 | `gate.lock_mismatch` | `terraform init -lockfile=readonly` | 해시·버전이 lock 파일과 다름 | 차단 | HIGH | 10/14 구현 (로컬 시나리오: lock 해시 변조) |
-| `gate.module_content_changed` | 해시 비교 | 같은 버전인데 내려받은 모듈 내용이 다름 | 경고 | HIGH | 10/14 구현 (로컬 시나리오: 같은 태그 내용 바꿔치기). 기준 해시는 `policy/module-hashes.txt` |
+| `gate.module_content_changed` | 해시 비교 | 같은 버전인데 내려받은 모듈 내용이 다름 | 차단 | HIGH | 10/14 구현 (로컬 시나리오: 같은 태그 내용 바꿔치기). 11/04 경고 → 차단 (로컬 시나리오: 기준 해시와 다른 git 모듈). 기준 해시는 `policy/module-hashes.txt` |
 | `gate.unscanned_file` | git ls-files | `.tf.json` 파일, 커밋된 `.terraform/`, 원격 모듈 안 `.tf.json` (Terraform은 읽지만 hcl2 검사가 못 보는 파일) | 차단 | HIGH | 10/14 구현 (로컬 시나리오) |
 | `gate.plan_failed` | terraform plan | plan 실패·시간 초과 | 차단 (fail-closed) | 없음 (실행 오류) | 설계 (S2 plan job) |
 
 - 판정 대상은 PR에서 새로 들어온 것만. 기존 코드에 있던 것은 허용 목록으로 관리.
 - 구현: `infrastructure`의 `policy/gate.rego`(규칙), `policy/gate.sh`(관문 순서). CI는 `iac-gate` 워크플로, 로컬은 `make plan`이 같은 스크립트를 씀
 - 관문 0·1(변경 감지)은 CI에서만 돎. 로컬 래퍼는 관문 2부터
+- `gate.check_code_changed`는 관문이 아니라 결과 등록 단계(`iac-report`, main 코드로 실행)에서 판정. gate가 PR 코드로 돌기 때문에, PR이 `gate.sh`·rego·워크플로를 고쳐 결과를 약하게 만들거나 꾸미는 것을 막음 (10/21 발견, 11/04 수정)
 - 화면 S-01 E의 관문 번호 대응:
 
 | 관문 번호 | 규칙 |
@@ -94,6 +96,12 @@
 
 1등급 차단은 IAM 시뮬레이터로 확인한 뒤 확정. 시뮬레이터가 허용이 아니면 경고·HIGH로 낮춤.
 
+구현 상태 (11/04, dashboard-backend iac-worker `AnalysisEngine`):
+
+- 구현: `path.tier1.added`, `path.tier2.added`, `path.shortened`, `path.removed`, `path.imds_v1_added`
+- `path.imds_v1_added`: plan에서 `http_tokens`를 `"optional"`로 적어 인스턴스를 만들거나 바꾸면 경로와 따로 발견 건 하나. 값을 적지 않은 경우(AMI·계정 기본값)와 원래 `optional`이던 인스턴스는 제외
+- 미구현: `path.tier1.reach_only`. 엔진이 plan에서 IAM 정책·IMDS만 그래프에 반영해 "네트워크로만 닿는 새 경로"가 plan으로 생길 수 없음. 보안 그룹 반영(백로그)과 함께 구현
+
 ## ③ State·드리프트 규칙
 
 | ID | 조건 | 강도 | 심각도 |
@@ -128,4 +136,4 @@
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-21 |
+| 수정일 | 2026-11-04 |
