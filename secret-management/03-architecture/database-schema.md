@@ -104,7 +104,7 @@ PostgreSQL에 저장하는 Secret 사실 원본, 관계, 제약과 조회 스냅
 | `secret_case_transfer_evidence` | `evidence_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `reason_code VARCHAR(40) NOT NULL`, `evidence_ref`, `accepted_transfer_ref VARCHAR(120) NOT NULL`, `submitted_by_user_id BIGINT NOT NULL FK`, `submitted_at TIMESTAMPTZ NOT NULL`, `case_version BIGINT NOT NULL` | PROGRAM_SCOPE_ENDED·OWNER_TRANSFER의 안전한 티켓/변경 근거와 인수 확인을 별도 불변 보존한다. 제출만으로 건을 종료하지 않는다. |
 | `secret_case_transfer_locations` | `evidence_id`, `occurrence_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `scope_revision`, `scope_origin_version`, `assessment_version BIGINT NOT NULL`, 복합 PK `(evidence_id,occurrence_id)` | 이관 당시 관련 위치·수집 revision·출처 승인·판정 버전을 고정한다. 이후 불일치는 적용 가능한 종료 근거가 아니다. |
 | `secret_case_transfer_reviews` | `review_id BIGINT PK`, `evidence_id BIGINT NOT NULL FK`, `decision VARCHAR(20) NOT NULL`, `reason_code VARCHAR(80) NOT NULL`, `expected_evidence_version`, `case_version BIGINT NOT NULL`, `reviewed_by_user_id BIGINT NOT NULL FK`, `reviewed_at TIMESTAMPTZ NOT NULL` | UQ(evidence_id,expected_evidence_version), 추가 전용. 제출자와 다른 전체 SECURITY의 APPROVE·REJECT. 최신 승인이며 범위·판정 버전이 같은 증거만 OUT_OF_SCOPE 검토에서 선택한다. |
-| `secret_exceptions` | `exception_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `reason_code VARCHAR(80) NOT NULL`, `evidence_ref VARCHAR(120) NOT NULL`, `approved_by_user_id BIGINT NOT NULL FK`, `approved_at`, `expires_at TIMESTAMPTZ NOT NULL`, `approved_case_version BIGINT NOT NULL`, `revoked_at TIMESTAMPTZ`, `revoked_by_user_id BIGINT FK`, `revoke_reason_code VARCHAR(80)` | 유효 기간은 승인 후 최대 90일, BUSINESS_CONTINUITY·TEMPORARY_DEPENDENCY·COMPENSATING_CONTROL 사유만 허용한다. 위치별 활성 중복 금지. 원래 action_status는 보존하고 전체 관련 위치의 SECURITY 접근에서만 RISK_ACCEPTED를 파생한다. 만료·취소·버전 변경은 효력을 없애며 과거 승인 이력을 보존한다. |
+| `secret_exceptions` | `exception_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `reason_code VARCHAR(80) NOT NULL`, `evidence_ref VARCHAR(120) NOT NULL`, `approved_by_user_id BIGINT NOT NULL FK`, `approved_at`, `expires_at TIMESTAMPTZ NOT NULL`, `approved_case_version BIGINT NOT NULL`, `revoked_at TIMESTAMPTZ`, `revoked_by_user_id BIGINT FK`, `revoke_reason_code VARCHAR(80)` | 위험 수용 기본 OFF. 활성 정책은 근거가 완전한 MEDIUM/LOW에 최대 7일과 자원 책임자·독립 SECURITY 검토를 요구한다. BUSINESS_CONTINUITY·TEMPORARY_DEPENDENCY·COMPENSATING_CONTROL 사유만 허용하며 과거 승인 이력을 삭제·기간 교정하지 않는다. 비활성 정책에서는 기존 행도 현재 위험 수용 집계에 적용하지 않는다. 위치별 활성 중복 금지. 원래 action_status는 보존하고 전체 관련 위치의 SECURITY 접근에서만 RISK_ACCEPTED를 파생한다. 만료·취소·버전 변경은 효력을 없애며 과거 승인 이력을 보존한다. |
 | `secret_exception_occurrences` | `exception_id`, `occurrence_id BIGINT NOT NULL FK`, `scope_id BIGINT NOT NULL FK`, `scope_revision`, `scope_origin_version`, `assessment_version BIGINT NOT NULL`, 복합 PK `(exception_id,occurrence_id)` | 승인 당시 위치·수집 revision·출처 승인·판정 버전 불변 고정. 현재 버전이 달라지거나 새 위치가 생기면 기존 예외로 자동 포함하지 않는다. |
 
 ### 3.6. 수명주기·합성 근거·교차 환경 경고
@@ -287,7 +287,7 @@ Notion `source_object_ref`는 정규화한 페이지·블록 UUID의 제목 또�
 |---|---|---|
 | `secret_validation_attempts` | NOTION_GET_SELF·검증기 버전·NOTION_SELF, HTTP status·정규화 reason·전송/관측/완료 시각 | 네 결과·동일성·원천/승인 revision·현재 적격성은 공통 계약. 새 관측은 새 행 |
 | `secret_credential_identities` | `provider=NOTION`, `principal_type=NOTION_BOT`, UUID인 `principal_id`, 보호된 `principal_ref`, 제한된 `safe_claims`, `observed_at`, `expires_at` | 같은 현재 VALID 부모 `validation_attempt_id`에 유일하게 결합. account_ref의 AWS 계정 의미를 보존하고 Notion에는 NULL 사용 |
-| `secret_permission_requests/observations/decisions` | 승인된 페이지·블록 읽기 또는 설정 자료의 출처·대상·safe_facts·완전성·관측 시각·근거 확인 기한 | ENRICH/PERMISSION_ASSISTANCE의 PARTIAL 후보. 담당자 수용은 별도 이력 |
+| `secret_permission_requests/observations/decisions` | 등록된 Notion 권한 adapter가 있을 때 승인된 페이지·블록 읽기 또는 설정 자료의 출처·대상·safe_facts·완전성·관측 시각·근거 확인 기한 | 미등록이면 UNSUPPORTED이며 작업을 만들지 않음. 등록된 ENRICH/PERMISSION_ASSISTANCE의 PARTIAL 후보와 담당자 수용은 별도 이력 |
 | `secret_credential_lifecycle_evidence`와 reviews | 외부 폐기 신고·수명 자료·수동 검토 | 수행 시각 미상을 허용하고 인증 거부와 별도 보존. 기존 확인 수준·독립 검토 적용 |
 
 Notion identity의 닫힌 `safe_claims` schema는 `schemaVersion=1`, 선택적인 `ownerType=workspace|user`, 검증된 보호 `workspaceRef`만 허용한다. 알 수 없는 값·누락 필드는 미확인으로 표현하고 임의 문자열·추가 객체를 복사하지 않는다. 봇 주체 식별이 가능하면 선택 owner/workspace 필드가 없어도 identity를 생성할 수 있다. 지원하는 User 응답에서 주체 부가 자료를 구성할 수 없으면 인증 결과와 제한 사유를 보존한다. 이름·이메일·페이지 제목·전체 응답·원문 인증값은 이 schema에 포함하지 않는다. schema·safe_claims의 길이 상한은 8 KiB다.
@@ -295,3 +295,32 @@ Notion identity의 닫힌 `safe_claims` schema는 `schemaVersion=1`, 선택적�
 identity는 부모의 실제 공급자 관측 시각을 참조하고 `expires_at`은 그 관측의 확인 기한으로 계산한다. 토큰 만료일은 발급/관리 출처가 정확히 해당 키에 결합된 수명 자료로 기록하며, 미확인 값을 기존 TTL·접수·폐기 신고 시각으로 채우지 않는다. 원문 키의 교체는 새 CredentialSet을 생성하고 기존 identity와 과거 검증을 보존한다.
 
 구조화된 교체 근거에는 nullable `replacement_credential_set_id`, `before_validation_attempt_id`, `after_validation_attempt_id`, `replacement_validation_attempt_id` FK를 기존 lifecycle evidence에 연결한다. 참조한 전후 시도는 원래 키, 교체 키 시도는 새 키에 속해야 하며 각 원천·수행 시각·권한을 검사한다. 알려진 performed_at이 없는 근거는 전후 시각 조건을 미확인으로 유지한다. 참조 추가·교정은 기존 증거 version·멱등·감사와 원자 처리하고 원본 관측을 수정하지 않는다.
+
+## 10. 근거 적용 시점
+
+`secret_risk_evidence`는 nullable `fact_valid_from TIMESTAMPTZ`, `fact_valid_until TIMESTAMPTZ`, `source_presence_observed_at TIMESTAMPTZ`, `applicability_basis VARCHAR`를 갖는다. 기간은 둘 다 NULL이거나 from < until이어야 한다. 서버가 위치의 실제 원문 관측·원천 버전과 결합하며 `applicability_basis`는 OBSERVATION_ONLY 또는 EFFECTIVE_INTERVAL이다. 현재 수집기의 비동시 공개 관측은 OBSERVATION_ONLY와 NULL 사실 기간으로 기록한다. 콘텐츠 revision이나 같은 run만으로 ACL 동시성을 확정하지 않는다. 수동 기간은 해당 원문 관측과 평가 기준시점에 적용 가능해야 한다. 기존 행의 NULL은 미확인으로 보존하고 관측·접수·수용 시각을 추정하여 backfill하지 않는다.
+
+현재 source revision·키·위치·부모와 맞지 않으면 적용 실패 사유를 반환한다. API의 applicableFrom/Until은 물리 fact_valid_from/until과 대응하며, 해당 근거의 관측 시각·TTL·만료는 별도로 검사한다. 원천 관찰 시간 결합은 키 원문·본문 저장을 요구하지 않는다.
+
+## 11. 사용 이력과 AI 저장·실행
+
+기존 키·위치·Finding, 인증 시도, 노출 판정, 보관 정책, 권한 후보·결정, 위험 근거·평가, 조사 과제·감사 원장을 재사용한다. AI 출력과 사용 기록을 secret_risk_evidence의 ABUSE_LINK로 저장하지 않는다. 기존 secret_location_activities는 담당자·조치 타임라인이며 키 사용 로그로 재사용하지 않는다.
+
+새 논리 모델은 다음 여섯 가지다. SQL 버전 번호는 공동 DB 담당자와 구현 직전에 조율하며 과거 마이그레이션을 복제하지 않는다. 테이블마다 별도 마이그레이션을 만들지 않고 함께 배포하는 기능의 변경을 묶는다.
+
+| 모델 | 저장 내용과 제약 |
+|---|---|
+| secret_usage_requests | 기존 ENRICH job_id, 서버 고정 범위·기간·키 결합·원천/승인 revision·멱등키, 실행 상태·페이지/이벤트 수·조회 커버리지·실패/누락 사유. 이벤트 0건과 불가 조회도 요약 행을 보존 |
+| secret_usage_observations | sourceKind=PROVIDER 또는 MANUAL, nullable request_id·provider event 참조, 키/주체·적용 기간·결합 수준·행위 결과·안전한 자원 참조. 공급자 관측은 등록 adapter와 event/key 중복 키, 수동 자료는 actor/occurrence/idempotency로 중복 방지 |
+| secret_usage_observation_decisions | observation_id·기준 revision·ACCEPT/REJECT/WITHDRAW·사유·typed 근거·담당자·시각. MANUAL 제출 수용과 철회를 추가 전용으로 보존 |
+| secret_ai_analysis_requests | 독립 큐. 위치·요청자·평가·근거/인증/사용/ACL/전송 정책 revision·전체 contextDigest·로컬 alias 대응·상태·lease·generation·멱등키·검증 결과 코드 |
+| secret_ai_analysis_attempts | 시도 ID·요청 ID·모델/prompt/schema·전송 시각·결과 사유·token 사용·예산 예약·응답 digest. 원문 응답 없음 |
+| secret_ai_budget_windows | 배포·분/일 구간의 한도·예약·전송 횟수, 동시 실행 lease. 공급자 호출 전 원자 예약 |
+
+사용 조회 요청은 기존 secret_jobs의 ENRICH 목적을 확장해 USAGE_OBSERVATION으로 구분한다. 범용 job에 존재하지 않는 context/result 필드를 가정하지 않고 조회 기간·대상·revision·완료/부분 실패·0건 요약은 secret_usage_requests에 보존한다. 요청과 job을 같은 트랜잭션에서 연결하고 기존 lease/fencing 계약으로 실행한다. 자동 관측의 event ID·고유 키와 수동 자료의 멱등키는 별도다. 스캔 횟수나 ScanRun을 만들지 않는다. AI 큐는 수집·권한·평가 큐와 별도로 처리하여 외부 AI 지연이 스캔을 막지 않는다.
+
+기존 정기 예약·수집·권한 워커의 기본 polling 30초와 정기 스캔 6시간을 유지한다. 30초는 작업 확인 간격이며 시작·완료 보장이 아니다. 수동 요청은 다음 선점에서 처리하고 대기·실행 상태를 표시한다. 새 AI 큐만 기본 2초 polling을 사용하되 큐가 비었으면 10초까지 완화하며 수동 요청은 즉시 wake-up 신호를 줄 수 있다. wake-up은 성능 최적화이고 DB가 요청 원본이다.
+
+외부 조회의 정상적인 제한·재시도는 기존 검증·수집 계약을 유지한다. 새 CloudTrail 조회는 한 페이지당 일시 오류 최대 2회 재시도, 1초·3초 지연과 jitter를 쓰고 Retry-After가 길면 lease를 반환해 재예약한다. 인증/권한 거절은 재시도하지 않는다. 실패한 페이지 이후를 COMPLETE로 처리하지 않는다. 원천 스캔·인증·사용 조회·AI의 성공 상태와 집계는 분리한다.
+
+신규 안전한 사용 관측과 AI 요청/결과 메타데이터는 초기 365일 보존한다. AI 응답 원문은 보존하지 않으며 cache 적격 기간은 별도 24시간이다. 사고·미해결 대응 또는 평가의 근거로 참조된 기록은 365일을 지나도 참조가 해소되기 전 자동 삭제하지 않는다. 기존 평가·감사 원장은 현재 보존 계약을 유지한다. 정리는 운영 유지보수 권한으로만 수행하며 일반 API에는 삭제 기능을 추가하지 않는다.
