@@ -367,7 +367,7 @@ JSONB 전체에 무조건 GIN을 만들거나 보호된 원천 참조·키 신�
 
 ## 10. 사실 적용 시점과 설명 투영
 
-관측한 시각과 사실이 성립한 기간을 구분한다. `applicableFrom`/`applicableUntil`은 둘 다 없거나 유효한 UTC 구간이어야 한다. 수동 기간은 같은 위치 원문 관찰 시각을 포함하고 평가 기준시점에도 적용 가능해야 한다. 서버는 원천 관측으로 `sourcePresenceObservedAt`과 `sourceObjectVersion`을 결합한다. 현재 수집기의 비동시 관측은 `OBSERVATION_ONLY`로 보존한다. 같은 run이나 콘텐츠 revision만으로 ACL과 원문의 동시성을 증명하지 않는다. 명시적인 수동 사실 효력 기간의 결합은 `EFFECTIVE_INTERVAL`로 기록한다. 서로 다른 시점의 공개 상태와 키 원문을 조합하지 않는다.
+관측한 시각과 사실이 성립한 기간을 구분한다. `applicableFrom`/`applicableUntil`은 둘 다 없거나 유효한 UTC 구간이어야 한다. 수동 기간은 반개구간 [applicableFrom, applicableUntil)이며 from < until, from <= observedAt, until <= validUntil을 적용한다. 같은 위치 원문 관찰 시각을 포함하고 평가 기준시점에도 적용 가능해야 한다. 역사적 ABUSE_LINK는 현재 사실의 적용 기간 필수 조건을 요구하지 않고 기존 사건 시점·동일성·반증 요건을 유지한다. 서버는 원천 관측으로 `sourcePresenceObservedAt`과 `sourceObjectVersion`을 결합한다. 현재 수집기의 비동시 관측은 `OBSERVATION_ONLY`로 보존한다. 같은 run이나 콘텐츠 revision만으로 ACL과 원문의 동시성을 증명하지 않는다. 명시적인 수동 사실 효력 기간의 결합은 `EFFECTIVE_INTERVAL`로 기록한다. 서로 다른 시점의 공개 상태와 키 원문을 조합하지 않는다.
 
 기존 근거에 새 시점·원천 필드가 없으면 추정하거나 수신·승인 시각으로 채우지 않는다. `EVIDENCE_APPLICABILITY_UNCONFIRMED`, `EVIDENCE_APPLICABILITY_MISMATCH`, `SOURCE_REVISION_UNCONFIRMED`로 해당 축의 적용 한계를 반환한다. 과거 평가·근거 원본과 높은 등급 보류는 보존하며 현재 정규화와 구분한다.
 
@@ -380,3 +380,11 @@ GET risk의 `riskExperience`는 등급 저장 원장을 바꾸지 않는 읽기 
 GitHub 파일 수집 뒤의 저장소 공개 메타데이터 조회는 원문과 ACL의 동시 관측을 입증하지 않는다. blob SHA는 파일 콘텐츠 버전이며 ACL 버전이 아니다. 이 관측은 공개 후보 사실로 보존하되 `ACCESS_COEXISTENCE_UNCONFIRMED`와 접근 범위 UNKNOWN을 반환한다. 공개 본문·접근 상태의 실제 동시 관측 또는 원문 관찰과 겹치는 명시적 수동 효력 기간이 확인될 때만 같은 시점의 공개 키 노출 근거로 수용한다. 공개 후보와 높은 권한 후보를 숨기지 않고 우선 확인 질문으로 보여준다.
 
 평가 snapshot에는 `applicabilityVersion=risk-applicability-v1`을 고정한다. 이 적용 시점 해석 버전이 없는 기존 snapshot은 과거 기록으로 보존하되 현재 결과 적격성은 false이며 재평가가 필요하다. `severity-v2` 규칙을 바꾸거나 과거 snapshot을 새 해석으로 덮어쓰지 않는다.
+
+## 11. 현재 설명과 부적격 근거의 구분
+
+현재 인증은 기존 검증 조회의 freshness와 latestAttempt를 재사용한다. CURRENT가 아닌 과거 확정값을 현재 VALID/INVALID로 투영하지 않는다. 원래 결과와 lastConclusiveValidation은 역사로 유지하고 시도 없음은 UNCHECKED, 현재 결론 불가는 UNKNOWN으로 설명한다. 이 표시·업무 신호 처리는 등급의 validity 독립 규칙을 바꾸지 않는다.
+
+정규화의 `excludedEvidence`에는 evidenceId·kind·reasonCode만 남긴다. 이 목록은 과거 근거의 제외 설명이며, 현재 모든 축의 보완 요구가 아니다. `missingFacts`는 현재 UNKNOWN/STALE/CONFLICT 축과 해당 kind에 한정한다. 새 적격 근거로 확인된 축은 이전 만료 근거 때문에 같은 보완 질문을 계속 표시하지 않는다. 현재 평가 자체가 낡았으면 근거 질문과 별도로 재평가 행동을 제공한다.
+
+권한 후보에서 유래한 업무 신호는 조회 연결의 현재 ACL·활성·인증 참조·승인 범위 baseline과 정확한 키 주체 일치를 검증한다. 업무 기산은 현재 등급 전환 또는 현재 유효한 관측 신호의 연속 구간에서 구한다. 원천 공개성 관측과 인증/권한 후보의 겹침은 조사 우선순위 근거이며, 원문과 ACL이 실제 같은 시점에 공개됐다는 평가 근거를 대신하지 않는다.

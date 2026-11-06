@@ -96,7 +96,7 @@ AI는 AWS·GitHub 발급자, TEST 건, 현재 유효한 키별 합성 표본 근
 | `POST /requests` | `{expectedContextVersion,idempotencyKey,collectorConnectionId?}`로 `ENRICH/PERMISSION_ASSISTANCE` 작업 등록. 202와 requestId·jobId·상태. 수집 연결이 하나로 확정되지 않으면 적격 연결을 명시 |
 | `GET /requests/{requestId}` | 같은 위치의 작업 상태·안전한 실패 사유·관측 후보 조회 |
 | `GET /observations/{observationId}/preview` | 현재 contextVersion·evidenceRevision, 후보·범위 한계, 실제 사용 가능한 부모 근거와 확인/제외 조건 조회 |
-| `POST /observations/{observationId}/confirm` | `{expectedContextVersion,expectedEvidenceRevision,idempotencyKey,attestation:true,evidenceRef,observedAt,validUntil,facts,sourceRefs}`. 별도 자료를 검토한 사람의 수동 근거 제출 |
+| `POST /observations/{observationId}/confirm` | `{expectedContextVersion,expectedEvidenceRevision,idempotencyKey,attestation:true,evidenceRef,observedAt,validUntil,facts,sourceRefs,applicableFrom?,applicableUntil?}`. 별도 자료를 검토한 사람의 수동 근거 제출 |
 | `POST /observations/{observationId}/reject` | `{expectedContextVersion,idempotencyKey,reasonCode}`. 사유는 NOT_APPLICABLE·INSUFFICIENT_EVIDENCE·IDENTITY_MISMATCH |
 
 `requestReadiness={nextAction,checks:[{code,status,action}]}`는 기능 설정·SECURITY 역할·지원 유형·완전한 키 구성·원천 접근·현재 키 주체·승인 조회 연결의 기존 요청 조건을 설명한다. 상태는 `READY|BLOCKED|WAITING|UNSUPPORTED`다. 실제 최신 검증에 결합된 주체가 없으면 `KEY_IDENTITY`는 BLOCKED, `COLLECTOR`는 WAITING이며 먼저 `VALIDATE_CREDENTIAL`을 안내한다. 이때 적격 연결을 아직 대조할 수 없으므로 `APPROVED_COLLECTOR_REQUIRED`로 단정하지 않는다. 주체 확인 뒤 실제 승인 연결이 없을 때 `CHOOSE_APPROVED_COLLECTOR`를 안내한다. 준비 완료는 권한 수집·확정 완료가 아니다.
@@ -482,7 +482,7 @@ Notion의 현재 결과·마지막 인증 성공·이력·시각·재시도는 �
 
 위치 조회 권한·증거 자체의 ACL을 모두 검사하고 같은 키 ID만으로 다른 원천의 권한·악용 근거를 공개하지 않는다. 평가 요청·수동 조정은 SECURITY, 자료 제출은 SECURITY 또는 해당 위치의 지정 REMEDIATOR에 허용한다. REMEDIATOR 제출은 자료이며 공급자 자동 확인이나 적용된 영향 범주가 아니다. SECURITY가 직접 수용한 일반 자료에 다시 자기 자신과 다른 승인자를 일괄 요구하지 않는다. 명시적 등급 조정과 기존 높은 등급 하향은 별도 승인 계약을 적용한다.
 
-자료 본문은 `{expectedEvidenceRevision,idempotencyKey,evidenceType,subject,observedAt,validUntil,evidenceRef,facts,applicableFrom?,applicableUntil?}`다. optional applicableFrom/applicableUntil은 함께 없거나 함께 있는 유효 UTC 기간이다. observedAt 확인 시각과 사실의 효력 기간은 별도이며, 누락 자료는 저장 호환을 유지하되 적용 시점 미확인으로 평가 입력에서 구분한다. `facts`는 등록된 유형별 필드·enum·개수·길이만 허용하며 `evidenceRef`는 기존 TICKET/CHANGE/POLICY 등의 제한된 형식이다. 클라이언트는 `PROVIDER_VERIFIED`·검증 결과·자동 매핑 버전·자동 노출 결정·행위자를 지정하지 못한다. 외부 응답·인증 재료·임의 URL·자유 본문은 400으로 거부한다. 자료 결정은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`이며 수용 대상·유형·같은 키/위치·근거 시각을 재검사한다.
+자료 본문은 `{expectedEvidenceRevision,idempotencyKey,evidenceType,subject,observedAt,validUntil,evidenceRef,facts,applicableFrom?,applicableUntil?}`다. optional applicableFrom/applicableUntil은 함께 없거나 함께 있는 유효 UTC 반개구간 [from, until)이다. from < until, from <= observedAt, validUntil이 있으면 until <= validUntil을 검사하고 원문 관찰 시각이 구간에 포함되어야 한다. 역사적 ABUSE_LINK는 현재 사실의 적용 기간 필수 조건에서 제외한다. observedAt 확인 시각과 사실의 효력 기간은 별도이며, 누락 자료는 저장 호환을 유지하되 적용 시점 미확인으로 평가 입력에서 구분한다. `facts`는 등록된 유형별 필드·enum·개수·길이만 허용하며 `evidenceRef`는 기존 TICKET/CHANGE/POLICY 등의 제한된 형식이다. 클라이언트는 `PROVIDER_VERIFIED`·검증 결과·자동 매핑 버전·자동 노출 결정·행위자를 지정하지 못한다. 외부 응답·인증 재료·임의 URL·자유 본문은 400으로 거부한다. 자료 결정은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`이며 수용 대상·유형·같은 키/위치·근거 시각을 재검사한다.
 
 평가 요청 본문은 `{expectedEvidenceRevision,idempotencyKey}`다. 정책 버전은 현재 활성 정책을 서버가 선택하며 사용자가 과거 정책을 현재 판단에 적용하지 못한다. 기존 `secret_jobs`에 `kind=ASSESS`, `purpose=SEVERITY_ASSESSMENT`, 내부 위치 ID·근거 revision을 저장한다. 이 작업은 DB 근거만 평가하며 ScanRun·수집·탐지·검증 성공 기록을 생성하지 않는다. 결과에서 `runId`는 null이다. 같은 위치·근거 revision·정책의 진행 작업은 멱등 재사용한다. 연결의 외부 호출 직렬화와 별개로 위치 잠금·revision CAS를 적용한다.
 
@@ -501,17 +501,26 @@ Notion의 현재 결과·마지막 인증 성공·이력·시각·재시도는 �
 | version, readAt | `risk-experience-v1`, 이 읽기 모델을 계산한 UTC 시각. 평가 시각과 다름 |
 | severityLabel | `시크릿 노출 심각도` |
 | sourcePresenceObservedAt | 같은 위치의 실제 원문 관측 시각. 미확인은 null |
+| authentication | `{currentResult,freshness,latestAttempt,lastConclusiveValidation}`. 기존 validation.read의 허용된 응답 재사용. 현재 인증과 과거의 마지막 확정 결과 분리 |
 | summary | `{status:CURRENT\|STALE\|UNASSESSED\|METADATA_ONLY,reasonCode,ruleId,severity,automaticSeverity,held}`. severity는 실제 적용값, automaticSeverity는 최신 자동값. 저장된 평가와 현재 적격성 구분 |
 | criteria[] | `{axis,label,value,status,evidenceIds,reasonCodes,nextAction}`. axis는 기존 여섯 축, status는 CONFIRMED/CANDIDATE/UNKNOWN/STALE/CONFLICT. 허용 근거만 참조 |
-| missingFacts[] | `{code,evidenceType,action}`. 필요한 질문과 허용된 보완 행동만 제공 |
+| missingFacts[] | `{code,evidenceType,action}`. 현재 미확인·오래됨·충돌인 축에 필요한 질문과 허용된 보완 행동만 제공. 과거 탈락 근거 전체를 질문으로 복사하지 않음 |
 | workPriority | `{policyVersion:'work-priority-v1',level,reasonCodes,clockMode,timeZone,targetBasis,targetBasisAt,acknowledgeDueAt,planDueAt,operatingHoursNow,holidayCalendarConfigured}` |
 | riskAcceptance | `{enabled:false,reasonCode:'RISK_ACCEPTANCE_DISABLED',allowedSeverities:['MEDIUM','LOW'],maximumDays:7}`. 등급 override와 별도 |
 | support.permissionAssistance | `{status:PARTIAL\|UNSUPPORTED,reasonCodes}`. 발급자·수집 원천 조합의 등록 capability 반영 |
 | support.automaticUsage | `{status,reasonCodes}`. 사용 adapter가 미등록이면 UNSUPPORTED. 인증 성공으로 지원 상태를 만들지 않음 |
 
-workPriority.level은 `IMMEDIATE|PRIORITY|GENERAL|PLANNED|INVENTORY`다. 기본 clockMode는 BUSINESS_HOURS, timeZone은 Asia/Seoul, 월~금 09~18시다. targetBasis는 GRADE_ACTIVATED(현재 적용 등급 전환의 첫 APPLICATION 시각), FIRST_OBSERVED(일반 미평가의 최초 관측), UNCONFIRMED(공개·권한 후보의 시작 시점 증명 부족), NOT_APPLICABLE(관리 기록)이다. 같은 등급의 반복 평가·조회로 기산을 갱신하지 않는다. targetBasisAt·acknowledgeDueAt·planDueAt은 nullable이며 기산을 입증할 자료가 없으면 기한 미확인으로 표시하고 조회 시각으로 만들지 않는다. 공휴일 캘린더 미연결은 false로 표시하고 실제 운영 체계가 없는 ALWAYS_ON을 허용하지 않는다. 운영시간 밖에도 긴급 배지는 유지한다.
+workPriority.level은 `IMMEDIATE|PRIORITY|GENERAL|PLANNED|INVENTORY`다. 기본 clockMode는 BUSINESS_HOURS, timeZone은 Asia/Seoul, 월~금 09~18시다. targetBasis는 GRADE_ACTIVATED(현재 적용 등급 전환의 첫 APPLICATION 시각), FIRST_OBSERVED(일반 미평가의 최초 관측), PRIORITY_SIGNAL_OBSERVED(현재 유효한 공개성 관측과 인증 성공 또는 높은 권한 후보의 연속 관측 구간이 겹치기 시작한 시각), UNCONFIRMED(신호의 시작 시점 증명 부족), NOT_APPLICABLE(관리 기록)이다. 같은 등급의 반복 평가·조회로 기산을 갱신하지 않는다. targetBasisAt·acknowledgeDueAt·planDueAt은 nullable이며 기산을 입증할 자료가 없으면 기한 미확인으로 표시하고 조회 시각으로 만들지 않는다. 공휴일 캘린더 미연결은 false로 표시하고 실제 운영 체계가 없는 ALWAYS_ON을 허용하지 않는다. 운영시간 밖에도 긴급 배지는 유지한다.
 
 `evidenceSummary`의 안전한 항목은 `applicableFrom,applicableUntil,sourcePresenceObservedAt,applicabilityBasis`를 포함한다. `applicabilityBasis=OBSERVATION_ONLY|EFFECTIVE_INTERVAL`이며, 비동시 수집 관측은 사실 기간을 NULL로 유지한다. 서버가 실제 같은 원천 관측을 결합할 때만 해당 값을 제공한다. 누락·불일치·source revision 미확인은 `EVIDENCE_APPLICABILITY_UNCONFIRMED|EVIDENCE_APPLICABILITY_MISMATCH|SOURCE_REVISION_UNCONFIRMED`로 표시하며 기존 행을 추정하지 않는다.
+
+`authentication.currentResult`는 freshness=CURRENT일 때 latestAttempt.result를 사용한다. 시도 기록이 없으면 UNCHECKED이며, 과거 VALID/INVALID만 있고 만료·조치 이후 미검증·최근 오류로 현재성이 없으면 UNKNOWN이다. latestAttempt와 lastConclusiveValidation은 당시 결과·시각으로 별도 보존한다. 현재 인증 표시와 업무 우선 신호는 이 현재성 결과를 사용하고 과거 평가 snapshot의 validity를 현재 인증으로 재사용하지 않는다. v2 등급 계산과는 독립이다.
+
+`analysisContext.excludedEvidence`는 `{evidenceId,kind,reasonCode}`의 안전한 배열이다. 과거 또는 현재 부적격 근거가 왜 제외됐는지 설명하며 현재 부족 질문과 다른 항목이다. 적격한 새 근거가 같은 축을 확인하면 이전 만료 근거를 이유로 STALE 보완 질문을 반복하지 않는다. `analysisContext.access`의 repositoryPublicObserved·publicObservationAt·coexistenceStatus는 공개 메타데이터 관측과 원문 공존 확인을 구분한다. ACCESS_COEXISTENCE_UNCONFIRMED의 missingFacts는 evidenceType=ACCESS_SCOPE, action=REVIEW_ACCESS로 연결하고 원문 관찰 시점의 공유 근거·효력 기간을 확인하게 한다. 단순 재스캔을 동시성 부족의 해소로 안내하지 않는다.
+
+PRIORITY_SIGNAL_OBSERVED는 업무 기산용 관측 연결이며 공개 키 노출의 실제 동시성을 확정하지 않는다. 현재 사건의 시작·조치 재개 이전으로 기산을 소급하지 않고, 반복 관측으로 이어지는 같은 신호는 최초 겹침을 유지한다. 반대 관측·기한 만료·관측 공백이 있으면 연속 구간을 끊는다. 수용·서버 기록 이전의 수동 주장 시각으로 기산하지 않으며 현재 구간의 시작을 입증할 수 없으면 UNCONFIRMED와 null 기한을 반환한다.
+
+우선순위에 사용하는 권한 후보도 원천 위치뿐 아니라 조회 연결의 현재 열람 권한·ACTIVE 상태·범위 활성·인증 참조·승인 baseline·정확한 키 주체 일치를 통과해야 한다. 오래된 권한·철회된 연결·다른 키의 관측으로 우선 신호를 만들지 않는다.
 
 GitHub PAT 권한 보조는 GitHub 수집 원천과 지원 PAT 유형의 조합에서만 실행 가능하다. Notion에서 발견한 GitHub PAT는 인증 지원과 별도로 권한 보조를 미지원으로 표시한다. Notion 발급 토큰도 관측기 등록 전 미지원이며 연결 선택을 요구하지 않는다.
 
