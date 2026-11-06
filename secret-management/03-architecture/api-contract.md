@@ -313,7 +313,7 @@ Notion 페이지 정보·본문 읽기는 기존 permission-assistance의 `ENRIC
 
 실행 선택용 `/connections`와 관리용 `GET /api/v1/secrets/connections/manage?status=&origin=&page=&size=`와 `GET /api/v1/secrets/connections/{connectionId}/scopes?origin=&classificationStatus=&gapOnly=&page=&size=`를 분리한다. `OPERATIONS`는 승인 범위 운영·실행 사실, `SECURITY`는 자신에게 허용된 범위의 승인·분류·정책 요약을 본다. 일반 REMEDIATOR의 키 상세에는 필요한 범위 읽기 상태만 포함하고 전체 연결 목록 권한을 주지 않는다. 실행 선택 목록과 관리 목록은 목적과 필드를 구분한다.
 
-관리 연결의 응답에는 현재 `connectionStatus`, 안전한 별칭, 승인 범위 수·revision, `latestProbe`, `lastFullScanAttempt`, `lastSuccessfulFullScan`, `nextDueAt`, `activeJob`, 권한에 맞는 상태별 범위 수를 분리한다. 연결 테스트는 STS 신원/설치 토큰 발급 확인이라는 `checkKind=IDENTITY_OR_INSTALLATION`이고 **수집 범위 권한·본문 접근·발견 키 유효성 확인이 아니다**. 테스트의 시각·안전한 사유 이력을 남겨도 연결 활성 상태나 수집 성공 시각을 변경하지 않는다.
+관리 연결의 응답에는 현재 `connectionStatus`, 안전한 별칭, 승인 범위 수·revision, `latestProbe`, `lastFullScanAttempt`, `lastSuccessfulFullScan`, `nextDueAt`, `activeJob`, 권한에 맞는 상태별 범위 수를 분리한다. 연결 테스트는 AWS STS 신원·GitHub 설치 토큰 발급·Notion 인증 확인을 나타내는 `checkKind=IDENTITY_OR_INSTALLATION`이고 **수집 범위 권한·본문 접근·발견 키 유효성 확인이 아니다**. 테스트의 시각·안전한 사유 이력을 남겨도 연결 활성 상태나 수집 성공 시각을 변경하지 않는다.
 
 범위별 `coverage`는 현재 `scopeRevision`, `lastAttempt`의 실행·시각·`scopeOutcome`, 동일 revision과 필수 단계 구성에서 마지막으로 성공한 `lastSuccessfulScan`, `nextDueAt`, `isPaused`, `isRunning`, `freshness`와 `gapReasonCodes[]`를 제공한다. `freshness=CURRENT|OVERDUE|NEVER_SCANNED|NOT_SCHEDULED`는 주기와 예정 시각으로 계산하는 읽기 정보이며 기존 수집 상태 enum을 바꾸지 않는다. `lastSuccessfulScan`을 최신 실패 시각으로 덮어쓰지 않고, 범위 변경 전의 성공을 현재 revision의 확인으로 재사용하지 않는다. 실행 ID가 있으면 스캔 상세로 연결하고 대상이 실행 전이면 연결·범위 복구로 안내한다.
 
@@ -453,7 +453,13 @@ SECURITY 또는 해당 위치의 현재 지정 REMEDIATOR가 승인된 능력 �
 
 Notion 발급자의 `support.methods`는 등록된 `NOTION_GET_SELF`를 제공한다. 원천이 GitHub 파일·승인 AWS 본문·승인 Notion 본문인지와 발급자 검증기 지원을 각각 판정한다. `REVALIDATE/CREDENTIAL_VALIDITY`는 현재 원천 재취득과 보호된 동일성 확인 후 실행한다. 원천 수집기가 미등록이면 원천 미지원 사유, Notion 검증기 미등록·비활성이면 해당 사유를 구분한다.
 
-Notion 연결 테스트는 연결의 `auth_ref`로 수행한 주체 확인을 `secret_connection_probes`에 기록한다. 발견 키의 유효성·페이지 본문 읽기·전체 스캔 성공과 분리해 표시한다. `canTest`, `canScan`, `canRequestValidation`, 권한 관측 readiness는 등록된 각 capability와 현재 승인에서 독립 계산한다. Notion scope는 등록된 `NOTION_PAGE_CONTENT`, 정규화한 페이지 UUID, 현재 버전과 지원 블록·하위 페이지 정책을 제공하며 임의 URL·추가 페이지를 명령 본문에서 승인하지 않는다.
+Notion 연결 테스트는 연결의 불투명 참조 `notion-internal:default`에 대응하는 외부 토큰으로 `GET /v1/users/me`만 수행하고 `secret_connection_probes`에 결과를 기록한다. 화면은 `Notion 인증 확인`과 페이지 읽기 결과를 구분한다. `capabilities.canTest/canRun`, `canRequestValidation`, 권한 관측 readiness는 등록된 각 capability와 현재 승인에서 독립 계산한다. 수집 비활성은 `NOTION_COLLECTION_DISABLED`, 토큰 파일 접근·형식 실패는 `NOTION_CREDENTIALS_UNAVAILABLE`, 인증·접근 거부는 `NOTION_ACCESS_DENIED`, 공급자 대기는 `NOTION_RATE_LIMITED`, 나머지 통신·응답 실패는 `NOTION_UNAVAILABLE`로 제공한다. 외부 경로·토큰·전체 응답은 반환하지 않는다.
+
+Notion scope는 `NOTION_PAGE_CONTENT`, 정규화한 페이지 UUID, `CURRENT_VERSION_ONLY`와 현재 페이지 텍스트 경계를 제공한다. 임의 URL·추가 페이지를 스캔 요청 본문에서 승인하지 않는다. 발견 위치는 승인 페이지와 일치하는 제목·블록 ID에서 구조화하고, 원본 열기 주소는 `https://www.notion.so/<하이픈 없는 페이지 UUID>#<하이픈 없는 블록 UUID>`로 생성한다. 제목은 블록 fragment를 생략한다. 페이지·블록 불일치나 확인 불가 좌표에는 원본 링크를 제공하지 않는다.
+
+실행 상세의 `scopeResults[].excludedObjectCount`는 선언된 하위 페이지·데이터베이스·링크·첨부 본문 제외 수다. 해당 값은 기본 0이며 수집한 텍스트 객체 수와 별개다. 화면은 0보다 큰 제외 개수와 `현재 페이지 텍스트 · 하위 페이지·외부 본문은 별도 대상` 경계를 표시한다. 알려진 제외만으로 성공 범위를 검사 누락으로 세지 않는다. 지원 텍스트를 읽지 못했거나 변경·불완전 순회가 있으면 기존 단계·범위 결과에 `PARTIAL|FAILED`와 `NOTION_*` 안전한 실패 코드를 제공한다.
+
+Notion에서 성공한 순회·변경 미검출·새 후보 0건도 기존 위치의 부재 증명으로 제공하지 않는다. 분 단위 수정 시각과 커서 순회의 한계에 따라 전체 스캔·대응 위치 재검사의 미관찰은 `UNKNOWN`으로 표시하고 제거·회수 완료나 `MISSING`으로 전환하지 않는다. 실제 관찰한 위치·동일 키에 대한 인증 결과는 독립적으로 제공하며 이 경계는 기존 `severity-v2`를 변경하지 않는다. [수정 시각의 정밀도](https://developers.notion.com/guides/resources/historical-changelog#june-28-2021), [페이지 나눔 계약](https://developers.notion.com/reference/pagination)
 
 Notion의 현재 결과·마지막 인증 성공·이력·시각·재시도는 이 절의 공통 응답을 사용한다. 정규화 사유는 `AUTHENTICATED`, `AUTHENTICATION_REJECTED`, `ACCESS_LIMITED`, `UNEXPECTED_RESPONSE`, `RATE_LIMITED`, `PROVIDER_UNAVAILABLE`, `PROVIDER_ACCESS_BLOCKED`, `CLIENT_FAILURE`와 실제 사전 차단 사유로 제한한다. 인증 거부는 현재 사용 불가와 세부 원인 미확인, 공급자 제한은 운영 확인 필요를 나타낸다. 원천 오류·공급자 오류를 대시보드 로그인 오류로 변환하지 않는다.
 
