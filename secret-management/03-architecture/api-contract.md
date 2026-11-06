@@ -101,6 +101,10 @@ AI는 AWS·GitHub 발급자, TEST 건, 현재 유효한 키별 합성 표본 근
 
 AWS는 확인한 주체와 같은 계정의 승인 연결로 결합된 사용자·역할 정책만 읽는다. GitHub는 발견 PAT의 실제 검증에서 얻은 사용자·정규화된 scope를 사용하며 수집 App의 권한을 대신하지 않는다. 자동 관측은 PARTIAL 후보이며 전체 유효 권한·영향·심각도를 확정하지 않는다. 확인에는 관측에 있는 capability와 기존 `PERMISSION_MAPPING`의 네 coverage에 대한 COMPLETE 근거, 현재 키 주체를 결합한 실제 검증 시도, 승인된 자산 분류, 수락된 조사 자료 등 적격 `sourceRefs`를 요구한다. 체크박스나 후보 이름 변경으로 이를 대신하지 못한다. 사람의 수동 근거만 기존 평가·보류·독립 검토 절차로 전달하며 [심각도 평가 계약](risk-assessment-contract.md)의 v2 정책과 신규 720개 정책 보류를 변경하지 않는다.
 
+Notion의 인증 주체는 현재 VALID 시도에 결합한 봇·소유 범위·워크스페이스 확인 수준으로 제공한다. 주체가 있어도 해당 권한 관측기가 등록되지 않았으면 권한 자료의 readiness는 `UNSUPPORTED`와 안전한 지원 사유를 반환한다. 사용자에게 불필요한 조회 연결 선택을 요구하지 않는다. 기본 인증의 실행 가능성은 별도로 계산한다.
+
+Notion 페이지 정보·본문 읽기는 기존 permission-assistance의 `ENRICH/PERMISSION_ASSISTANCE`로 등록한다. 대상은 현재 권한으로 열람 가능한 승인 페이지·블록의 서버 등록 식별자에서 선택하고 context에 대상·원천·승인 revision을 고정한다. 기본 인증 승인으로 추가 대상을 허용하지 않는다. 읽기 성공은 해당 대상·동작·시각의 PARTIAL 관측이며, 설정상 capability·전체 접근 목록·실효 쓰기 권한·토큰 만료 근거는 별도로 표시한다. 담당자 확인은 기존 권한 자료의 provenance·완전성·자산·v2 매핑 조건을 적용한다.
+
 ## 4. 공유 데이터 경계
 
 인증 주체는 공통 dashboard_users를 참조하고 Secret 역할·활성 팀·연결/위치 권한을 별도로 검사한다. SECURITY는 근거 검토·판정·조정·예외·해결, REMEDIATOR는 할당 위치의 외부 조치·재검사, OPERATIONS는 연결·승인 범위 운영을 수행한다. 화면 capability는 보조 정보이며 모든 명령은 서버에서 다시 검사한다.
@@ -345,6 +349,10 @@ AWS는 확인한 주체와 같은 계정의 승인 연결로 결합된 사용자
 
 fixture manifest는 별도로 승인·버전 고정된 합성 표본 등록물이며 보호된 일치 자료는 일반 API에 노출하지 않는다. 워커 또는 신뢰된 내부 비교기가 현재 키의 보호된 동일성을 manifest와 정확히 비교하고 결과 ID·키·scope revision·manifest 버전을 보존한다. SECURITY는 그 일치 결과를 검토·승인하거나 이미 승인된 manifest의 매칭 정책에 따라 자동 attestation을 허용할 수 있다. 원문 키를 폼에 붙여 넣거나 마스킹 suffix를 비교하는 방식은 허용하지 않는다. manifest 만료·취소·키/위치 revision 변경·실제 키임을 보이는 상충 근거가 생기면 이전 attestation으로 SIMULATION을 통과할 수 없다. 최신 유효 attestation과 실제 fixture 제거·조치 후 비교 가능한 재검사가 있을 때만 시험 종료를 허용한다.
 
+수명주기 신고의 `performedAt`은 정확한 수행 시각을 알 때 입력하고 미상이면 null을 허용한다. 서버는 `observedAt`과 접수 시각을 독립 기록하며 조회에서 `performedAtStatus=KNOWN|UNKNOWN`을 파생한다. 시각 미상 신고는 등록·검토·조회할 수 있고, 조치 이후의 근거가 필요한 해결 조건은 추가 확인될 때까지 UNKNOWN으로 유지한다. 공급자의 인증 거부 시각이나 접수 시각을 수행 시각으로 대입하지 않는다.
+
+교체 증거에 선택적인 `replacementCredentialSetId`, `beforeValidationAttemptId`, `afterValidationAttemptId`, `replacementValidationAttemptId`를 연결할 때 기존 키·새 키·각 관측의 소속·현재 ACL·시각·revision을 검증한다. 참조한 관측은 당시 사실로 보존하고 현재 사용 적격성은 조회·적용 시 다시 검사한다. 제출 원본·검토·인증 결과·교체 관계를 서로 다른 항목으로 반환하며 일반 401 관측은 `AUTHENTICATION_REJECTED`와 원인 미확인 설명으로 제공한다.
+
 ### 5.11. 같은 출처의 해결 대상과 표시 집계
 
 해결·건 집계는 같은 `CredentialSet`과 같은 **대응 건 출처**를 기준으로 계산한다. 승인 위치에서 값을 발견한 사실만으로 그 값을 모두 지우게 하지 않는다.
@@ -440,6 +448,14 @@ SECURITY 또는 해당 위치의 현재 지정 REMEDIATOR가 승인된 능력 �
 권한 없는 대상은 기존 404/필드 차단 규칙, 지원·구성·승인 부족은 422의 안전한 사유, 오래된 context는 409, 대시보드 요청 한도는 429를 사용한다. 공급자의 401/403/429는 대시보드 세션 오류로 중계하지 않는다.
 
 검증 설정 조회는 기존 연결·범위 설정 응답에 현재 서버 검증 profile 버전·활성화·scope 승인 revision·승인 여부·지원 유형과 `canConfigureValidation`을 추가한다. `PATCH /api/v1/secrets/scopes/{scopeId}/validation-policy`는 `{expectedValidationApprovalRevision,idempotencyKey,enabled,reasonCode}`를 받으며 현재 범위 SECURITY만 수행한다. 이는 이미 승인된 범위의 등록 검증기를 허용/철회하는 직접 결정이고 수집 범위를 넓히거나 endpoint·원문·권한을 지정하지 못한다. 서버 profile 활성화는 승인된 운영 배포 설정의 책임이다. 연결·서버 profile이 꺼져 있으면 범위 허용만으로 외부 호출하지 않는다. 결정자·시각·승인 revision·감사를 원자 저장하고 철회는 대기 요청 취소와 현재 투영 무효화를 수행한다. 서버 profile이 바뀌면 기존 scope 승인을 자동 확대하지 않는다.
+
+### 6.1. Notion 인증과 원천 capability
+
+Notion 발급자의 `support.methods`는 등록된 `NOTION_GET_SELF`를 제공한다. 원천이 GitHub 파일·승인 AWS 본문·승인 Notion 본문인지와 발급자 검증기 지원을 각각 판정한다. `REVALIDATE/CREDENTIAL_VALIDITY`는 현재 원천 재취득과 보호된 동일성 확인 후 실행한다. 원천 수집기가 미등록이면 원천 미지원 사유, Notion 검증기 미등록·비활성이면 해당 사유를 구분한다.
+
+Notion 연결 테스트는 연결의 `auth_ref`로 수행한 주체 확인을 `secret_connection_probes`에 기록한다. 발견 키의 유효성·페이지 본문 읽기·전체 스캔 성공과 분리해 표시한다. `canTest`, `canScan`, `canRequestValidation`, 권한 관측 readiness는 등록된 각 capability와 현재 승인에서 독립 계산한다. Notion scope는 등록된 `NOTION_PAGE_CONTENT`, 정규화한 페이지 UUID, 현재 버전과 지원 블록·하위 페이지 정책을 제공하며 임의 URL·추가 페이지를 명령 본문에서 승인하지 않는다.
+
+Notion의 현재 결과·마지막 인증 성공·이력·시각·재시도는 이 절의 공통 응답을 사용한다. 정규화 사유는 `AUTHENTICATED`, `AUTHENTICATION_REJECTED`, `ACCESS_LIMITED`, `UNEXPECTED_RESPONSE`, `RATE_LIMITED`, `PROVIDER_UNAVAILABLE`, `PROVIDER_ACCESS_BLOCKED`, `CLIENT_FAILURE`와 실제 사전 차단 사유로 제한한다. 인증 거부는 현재 사용 불가와 세부 원인 미확인, 공급자 제한은 운영 확인 필요를 나타낸다. 원천 오류·공급자 오류를 대시보드 로그인 오류로 변환하지 않는다.
 
 ## 7. 위치별 심각도·근거·재평가
 

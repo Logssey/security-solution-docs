@@ -111,7 +111,7 @@ PostgreSQL에 저장하는 Secret 사실 원본, 관계, 제약과 조회 스냅
 
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
-| `secret_credential_lifecycle_evidence` | `evidence_id BIGINT PK`, `case_id`, `credential_set_id`, `source_occurrence_id BIGINT NOT NULL FK`, `origin VARCHAR(20) NOT NULL`, `kind VARCHAR(30) NOT NULL`, `verification_method`, `verification_level VARCHAR(30) NOT NULL`, `evidence_ref VARCHAR(120)`, `provider_validator_id VARCHAR(120)`, `validator_version`, `endpoint_class`, `reason_code VARCHAR(80)`, `performed_at`, `observed_at TIMESTAMPTZ NOT NULL`, `submitted_by_user_id BIGINT FK`, `version BIGINT NOT NULL`, `created_at TIMESTAMPTZ NOT NULL` | 외부 제출은 EXTERNAL_RECORD/PENDING 불변 원본. 수동 승인은 reviews와 현재 유효 뷰에서 APPROVED_MANUAL로 파생한다. 승인 DB 역할·검증기 capability의 실제 관측만 PROVIDER/PROVIDER_VERIFIED를 생성한다. 이후 상충 VALID로 현재 적용을 취소하며 공급자 본문·키 원문은 저장하지 않는다. |
+| `secret_credential_lifecycle_evidence` | `evidence_id BIGINT PK`, `case_id`, `credential_set_id`, `source_occurrence_id BIGINT NOT NULL FK`, `origin VARCHAR(20) NOT NULL`, `kind VARCHAR(30) NOT NULL`, `verification_method`, `verification_level VARCHAR(30) NOT NULL`, `evidence_ref VARCHAR(120)`, `provider_validator_id VARCHAR(120)`, `validator_version`, `endpoint_class`, `reason_code VARCHAR(80)`, `performed_at TIMESTAMPTZ`, `observed_at TIMESTAMPTZ NOT NULL`, `submitted_by_user_id BIGINT FK`, `version BIGINT NOT NULL`, `created_at TIMESTAMPTZ NOT NULL` | 수행 시각 미상은 performed_at=NULL, 관측·서버 접수 시각은 각각 보존. 외부 제출은 EXTERNAL_RECORD/PENDING 불변 원본. 수동 승인은 reviews와 현재 유효 뷰에서 APPROVED_MANUAL로 파생한다. 승인 DB 역할·검증기 capability의 실제 관측만 PROVIDER/PROVIDER_VERIFIED를 생성한다. 이후 상충 VALID로 현재 적용을 취소하며 공급자 본문·키 원문은 저장하지 않는다. |
 | `secret_lifecycle_evidence_reviews` | `review_id BIGINT PK`, `evidence_id BIGINT NOT NULL FK`, `decision VARCHAR(20) NOT NULL`, `reason_code VARCHAR(80) NOT NULL`, `expected_evidence_version`, `case_version BIGINT NOT NULL`, `reviewed_by_user_id BIGINT NOT NULL FK`, `limitations JSONB NOT NULL`, `reviewed_at TIMESTAMPTZ NOT NULL` | APPROVE·REJECT 추가 전용. 검토자는 제출자와 다르고 전체 적용 위치의 SECURITY여야 한다. 현재 수동 수준은 APPROVED_MANUAL이며 LIMITED 상한. 공급자 확인으로 승격 금지. 취소·상충·적용 시각은 해결 시 재검사한다. |
 | `secret_lifecycle_evidence_applications` | `application_id BIGINT PK`, `evidence_id`, `case_id`, `credential_set_id BIGINT NOT NULL FK`, `origin VARCHAR(20) NOT NULL`, `reviewed_by_user_id BIGINT NOT NULL FK`, `reviewed_at TIMESTAMPTZ NOT NULL` | UQ(evidence_id,case_id). 다른 출처 건 재사용은 키·시각·현재 건·권한을 검토한 관계만 추가하고 원 증거 복제/변경 금지. 위치별 조치 후 부재는 별도 필수. |
 | `secret_lifecycle_provider_writers`·`secret_lifecycle_provider_capabilities` | 승인 DB 역할; `provider_validator_id`·`validator_version`·`endpoint_class`·`kind`의 허용 조합 | 운영자가 승인한 DB 쓰기 주체와 검증기만 공급자 수명주기 근거를 적재한다. 기본 허용 목록은 비어 있으며 일반 HTTP나 수동 SECURITY 승인으로 이 수준을 생성할 수 없다. |
@@ -272,3 +272,20 @@ API DB 역할은 허용 조회·업무 변경, 워커 역할은 작업 임대·�
 - COMPLETED/current_eligible=false에는 안전한 부적격 사유가 필요하다. true여도 현재 ACL·동일성·승인 revision을 매번 재검사한다. 과거 이력의 사실을 수정해 재승인하지 않는다.
 
 조회 색인은 `(credential_set_id,completed_at DESC,attempt_id DESC) WHERE attempt_state='COMPLETED'`와 `(job_id,attempt_state)`, 활성 예약 색인으로 구성한다. 마지막 인증 성공은 COMPLETED/VALID의 실제 provider_checked_at에서 구하고 권한/승인 적격성을 함께 검사한다. 위험 평가의 상세 CHECK·FK·색인은 [평가 계약](risk-assessment-contract.md)이 정의한다.
+
+## 9. Notion 주체와 근거 저장
+
+인증·주체·권한·수명 근거는 기존 공통 테이블을 확장한다. Notion 전용 시도 원장이나 최신 상태 캐시는 생성하지 않는다.
+
+| 기존 원본 | Notion 저장 계약 | 제약 |
+|---|---|---|
+| `secret_validation_attempts` | NOTION_GET_SELF·검증기 버전·NOTION_SELF, HTTP status·정규화 reason·전송/관측/완료 시각 | 네 결과·동일성·원천/승인 revision·현재 적격성은 공통 계약. 새 관측은 새 행 |
+| `secret_credential_identities` | `provider=NOTION`, `principal_type=NOTION_BOT`, UUID인 `principal_id`, 보호된 `principal_ref`, 제한된 `safe_claims`, `observed_at`, `expires_at` | 같은 현재 VALID 부모 `validation_attempt_id`에 유일하게 결합. account_ref의 AWS 계정 의미를 보존하고 Notion에는 NULL 사용 |
+| `secret_permission_requests/observations/decisions` | 승인된 페이지·블록 읽기 또는 설정 자료의 출처·대상·safe_facts·완전성·관측 시각·근거 확인 기한 | ENRICH/PERMISSION_ASSISTANCE의 PARTIAL 후보. 담당자 수용은 별도 이력 |
+| `secret_credential_lifecycle_evidence`와 reviews | 외부 폐기 신고·수명 자료·수동 검토 | 수행 시각 미상을 허용하고 인증 거부와 별도 보존. 기존 확인 수준·독립 검토 적용 |
+
+Notion identity의 닫힌 `safe_claims` schema는 `schemaVersion=1`, 선택적인 `ownerType=workspace|user`, 검증된 보호 `workspaceRef`만 허용한다. 알 수 없는 값·누락 필드는 미확인으로 표현하고 임의 문자열·추가 객체를 복사하지 않는다. 봇 주체 식별이 가능하면 선택 owner/workspace 필드가 없어도 identity를 생성할 수 있다. 지원하는 User 응답에서 주체 부가 자료를 구성할 수 없으면 인증 결과와 제한 사유를 보존한다. 이름·이메일·페이지 제목·전체 응답·원문 인증값은 이 schema에 포함하지 않는다. schema·safe_claims의 길이 상한은 8 KiB다.
+
+identity는 부모의 실제 공급자 관측 시각을 참조하고 `expires_at`은 그 관측의 확인 기한으로 계산한다. 토큰 만료일은 발급/관리 출처가 정확히 해당 키에 결합된 수명 자료로 기록하며, 미확인 값을 기존 TTL·접수·폐기 신고 시각으로 채우지 않는다. 원문 키의 교체는 새 CredentialSet을 생성하고 기존 identity와 과거 검증을 보존한다.
+
+구조화된 교체 근거에는 nullable `replacement_credential_set_id`, `before_validation_attempt_id`, `after_validation_attempt_id`, `replacement_validation_attempt_id` FK를 기존 lifecycle evidence에 연결한다. 참조한 전후 시도는 원래 키, 교체 키 시도는 새 키에 속해야 하며 각 원천·수행 시각·권한을 검사한다. 알려진 performed_at이 없는 근거는 전후 시각 조건을 미확인으로 유지한다. 참조 추가·교정은 기존 증거 version·멱등·감사와 원자 처리하고 원본 관측을 수정하지 않는다.

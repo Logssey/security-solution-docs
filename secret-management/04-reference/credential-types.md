@@ -27,6 +27,8 @@
 
 공급자별 분류 계열과 실제 탐지·검증 capability는 구분한다. 카탈로그에 속하더라도 등록된 검사기가 없으면 미지원 이유를 표시한다.
 
+Notion의 내부 연결은 별도 봇과 공유된 자료, PAT는 선택 워크스페이스의 생성자 권한, OAuth access는 앱 승인과 허용 자료를 따른다. 콘텐츠 API 토큰 후보는 기존 `NOTION_CONNECTION_TOKEN` 정규형을 사용하고 세부 유형은 발급 근거로 보완한다. `ntn_`와 기존 `secret_` 접두사·지원 길이는 후보 규칙으로 관리하며 정상 인증·세부 유형을 각각 확인한다. OAuth refresh·client secret, Enterprise Admin·SCIM 자격 증명은 별도 목적·검증 capability를 갖는다. [내부 연결](https://developers.notion.com/guides/connections-and-tokens/internal-connections), [PAT](https://developers.notion.com/guides/connections-and-tokens/personal-access-tokens), [인증 계약](../03-architecture/credential-validation.md#notion-콘텐츠-api-토큰)
+
 ## 3. Kubernetes 자격 증명
 
 Kubernetes Secret은 비밀을 담는 객체이며 `data`의 Base64 인코딩 자체는 암호화가 아니다. 기본 유형과 사용자 정의 유형을 모두 분류해야 한다. [공식 Secret 문서](https://kubernetes.io/docs/concepts/configuration/secret/)

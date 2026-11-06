@@ -29,6 +29,7 @@
 | GitHub installation token | 해당 유형의 원문·별도 설치 검증기 등록 | 사용자 PAT capability와 분리. PAT 검증기로 보내거나 수집용 설치 토큰 발급 성공으로 대체하지 않음. 별도 등록·시험·승인 전에는 `UNCHECKED/UNSUPPORTED_TYPE` |
 | AWS 장기 키 쌍 | AccessKeyId·SecretAccessKey가 같은 구성이라는 근거 | 기존 STS `GetCallerIdentity`. 발견한 쌍을 명시적 `StaticCredentialsProvider`로 공급 |
 | AWS 임시 자격 증명 | 같은 키 쌍과 session token | 같은 STS 요청. session token 누락은 `UNCHECKED/MISSING_SESSION_TOKEN` |
+| Notion 콘텐츠 API 토큰 | 완전한 `NOTION_CONNECTION_TOKEN` 후보와 현재 승인 원천의 동일성 근거 | `NOTION_GET_SELF`, endpoint class `NOTION_SELF`, `GET https://api.notion.com/v1/users/me`. 현재 인증과 제한된 주체 정보 확인 |
 | 기타 유형·불완전 후보·메타데이터 | 안전한 최소 인증 방법 또는 필수 구성 미충족 | 등록된 capability가 없으면 호출하지 않음. `METADATA_ONLY`에는 값 인증 시도를 생성하지 않음 |
 
 GitHub PAT의 `/user` 지원과 permission 조건은 [인증 사용자 조회 공식 계약](https://docs.github.com/en/rest/users/users#get-the-authenticated-user)을 따른다. 공개 저장소 조회 성공이나 특정 저장소 접근 실패로 PAT 유효성을 판정하지 않는다. GitHub Enterprise 등 다른 인스턴스는 별도 호스트·검증기 등록 전까지 지원 범위가 아니다.
@@ -36,6 +37,8 @@ GitHub PAT의 `/user` 지원과 permission 조건은 [인증 사용자 조회 �
 GitHub 요청은 `api.github.com:443`, HTTPS, 정확한 `/user`, `GET`, query/body 없음으로 고정한다. 발견 PAT를 `Authorization: Bearer`에 넣고 `Accept: application/vnd.github+json`, `User-Agent: logssey-secret-worker`, `X-GitHub-Api-Version: 2026-03-10`을 검증기 등록의 고정값으로 사용한다. 발견 문서의 URL·호스트·헤더·프록시 지시를 요청에 반영하지 않는다. redirect는 따라가지 않으며 TLS 인증서·호스트 검증을 끄지 않는다. 승인 egress 설정과 호스트 allowlist를 함께 적용하고 인증 헤더를 다른 호스트로 전송하지 않는다.
 
 AWS는 기존 승인 STS endpoint·서명 리전을 고정하고 SDK 내부 재시도도 전체 호출 예산에 포함한다. `SECRET_AWS_VALIDATION_ENABLED`는 기본 false이며 AWS 수집·본문 읽기 활성화와 독립이다. AWS 목록 메타데이터만으로 키 쌍을 구성하거나 검증하지 않는다. 기본 자격 증명 체인·개인 로컬 프로필·수집 연결 역할로 발견 키 검증에 fallback하지 않는다.
+
+Notion 요청은 `api.notion.com:443`, HTTPS, 정확한 `/v1/users/me`, `GET`, query/body 없음으로 등록한다. 헤더는 발견 원문의 `Authorization: Bearer`, `Notion-Version: 2026-03-11`, `Accept: application/json`, 고정된 워커 User-Agent로 구성한다. `SECRET_NOTION_VALIDATION_ENABLED`의 기본값은 false이며 원천 수집 플랫폼·수집 연결의 토큰과 별개로 적용한다. redirect·임의 endpoint·쿠키 인증은 허용하지 않는다. Notion 콘텐츠 API의 내부 연결·PAT·OAuth access token 후보는 같은 최소 인증 계약을 사용할 수 있다. `ntn_`·기존 `secret_`는 포맷 후보 근거이며 세부 발급 유형은 등록·발급 근거로 확인한다. refresh token·client secret·Admin·SCIM 자격 증명은 각 등록 capability로 구분한다. [인증 요청](https://developers.notion.com/reference/get-self), [PAT](https://developers.notion.com/guides/connections-and-tokens/personal-access-tokens)
 
 ## 3. 원문 전달·재취득과 동일성
 
@@ -53,6 +56,8 @@ AWS는 기존 승인 STS endpoint·서명 리전을 고정하고 SDK 내부 재�
 4. 일치한 원문만 검증기에 전달하고 실제 원천 버전·Finding을 시도 근거로 연결한다. 다른 토큰으로 바뀌었거나 대응되는 HMAC 키/회전 근거가 없으면 호출하지 않는다. 접두사·마스킹 suffix·같은 줄·같은 사용자만으로 동일성을 인정하지 않는다.
 
 같은 파일에 다른 키가 생겼을 때 그 키의 응답을 이전 키에 붙이지 않는다. 새 후보는 별도 탐지·동일성 계약을 따른다. 원래 키를 다시 얻지 못한 사실은 `INVALID`가 아니다. 사전 검사에서 재취득 참조 자체가 없으면 `UNCHECKED/SOURCE_VALUE_UNAVAILABLE`, 승인된 재취득을 시도했으나 삭제·접근 실패·값 불일치로 얻지 못하면 `UNKNOWN/SOURCE_UNAVAILABLE` 또는 `UNKNOWN/CREDENTIAL_MISMATCH`다. 이 결과만으로 위치 `MISSING`이나 대응 완료를 만들지 않는다.
+
+발급자와 수집 플랫폼은 독립적으로 선택한다. GitHub 파일 또는 승인된 AWS 본문에서 발견한 Notion 후보의 재검증은 해당 원천의 현재 재취득 경로와 Notion 검증기를 결합한다. Notion 문서에서 발견한 AWS·GitHub 후보도 각 발급자 검증기로 전달한다. Notion 원천은 승인된 현재 페이지·블록의 버전과 비교 가능한 위치 근거를 재취득한다. 수집 capability와 검증기 등록은 각각 검사한다.
 
 원문·전체 공급자 응답·인증/응답 헤더·예외 메시지는 DB, 큐, 임시 파일, 로그, trace, APM, 오류 응답, 화면, CSV, 백업, AI 입력에 넣지 않는다. 응답은 크기 제한을 둔 메모리 파서에서 필요한 필드만 확인하고 버린다. HTTP wire logging·SDK wire logging·클라이언트 자동 request/response 캡처를 끈다. 자체 소유 byte 배열은 완료·오류·취소 경로에서 덮어쓰며 Java 불변 문자열·SDK 복사본까지 즉시 소거할 수 있다는 보장은 하지 않는다. 워커의 dump·프로세스·메모리 접근을 제한한다.
 
@@ -86,6 +91,24 @@ GitHub는 잘못된 자격 증명에 처음 401을 반환한 뒤 반복 실패 �
 ### AWS STS
 
 기존 분류를 유지한다. 성공은 `VALID/AUTHENTICATED`, `InvalidClientTokenId`는 `INVALID/INVALID_ACCESS_KEY`, 명시적 `ExpiredToken`은 `INVALID/EXPIRED_SESSION`이다. `SignatureDoesNotMatch`는 서명·환경 원인도 가능하므로 `UNKNOWN/SIGNATURE_AMBIGUOUS`다. `Throttling` 계열·429는 `UNKNOWN/RATE_LIMITED`, 다른 401·403·404는 `UNKNOWN/ACCESS_AMBIGUOUS`, 공급자/네트워크/client 실패는 대응하는 `UNKNOWN` 사유다. AWS의 명시적인 만료 근거를 GitHub의 일반 401에 적용하지 않는다.
+
+### Notion 콘텐츠 API 토큰
+
+| 관측 | 결과·안전한 reason | 기록할 범위 |
+|---|---|---|
+| 200, 제한 내 JSON의 `object=user`, 지원되는 `type=bot\|person`, 유효한 주체 UUID | `VALID/AUTHENTICATED` | 현재 인증 관측. 선택 주체 필드의 누락·지원 밖 값은 해당 필드의 미확인으로 기록 |
+| 401, 정상 오류 JSON의 `code=unauthorized` | `INVALID/AUTHENTICATION_REJECTED` | 현재 인증 거부. 만료·폐기·변조·관리 정책 변경의 세부 원인은 별도 근거로 관리 |
+| 그 밖의 401, 200 주체 형식 불일치·잘린/과대/비정상 JSON·3xx | `UNKNOWN/UNEXPECTED_RESPONSE` | 등록 응답 구조 확인 실패. redirect는 따르지 않음 |
+| 403·404 | `UNKNOWN/ACCESS_LIMITED` | endpoint 권한·자료 접근 제한·요청 경계의 불확실성 |
+| 429, `rate_limit_reason=public_api_request_blocked` | `UNKNOWN/PROVIDER_ACCESS_BLOCKED` | 운영 확인이 필요한 공급자 제한. 자동 재시도에서 제외 |
+| 그 밖의 429 | `UNKNOWN/RATE_LIMITED` | 검증된 `Retry-After`와 제한 단위에 따른 대기 |
+| 529·그 밖의 5xx·timeout·연결/TLS 실패 | `UNKNOWN/PROVIDER_UNAVAILABLE` | 허용 횟수·전체 실행 기한 안에서 재시도 |
+| 요청 구성·검증기 내부 오류 | `UNKNOWN/CLIENT_FAILURE` | 검사 설정·처리 오류를 안전한 사유로 보존 |
+| 비활성·미지원·불완전·합성·미승인 | `UNCHECKED`와 실제 사전 차단 사유 | 공통 미실행·원문 보호 계약 적용 |
+
+기능 권한에 따라 `/users/me`의 사용자 정보가 제한될 수 있다. 정상 User 구조를 확인한 뒤 선택 메타데이터가 부족하면 인증 성공과 해당 필드의 미확인을 함께 보존한다. 봇·owner·workspace 정보에서 전체 capability·접근 가능한 모든 페이지·토큰 만료일을 추정하지 않는다. `bot.owner.type=workspace`는 소유 범위 근거이며 내부 연결·PAT·OAuth 세부 유형 확정에는 발급 근거를 사용한다. PAT 정책 변경도 인증 거부의 원인이 될 수 있다. [인증 응답](https://developers.notion.com/reference/get-self), [오류 코드](https://developers.notion.com/reference/status-codes)
+
+페이지 정보·본문 읽기는 등록된 대상에 대한 `ENRICH/PERMISSION_ASSISTANCE`의 별도 관측이다. 기본 인증과 다른 요청 목적·승인 대상·결과·관측 시각을 갖는다. OAuth introspection은 정확한 발급 앱과 관리 연결이 확인된 별도 capability로 등록하며, 응답의 active/scope/iat와 토큰 만료 자료를 구분한다. refresh·revoke는 외부 조치 절차에서 다룬다.
 
 reason은 검증기별 승인된 코드 집합이며 `result`와 일치해야 한다. UI는 코드에서 고정된 한국어 설명을 선택하고 공급자 자유문을 그대로 표시하지 않는다. 예를 들어 GitHub의 `AUTHENTICATION_REJECTED`는 ‘인증이 거절됨 · 만료/폐기 원인 미확인’으로 표시한다. 범위가 다른 오류를 하나의 ‘키 무효’ 문구로 합치지 않는다.
 
@@ -137,7 +160,7 @@ V5의 `secret_validation_attempts`를 예약 상태와 미완료 NULL 제약을 
 | 동일성·중복 근거 | credential ID·원본의 `credential_revision`, 유형에 맞는 HMAC 키 버전, 검증 주기/목적·재시도 번호, 활성 예약 세대. HMAC 값·원문은 일반 API에 노출하지 않음 |
 | 실행·승인 근거 | run/job, 현재 lease의 예약 세대, scope·scope revision, 검증 승인 revision, 실제 원천 버전의 보호된 근거, 참조한 occurrence/Finding의 내부 ID. 같은 키·실행·범위 소속을 저장 트랜잭션에서 확인 |
 | 현재 사용 적격성 | `current_eligible`와 부적격 사유. 승인 취소·revision 변경·lease 상실 결과를 현재 판정으로 승격하지 않음. 과거 시도·근거는 덮어쓰지 않음 |
-| 제한된 응답 메타데이터 | 필요한 경우 정수 HTTP status, 파서가 정규화한 reason, `next_due_at`만 저장. response body·헤더·예외 원문·사용자 프로필 저장 금지 |
+| 제한된 응답 메타데이터 | 시도 원장에 정수 HTTP status, 정규화 reason, `next_due_at`을 저장. VALID에 결합한 주체 정보는 [DB 스키마](database-schema.md#9-notion-주체와-근거-저장)의 공급자별 닫힌 schema로 저장. response body·헤더·예외 원문·사용자 프로필 저장 금지 |
 
 검증기 ID·유형·endpoint class·result/reason의 허용 조합은 등록부로 검증한다. 예를 들어 PAT에 AWS method를 쓰거나 `CANDIDATE`에 `VALID`를 저장할 수 없다. COMPLETED의 실제 응답은 재시도로 덮지 않고 새 attempt로 남긴다. 진행 중·포기한 예약을 완료된 최신 결과로 조회하지 않는다.
 
@@ -186,6 +209,10 @@ profile 미설정·미등록으로 사전 차단한 COMPLETED/UNCHECKED에는 pr
 
 provider rate limit이 더 낮으면 그 제한이 우선이다. timeout·전송 실패의 자동 재시도도 호출 예산을 소비한 것으로 계산한다. retry 대기와 예약을 `Thread.sleep`으로 장시간 점유하지 않고 기존 job의 `available_at`·`max_attempts`·시도 이력·`next_due_at`에 영속화한다. 미검증 대상은 내부 ID·기대 revision만 유지하며 재실행 때 원문을 다시 취득한다.
 
+Notion의 전송은 상태·검증된 대기 헤더를 본문보다 먼저 처리하고 내부 자동 재전송을 끈다. 8초 전체 deadline과 64 KiB 상한은 헤더 이후의 본문 정지에도 적용한다. 최초 포함 최대 3회·30분 실행 기한을 적용하고, 더 긴 공급자 대기는 공유 상태에 보존한 채 해당 요청을 확인 불가로 종료한다. 다음 요청도 남은 공급자 대기를 적용한다. 대기의 최솟값은 검증된 `Retry-After`이며 이를 로컬 backoff 상한으로 줄이지 않는다.
+
+Notion의 공유 대기는 `NOTION_SELF` endpoint의 공통 cooldown에 검증된 가장 늦은 `Retry-After`를 보존한다. 키·작업·워커가 바뀌어도 이 기한을 적용해 workspace 제한 우회를 차단한다. 같은 workspace·연결을 정확히 결합하는 근거가 있는 세분화 limiter는 공통 대기 이상의 제한으로 적용한다. `public_api_request_blocked`는 운영 확인 필요 사유로 종료하고 운영 해제·새 검증 승인에 따른 적격 요청에서 재평가한다. [Notion 요청 제한](https://developers.notion.com/reference/request-limits)
+
 검증 단계는 실제 호출의 VALID/INVALID를 처리 성공으로 보고 UNKNOWN·필수 검증 누락은 부분 실패로 남긴다. 선택적으로 비활성인 검증·합성 fixture 생략·메타데이터의 해당 없음은 이유를 기록한 SKIPPED이며 수집 실패를 만들지 않는다. 검증 budget 소진은 이미 성공한 수집·탐지를 실패나 정상 0건으로 덮지 않고 검증 누락을 표시한다. 실행 완료 상태는 결과의 유효성 값과 별개다.
 
 운영 지표는 원문 없는 공급자·검증기 버전별 대기량, 예약/전송/완료/포기 수, 인증 거부·미확정 비율, timeout, rate-limit 대기, lease 복구, 승인 취소, 재취득 실패, 동일성 불일치, fixture 생략, 예산 소진과 freshness 지연이다. 키·사용자·원천 경로를 metric label에 넣지 않는다. 경보·오류도 reason code와 내부 실행 ID만 사용한다.
@@ -199,6 +226,10 @@ provider rate limit이 더 낮으면 그 제한이 우선이다. timeout·전송
 | PAT 두 유형의 인증 성공 | Classic/Fine-grained 각각 발견 원문으로 정확히 GET `/user` 한 번. 200 주체 파싱 후 VALID. 수집 App·설치 토큰은 요청 인증에 사용되지 않음 |
 | GitHub 거부·비정상 응답 | 명확한 401만 INVALID. 헤더 오류 401·403·404·429·timeout·5xx·redirect·malformed/과대 응답은 정의된 UNKNOWN. 원인 불명 401로 만료·폐기 증거 생성 불가 |
 | AWS 회귀 | 기본 비활성·불완전 쌍·ASIA session 누락은 미호출. 명시적 발견 쌍으로 STS 호출. 기존 명시 오류·서명 모호성·rate limit 분류 유지, 기본 profile fallback 없음 |
+| Notion 인증 분류 | 내부 연결·PAT·OAuth access의 등록 후보에서 200 정상 주체·401 unauthorized·403/404·잘린 200·잘못된 JSON을 구분. 선택 owner/workspace 누락은 인증 성공과 별도 미확인으로 보존 |
+| Notion 주체와 동일성 | 같은 봇·workspace의 서로 다른 키는 별도 CredentialSet. 유형 보완이 기존 HMAC 동일성을 조용히 변경하지 않음. 과거 200→사용자 폐기 신고→현재 401은 세 기록으로 보존 |
+| Notion 원천과 발급자 | GitHub/AWS 원천의 Notion 키는 현재 원천 재취득·HMAC 일치 후 Notion 인증기로 전달. Notion 원천의 AWS/GitHub 키는 해당 발급자로 전달. 새 키로 교체된 원본은 이전 키의 인증 결과를 생성하지 않음 |
+| Notion 대기와 영구 제한 | 연결·workspace·endpoint별 429, 529, 긴 Retry-After, 헤더 이후 본문 정지, 재시도 소진을 시험. 새 키·작업의 대기 우회와 내부 재전송을 차단하고 public_api_request_blocked는 운영 확인 필요로 종료 |
 | 원문 수명 | 최초 콜백의 동일 바이트를 검증기에 전달. 재시작·재시도는 내부 ID에서 승인 원천 재취득. 원문이 큐·파일·DB에 복원 경로로 남지 않음 |
 | 동일성·현재 원천 | 같은 suffix의 다른 PAT, 원천 값 변경, 다른 HMAC 버전·회전 근거 없음, 현재 범위 밖 과거 blob은 미호출. 같은 HMAC으로 확인한 원문만 해당 키에 연결 |
 | 합성·출처 | fixture guard는 활성화·수동 요청·재시도에서도 실제 호출 0회. TEST 표식만으로 fixture 생략 불가. fixture 생략이 다른 운영 원천의 실제 검증을 중복 제거하지 않음 |
