@@ -65,9 +65,11 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | `POST /cases/{caseId}/revalidations` | `{occurrenceId,expectedCaseVersion,expectedOccurrenceVersion,idempotencyKey}`. 조치 기록 마침·원천 capability·할당 권한을 확인하고 승인 위치의 비동기 작업 등록. 202와 재검사 이력 형태 반환 |
 | `POST /cases/{caseId}/revalidation-resume` | `{occurrenceId,expectedCaseVersion,expectedOccurrenceVersion,reasonCode:"REVALIDATION_PRESENT",idempotencyKey}`. PRESENT 재검사 결과를 가진 위치에 새 조치 주기·이력을 만들고 IN_PROGRESS 전이 |
 | `PATCH /cases/{caseId}/checklist/{itemId}` | `{completed,guideVersion,evidenceRef,expectedCaseVersion}`. 허용 담당자가 보조 체크 기록. 완료는 티켓·변경 참조를 요구하되 체크만으로 조치 마침·해결 불가 |
-| `GET /cases/{caseId}/exceptions` | 현재·과거 예외, 허용 위치 ID, `currentlyApplicable`, `canApprove`, `allowedReasonCodes`, `allowedRevokeReasonCodes`, `eligibleOccurrences`, `maxDurationDays`, `fullyRiskAccepted`, `restrictedCoverage`. 승인·취소·만료·범위 변경 상태를 구분 |
-| `POST /cases/{caseId}/exceptions` | 위치 집합·사유 코드·안전한 근거·만료 시각·기대 버전. SECURITY가 위치별 범위·승인 권한·중복 활성 예외 검사 |
+| `GET /cases/{caseId}/exceptions` | 현재·과거 예외, 허용 위치 ID, `currentlyApplicable`, `canApprove`, `allowedReasonCodes`, `allowedRevokeReasonCodes`, `eligibleOccurrences`, `maxDurationDays`, `fullyRiskAccepted`, `restrictedCoverage`, `blockedReasonCodes`. 기본 OFF에서는 canApprove=false, RISK_ACCEPTANCE_DISABLED, maxDurationDays=7이며 과거 기록·취소는 유지. 비활성 정책으로 적용되지 않는 과거 ACTIVE는 POLICY_DISABLED, currentlyApplicable=false이며 만료·범위 변경 상태는 별도 보존 |
+| `POST /cases/{caseId}/exceptions` | 위치 집합·사유 코드·안전한 근거·만료 시각·기대 버전. 현재 권한 검사 후 기본 OFF의 HTTP 422 RISK_ACCEPTANCE_DISABLED로 거부. 정책 활성화와 자원 책임자·독립 SECURITY 검토를 모두 갖추기 전 단독 승인 경로 제공 금지 |
 | `POST /cases/{caseId}/exceptions/revoke` | 예외 ID·취소 사유·기대 버전. 만료·취소 뒤 남은 위험에 맞게 조치 재개 |
+
+위험 수용 OFF에서는 `eligibleOccurrences=[]`, `canApprove=false`, `fullyRiskAccepted=false`, `blockedReasonCodes=[RISK_ACCEPTANCE_DISABLED]`를 반환한다. `closure-checks.capabilities.canApproveException`도 false다. 현재 권한 검사를 먼저 수행하므로 다른 사용자의 건 존재를 비활성 오류로 노출하지 않는다. 과거 예외 취소는 기존 권한·버전 검사를 유지한다.
 | `POST /cases/{caseId}/guide` | 본문 없이 선택 AI를 명시적으로 요청. 허용 조건·설정·응답 검사를 통과하지 못하면 기본 안내 반환. 상태·DB 변경 없음. 3.3절 |
 
 외부 조치 종류는 ROTATED·REVOKED·REMOVED_FROM_SOURCE·PERMISSION_REDUCED다. 외부 수행 시각은 요청보다 최대 5분 뒤부터 최근 30일 사이만 허용한다. 한 위치에 여러 기록을 남길 수 있고 PERMISSION_REDUCED는 임시 완화일 뿐 제거·폐기 증거를 대신하지 않는다. 체크리스트 기본 코드는 IDENTIFY_OWNER·ROTATE_OR_REVOKE·REMOVE_EXPOSURE·CHECK_ACCESS_LOGS이며 상태는 TODO·DONE이다. 체크리스트는 조치 주기·재검사·해결의 필수 사실을 대체하지 않는다.
@@ -103,7 +105,7 @@ AWS는 확인한 주체와 같은 계정의 승인 연결로 결합된 사용자
 
 Notion의 인증 주체는 현재 VALID 시도에 결합한 봇·소유 범위·워크스페이스 확인 수준으로 제공한다. 주체가 있어도 해당 권한 관측기가 등록되지 않았으면 권한 자료의 readiness는 `UNSUPPORTED`와 안전한 지원 사유를 반환한다. 사용자에게 불필요한 조회 연결 선택을 요구하지 않는다. 기본 인증의 실행 가능성은 별도로 계산한다.
 
-Notion 페이지 정보·본문 읽기는 기존 permission-assistance의 `ENRICH/PERMISSION_ASSISTANCE`로 등록한다. 대상은 현재 권한으로 열람 가능한 승인 페이지·블록의 서버 등록 식별자에서 선택하고 context에 대상·원천·승인 revision을 고정한다. 기본 인증 승인으로 추가 대상을 허용하지 않는다. 읽기 성공은 해당 대상·동작·시각의 PARTIAL 관측이며, 설정상 capability·전체 접근 목록·실효 쓰기 권한·토큰 만료 근거는 별도로 표시한다. 담당자 확인은 기존 권한 자료의 provenance·완전성·자산·v2 매핑 조건을 적용한다.
+Notion 발급 토큰의 권한 관측기는 등록 전 `UNSUPPORTED`다. 등록된 adapter가 있을 때만 승인 페이지 정보·본문 읽기를 기존 permission-assistance의 `ENRICH/PERMISSION_ASSISTANCE`로 등록할 수 있다. 대상은 현재 권한으로 열람 가능한 승인 페이지·블록의 서버 등록 식별자에서 선택하고 context에 대상·원천·승인 revision을 고정한다. 기본 인증 승인으로 추가 대상을 허용하지 않는다. 읽기 성공은 해당 대상·동작·시각의 PARTIAL 관측이며, 설정상 capability·전체 접근 목록·실효 쓰기 권한·토큰 만료 근거는 별도로 표시한다. 담당자 확인은 기존 권한 자료의 provenance·완전성·자산·v2 매핑 조건을 적용한다.
 
 ## 4. 공유 데이터 경계
 
@@ -139,7 +141,7 @@ Notion 페이지 정보·본문 읽기는 기존 permission-assistance의 `ENRIC
 
 ### 5.2. 검토 대기열과 근거
 
-검토 대기열은 `GET /api/v1/secrets/review-queue?bucket=ACTION_REQUIRED|NEEDS_DECISION|NORMAL_INVENTORY|NEEDS_CASE_LINK&origin=PRODUCTION|TEST|UNCLASSIFIED&page={page}&size={size}`로 조회한다. `bucket`, `origin`, `page`, `size`는 허용 목록으로 검증하고 `ACTION_REQUIRED`는 범위별 `SECURITY` 또는 해당 위치에 할당되고 연결의 `REMEDIATOR` 권한을 가진 사용자에게 허용한다. 담당자 조회는 본인에게 허용된 위치가 있는 고유 건만 반환하며 다른 위치의 근거·수·담당자를 확장 공개하지 않는다. `NEEDS_DECISION`, `NORMAL_INVENTORY`, `NEEDS_CASE_LINK`는 범위별 `SECURITY` 권한을 요구한다. 응답은 `{items,total,page,size,unit,asOf,partialCoverage}`이며 `ACTION_REQUIRED`는 남은 작업이 있는 `OPEN|IN_PROGRESS|REVALIDATION_PENDING` 현재 `ResponseCase`, `NEEDS_DECISION`은 `UNKNOWN`·재검토 필요 `Occurrence`, `NORMAL_INVENTORY`는 `CredentialSet`, `NEEDS_CASE_LINK`는 유효한 비정상 판정이 있으나 현재 건에 연결되지 않은 `ABNORMAL` `Occurrence`가 단위다. 해결·전체 위험 수용 건은 `ACTION_REQUIRED`에 넣지 않는다. 서로 다른 단위의 `total`을 더해 고유 키 수로 표시하지 않는다. 항목에는 `credentialSetId`, 선택 가능한 `occurrenceId`, `caseId`, 안전한 키 이름, 구성·존재 상태, 출처, 노출 판정·심각도·검증 각각의 상태, 마지막 성공·최근 시도, 정책 버전, 근거의 확인 수준, 누락 사유, 담당자·기한, 위치 수, `whyHere`, `nextAction`을 필드별 열람 권한 안에서 제공한다. `whyHere`와 `nextAction`은 사용자 자유문이나 생성형 AI 문장이 아니라 서버가 안전한 코드와 템플릿으로 만든다. 범위별 검사 누락은 키 대기열 수에 섞지 않고 `GET /api/v1/secrets/coverage-gaps`에서 `unit=Scope`로 제공한다.
+검토 대기열은 `GET /api/v1/secrets/review-queue?bucket=ACTION_REQUIRED|NEEDS_DECISION|NORMAL_INVENTORY|NEEDS_CASE_LINK&origin=PRODUCTION|TEST|UNCLASSIFIED&page={page}&size={size}`로 조회한다. `bucket`, `origin`, `page`, `size`는 허용 목록으로 검증하고 `ACTION_REQUIRED`는 범위별 `SECURITY` 또는 해당 위치에 할당되고 연결의 `REMEDIATOR` 권한을 가진 사용자에게 허용한다. 담당자 조회는 본인에게 허용된 위치가 있는 고유 건만 반환하며 다른 위치의 근거·수·담당자를 확장 공개하지 않는다. `NEEDS_DECISION`, `NORMAL_INVENTORY`, `NEEDS_CASE_LINK`는 범위별 `SECURITY` 권한을 요구한다. 응답은 `{items,total,page,size,unit,asOf,partialCoverage}`이며 `ACTION_REQUIRED`는 남은 작업이 있는 `OPEN|IN_PROGRESS|REVALIDATION_PENDING` 현재 `ResponseCase`, `NEEDS_DECISION`은 `UNKNOWN`·재검토 필요 `Occurrence`, `NORMAL_INVENTORY`는 `CredentialSet`, `NEEDS_CASE_LINK`는 유효한 비정상 판정이 있으나 현재 건에 연결되지 않은 `ABNORMAL` `Occurrence`가 단위다. 해결 건과 현재 정책상 적격인 전체 위험 수용 건만 `ACTION_REQUIRED`에서 제외한다. 위험 수용 OFF에서는 과거 예외로 미해결 건을 숨기지 않는다. 서로 다른 단위의 `total`을 더해 고유 키 수로 표시하지 않는다. 항목에는 `credentialSetId`, 선택 가능한 `occurrenceId`, `caseId`, 안전한 키 이름, 구성·존재 상태, 출처, 노출 판정·심각도·검증 각각의 상태, 마지막 성공·최근 시도, 정책 버전, 근거의 확인 수준, 누락 사유, 담당자·기한, 위치 수, `whyHere`, `nextAction`을 필드별 열람 권한 안에서 제공한다. `whyHere`와 `nextAction`은 사용자 자유문이나 생성형 AI 문장이 아니라 서버가 안전한 코드와 템플릿으로 만든다. 범위별 검사 누락은 키 대기열 수에 섞지 않고 `GET /api/v1/secrets/coverage-gaps`에서 `unit=Scope`로 제공한다.
 
 `NORMAL_INVENTORY`의 키는 같은 출처 구분에 활성 대응 건과 판정 대기 위치가 없고, 위치 보관 `NORMAL`이 정책으로 증명됐거나 `METADATA_ONLY` 또는 폐기·만료가 공급자 근거로 확인된 경우에만 들어간다. 응답의 `inventorySubtype=AUTHORIZED_STORAGE|METADATA_ONLY|RETIRED_HISTORY`를 반드시 표시한다. `CANDIDATE`·사유 불명 `INVALID`·단순 건 없음은 정상 근거가 아니다. 허용 위치와 비정상 위치가 같이 있는 키는 정상 키 한 건으로 중복 표시하지 않고 대응·판정 상세에서 허용 위치를 보여준다. 전체 인벤토리 API는 이 대기열과 달리 해당 키를 계속 조회할 수 있다. `UNCLASSIFIED`는 정상 인벤토리로 자동 분류하지 않는다.
 
@@ -480,7 +482,7 @@ Notion의 현재 결과·마지막 인증 성공·이력·시각·재시도는 �
 
 위치 조회 권한·증거 자체의 ACL을 모두 검사하고 같은 키 ID만으로 다른 원천의 권한·악용 근거를 공개하지 않는다. 평가 요청·수동 조정은 SECURITY, 자료 제출은 SECURITY 또는 해당 위치의 지정 REMEDIATOR에 허용한다. REMEDIATOR 제출은 자료이며 공급자 자동 확인이나 적용된 영향 범주가 아니다. SECURITY가 직접 수용한 일반 자료에 다시 자기 자신과 다른 승인자를 일괄 요구하지 않는다. 명시적 등급 조정과 기존 높은 등급 하향은 별도 승인 계약을 적용한다.
 
-자료 본문은 `{expectedEvidenceRevision,idempotencyKey,evidenceType,subject,observedAt,validUntil,evidenceRef,facts}`다. `facts`는 등록된 유형별 필드·enum·개수·길이만 허용하며 `evidenceRef`는 기존 TICKET/CHANGE/POLICY 등의 제한된 형식이다. 클라이언트는 `PROVIDER_VERIFIED`·검증 결과·자동 매핑 버전·자동 노출 결정·행위자를 지정하지 못한다. 외부 응답·인증 재료·임의 URL·자유 본문은 400으로 거부한다. 자료 결정은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`이며 수용 대상·유형·같은 키/위치·근거 시각을 재검사한다.
+자료 본문은 `{expectedEvidenceRevision,idempotencyKey,evidenceType,subject,observedAt,validUntil,evidenceRef,facts,applicableFrom?,applicableUntil?}`다. optional applicableFrom/applicableUntil은 함께 없거나 함께 있는 유효 UTC 기간이다. observedAt 확인 시각과 사실의 효력 기간은 별도이며, 누락 자료는 저장 호환을 유지하되 적용 시점 미확인으로 평가 입력에서 구분한다. `facts`는 등록된 유형별 필드·enum·개수·길이만 허용하며 `evidenceRef`는 기존 TICKET/CHANGE/POLICY 등의 제한된 형식이다. 클라이언트는 `PROVIDER_VERIFIED`·검증 결과·자동 매핑 버전·자동 노출 결정·행위자를 지정하지 못한다. 외부 응답·인증 재료·임의 URL·자유 본문은 400으로 거부한다. 자료 결정은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`이며 수용 대상·유형·같은 키/위치·근거 시각을 재검사한다.
 
 평가 요청 본문은 `{expectedEvidenceRevision,idempotencyKey}`다. 정책 버전은 현재 활성 정책을 서버가 선택하며 사용자가 과거 정책을 현재 판단에 적용하지 못한다. 기존 `secret_jobs`에 `kind=ASSESS`, `purpose=SEVERITY_ASSESSMENT`, 내부 위치 ID·근거 revision을 저장한다. 이 작업은 DB 근거만 평가하며 ScanRun·수집·탐지·검증 성공 기록을 생성하지 않는다. 결과에서 `runId`는 null이다. 같은 위치·근거 revision·정책의 진행 작업은 멱등 재사용한다. 연결의 외부 호출 직렬화와 별개로 위치 잠금·revision CAS를 적용한다.
 
@@ -489,3 +491,56 @@ Notion의 현재 결과·마지막 인증 성공·이력·시각·재시도는 �
 위치 risk 응답은 `{latestAutomaticAssessment,effectiveAssessment,lastConfirmedSeverity,evidenceRevision,capabilities,nextAction,readAt}`와 허용된 `inputs,evidenceSummary,missingReasonCodes,conflictReasonCodes,freshness`다. `latestAutomaticAssessment`는 `{assessmentId,assessmentStatus,severity,ruleId,policyVersion,assessedAt}`이고 `assessmentStatus=ASSESSED|UNASSESSED|NOT_APPLICABLE`, 뒤 두 상태의 `severity=null`이다. `effectiveAssessment`는 적용 근거의 같은 필드와 `held,holdReasonCodes,sourceAssessmentId,reviewRequired`를 갖는다. 최신 R99가 기존 CRITICAL과 동시에 존재할 때 각각의 규칙·시각·원평가를 구분한다. 호환 평면 필드 `assessmentStatus,severity,ruleId,policyVersion,assessmentId,assessedAt`를 제공하면 모두 latestAutomaticAssessment에 대응시키고 `effectiveSeverity`는 effectiveAssessment.severity에만 대응시킨다. 규칙별 입력은 [심각도 정책](../02-functional-design/severity-policy.md)을 따른다. 현재 미평가·오래된 근거와 이전 확정/적용 중 등급은 별개이며 새 UNKNOWN으로 과거 악용 등급을 조용히 삭제하지 않는다. 근거 부족을 LOW로 투영하지 않는다.
 
 수동 조정 본문은 `{expectedEvidenceRevision,idempotencyKey,targetAssessmentStatus,targetSeverity,basisAssessmentId,reasonCode,evidenceIds,validUntil}`이고 결정 본문은 `{expectedEvidenceRevision,idempotencyKey,decision,reasonCode}`다. `targetAssessmentStatus=ASSESSED`이면 네 등급 중 하나가 필수다. `NOT_APPLICABLE`이면 `targetSeverity=null`과 현재 적격 R00 등 자동 평가의 `basisAssessmentId`를 요구한다. 이는 잘못된 노출 판단을 근거 있게 교정한 뒤 기존 등급 보류를 독립 검토로 해제하는 경로이며 자료 부재·권한 철회·원천 삭제만으로는 사용할 수 없다. 확정 사고 근거와 충돌하면 반증·정식 교정 없이 보류를 해제하지 않는다. 제안·승인·적용은 서로 다른 기록으로 남기며 자동 평가를 수정하지 않는다. 같은 범위의 독립 승인자·현재 권한·충돌·근거 만료를 적용 시 다시 검사한다. 예외 만료는 자동 LOW 또는 해결이 아니라 자동 근거 재평가와 필요한 검토를 만든다. 등급 보류 해제는 대응 건 해결·키 폐기를 만들지 않는다. 대응 건·현황·목록은 같은 출처·허용 위치·스냅샷 기준의 유효 대표 등급과 미평가 수를 사용한다.
+
+## 8. 판단 경험 읽기 모델
+
+`GET /api/v1/secrets/occurrences/{occurrenceId}/risk`는 기존 필드를 유지하고 `riskExperience`를 추가한다. 모든 하위 사실·대상은 같은 위치의 현재 권한으로 필터링한다. 새로운 등급 원장을 만들거나 GET에서 재평가·외부 호출을 시작하지 않는다.
+
+| 필드 | 계약 |
+|---|---|
+| version, readAt | `risk-experience-v1`, 이 읽기 모델을 계산한 UTC 시각. 평가 시각과 다름 |
+| severityLabel | `시크릿 노출 심각도` |
+| sourcePresenceObservedAt | 같은 위치의 실제 원문 관측 시각. 미확인은 null |
+| summary | `{status:CURRENT\|STALE\|UNASSESSED\|METADATA_ONLY,reasonCode,ruleId,severity,automaticSeverity,held}`. severity는 실제 적용값, automaticSeverity는 최신 자동값. 저장된 평가와 현재 적격성 구분 |
+| criteria[] | `{axis,label,value,status,evidenceIds,reasonCodes,nextAction}`. axis는 기존 여섯 축, status는 CONFIRMED/CANDIDATE/UNKNOWN/STALE/CONFLICT. 허용 근거만 참조 |
+| missingFacts[] | `{code,evidenceType,action}`. 필요한 질문과 허용된 보완 행동만 제공 |
+| workPriority | `{policyVersion:'work-priority-v1',level,reasonCodes,clockMode,timeZone,targetBasis,targetBasisAt,acknowledgeDueAt,planDueAt,operatingHoursNow,holidayCalendarConfigured}` |
+| riskAcceptance | `{enabled:false,reasonCode:'RISK_ACCEPTANCE_DISABLED',allowedSeverities:['MEDIUM','LOW'],maximumDays:7}`. 등급 override와 별도 |
+| support.permissionAssistance | `{status:PARTIAL\|UNSUPPORTED,reasonCodes}`. 발급자·수집 원천 조합의 등록 capability 반영 |
+| support.automaticUsage | `{status,reasonCodes}`. 사용 adapter가 미등록이면 UNSUPPORTED. 인증 성공으로 지원 상태를 만들지 않음 |
+
+workPriority.level은 `IMMEDIATE|PRIORITY|GENERAL|PLANNED|INVENTORY`다. 기본 clockMode는 BUSINESS_HOURS, timeZone은 Asia/Seoul, 월~금 09~18시다. targetBasis는 GRADE_ACTIVATED(현재 적용 등급 전환의 첫 APPLICATION 시각), FIRST_OBSERVED(일반 미평가의 최초 관측), UNCONFIRMED(공개·권한 후보의 시작 시점 증명 부족), NOT_APPLICABLE(관리 기록)이다. 같은 등급의 반복 평가·조회로 기산을 갱신하지 않는다. targetBasisAt·acknowledgeDueAt·planDueAt은 nullable이며 기산을 입증할 자료가 없으면 기한 미확인으로 표시하고 조회 시각으로 만들지 않는다. 공휴일 캘린더 미연결은 false로 표시하고 실제 운영 체계가 없는 ALWAYS_ON을 허용하지 않는다. 운영시간 밖에도 긴급 배지는 유지한다.
+
+`evidenceSummary`의 안전한 항목은 `applicableFrom,applicableUntil,sourcePresenceObservedAt,applicabilityBasis`를 포함한다. `applicabilityBasis=OBSERVATION_ONLY|EFFECTIVE_INTERVAL`이며, 비동시 수집 관측은 사실 기간을 NULL로 유지한다. 서버가 실제 같은 원천 관측을 결합할 때만 해당 값을 제공한다. 누락·불일치·source revision 미확인은 `EVIDENCE_APPLICABILITY_UNCONFIRMED|EVIDENCE_APPLICABILITY_MISMATCH|SOURCE_REVISION_UNCONFIRMED`로 표시하며 기존 행을 추정하지 않는다.
+
+GitHub PAT 권한 보조는 GitHub 수집 원천과 지원 PAT 유형의 조합에서만 실행 가능하다. Notion에서 발견한 GitHub PAT는 인증 지원과 별도로 권한 보조를 미지원으로 표시한다. Notion 발급 토큰도 관측기 등록 전 미지원이며 연결 선택을 요구하지 않는다.
+
+원천 공개 메타데이터와 키 원문이 동시에 관측됐다는 증거가 없으면 `ACCESS_COEXISTENCE_UNCONFIRMED`를 반환한다. GitHub blob SHA만으로 ACL revision 일치를 주장하지 않는다. 공개 후보는 확인 질문으로 보존하고 현재 접근 범위는 UNKNOWN으로 표시한다.
+
+평가 snapshot의 적용 시점 해석 버전은 risk-applicability-v1이다. 기존 snapshot에 해당 버전이 없으면 과거 결과는 보존하고 현재 적격성을 false로 반환하며 재평가를 안내한다.
+
+## 9. AI 조사 요약 API
+
+다음 경로는 `/api/v1/secrets` 아래다. 기존 `/cases/{caseId}/guide`의 합성 TEST 제한·응답은 유지하며 새 자원에 적용하지 않는다. 전체 계약은 [AI 조사 요약](risk-briefing-contract.md)을 따른다.
+
+| Method·경로 | 입력과 결과 |
+|---|---|
+| GET /occurrences/{occurrenceId}/risk-briefing | 서버 기본 설명과 현재 적격 AI 결과. source=DEFAULT/AI, providerCalled, cached, reasonCode, 생성 시각·기준 평가·적격성. 외부 호출 없음 |
+| POST /occurrences/{occurrenceId}/risk-briefing-requests | SECURITY·현재 위치 권한·CSRF. expectedAssessmentId, expectedEvidenceRevision, idempotencyKey. 202와 requestId·상태 |
+| GET /occurrences/{occurrenceId}/risk-briefing-requests/{requestId} | 같은 위치에 결합된 요청 상태·허용 결과. QUEUED/RUNNING/SUCCEEDED/FALLBACK/SUPERSEDED/CANCELLED |
+
+입력은 내부 대상·기준 버전만 받는다. 키·사실 본문·등급·prompt·endpoint·자유 메모를 받지 않는다. 평가가 없으면 ASSESSMENT_REQUIRED, 메타데이터 전용이면 대상 제외, 현재 권한 결합 불가이면 CONTEXT_NOT_AUTHORIZED로 처리한다. 숨은 근거의 존재·이름·개수를 오류에 포함하지 않는다. 동일 멱등키·동일 본문은 같은 요청, 다른 본문 또는 기준 버전 불일치는 409다. 기존 성공 요청의 현재 적격성이 만료돼도 과거 성공 기록은 유지한다.
+
+## 10. 사용 이력 API
+
+다음 경로도 `/api/v1/secrets` 아래다. 전체 계약은 [사용 이력](usage-observation-contract.md)을 따른다.
+
+| Method·경로 | 입력과 결과 |
+|---|---|
+| GET /{credentialId}/usage?occurrenceId=... | 선택 위치·키의 허용 사용 사실, 요청 상태·조회 기간/범위·커버리지·결합 수준·미지원 사유 |
+| POST /{credentialId}/usage-requests | occurrenceId, serverRegisteredTargetId, 기간, expectedCredentialRevision, idempotencyKey. 현재 역할·원천·승인 범위 재검사 후 202와 requestId |
+| GET /usage-requests/{requestId} | 허용 요청의 대기·실행·완료·부분 실패·0건 결과 요약. raw provider body 없음 |
+| POST /{credentialId}/usage-observations | SECURITY 또는 할당 REMEDIATOR. occurrenceId, 현재 credential/scope revision, typed sourceRef, 기간·행위 코드·결과·대상 참조·idempotencyKey. 201, MANUAL 자료 제출 |
+| POST /usage-observations/{observationId}/decisions | SECURITY. ACCEPT/REJECT/WITHDRAW, expectedObservationRevision, reasonCode, idempotencyKey. 200, 원행 수정 없이 결정 추가 |
+
+작업 등록은 임의 계정·리전·키 ID·endpoint·로그 본문을 받지 않는다. 별도 수동 자료 API도 승인된 구조화 사실만 받고 원문 로그·토큰·자유 URL은 거부한다. 요청과 결과 모두 현재 권한을 검사하고 등록 후 변경·철회 시 취소하거나 현재 적용을 막는다. 동일 멱등키의 다른 본문·기준 버전 불일치는 409다. 수동 자료는 PROVIDER 관측으로 승격하지 않으며 EXACT_CREDENTIAL 결합은 서버 증명이 있어야 한다.

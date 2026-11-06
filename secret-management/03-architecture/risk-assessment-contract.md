@@ -364,3 +364,19 @@ JSONB 전체에 무조건 GIN을 만들거나 보호된 원천 참조·키 신�
 | 비밀 비저장 | payload·digest 입력·오류·큐·감사·평가 snapshot에 원문 키·토큰·본문·공급자 전체 응답·자유 URL 없음 |
 
 규칙 fixture는 policy hash와 함께 보존한다. 모든 결과 검증은 등급뿐 아니라 rule ID·상태·누락 사유·typed 근거·최신성·적용 여부를 함께 확인한다. 등급이 우연히 같아도 잘못된 규칙이나 다른 위치의 근거가 선택되면 실패다.
+
+## 10. 사실 적용 시점과 설명 투영
+
+관측한 시각과 사실이 성립한 기간을 구분한다. `applicableFrom`/`applicableUntil`은 둘 다 없거나 유효한 UTC 구간이어야 한다. 수동 기간은 같은 위치 원문 관찰 시각을 포함하고 평가 기준시점에도 적용 가능해야 한다. 서버는 원천 관측으로 `sourcePresenceObservedAt`과 `sourceObjectVersion`을 결합한다. 현재 수집기의 비동시 관측은 `OBSERVATION_ONLY`로 보존한다. 같은 run이나 콘텐츠 revision만으로 ACL과 원문의 동시성을 증명하지 않는다. 명시적인 수동 사실 효력 기간의 결합은 `EFFECTIVE_INTERVAL`로 기록한다. 서로 다른 시점의 공개 상태와 키 원문을 조합하지 않는다.
+
+기존 근거에 새 시점·원천 필드가 없으면 추정하거나 수신·승인 시각으로 채우지 않는다. `EVIDENCE_APPLICABILITY_UNCONFIRMED`, `EVIDENCE_APPLICABILITY_MISMATCH`, `SOURCE_REVISION_UNCONFIRMED`로 해당 축의 적용 한계를 반환한다. 과거 평가·근거 원본과 높은 등급 보류는 보존하며 현재 정규화와 구분한다.
+
+NORMAL과 같은 위치·시점의 BROAD가 충돌하면 `ACCESS_POLICY_CONFLICT`로 exposure UNKNOWN을 전달한다. NORMAL과 동일 노출의 사고가 충돌하면 기존 `EXPOSURE_INCIDENT_CONFLICT` 경계를 따른다. BOUNDED는 완전한 관련 접근 경계가 필요하지만 확인된 공개 접근의 양성 BROAD 근거는 일부 명단 누락으로 숨기지 않는다. 권한 없음 자료의 지원 매핑이 없으면 `MAPPING_UNSUPPORTED`이며 임의 MINIMAL을 만들지 않는다.
+
+GET risk의 `riskExperience`는 등급 저장 원장을 바꾸지 않는 읽기 모델이다. 현재 근거 상태·부족 질문·다음 행동·업무 우선순위를 제공하며 [API 계약](api-contract.md)의 명시적 필드를 따른다. `work-priority-v1`은 심각도 정책과 별도이며 같은 업무의 최초 발생 기준에서 영업시간 목표를 계산한다. 공개 원문과 인증 성공/높은 권한 후보가 있어도 영향이 부족하면 등급은 미평가로 두고 우선 조사 이유를 표시한다.
+
+일반 사용 관측과 AI 출력은 ABUSE_LINK로 저장하지 않는다. `incidentObservers`에 등록된 증거 생성기가 없는 배포는 자동 사고 확정을 비활성으로 유지한다. 수동 자료 제출도 필요한 동일 키·동일 노출·비인가 사용·중대한 영향 증거를 생략하지 못한다.
+
+GitHub 파일 수집 뒤의 저장소 공개 메타데이터 조회는 원문과 ACL의 동시 관측을 입증하지 않는다. blob SHA는 파일 콘텐츠 버전이며 ACL 버전이 아니다. 이 관측은 공개 후보 사실로 보존하되 `ACCESS_COEXISTENCE_UNCONFIRMED`와 접근 범위 UNKNOWN을 반환한다. 공개 본문·접근 상태의 실제 동시 관측 또는 원문 관찰과 겹치는 명시적 수동 효력 기간이 확인될 때만 같은 시점의 공개 키 노출 근거로 수용한다. 공개 후보와 높은 권한 후보를 숨기지 않고 우선 확인 질문으로 보여준다.
+
+평가 snapshot에는 `applicabilityVersion=risk-applicability-v1`을 고정한다. 이 적용 시점 해석 버전이 없는 기존 snapshot은 과거 기록으로 보존하되 현재 결과 적격성은 false이며 재평가가 필요하다. `severity-v2` 규칙을 바꾸거나 과거 snapshot을 새 해석으로 덮어쓰지 않는다.

@@ -32,3 +32,7 @@ Kubernetes Java 클라이언트는 승인 클러스터 버전과 공식 호환�
 수집용 연결 자격 증명과 발견한 비밀은 분리한다. 원천별 허용·거부·부분 누락을 공통 형식으로 기록하고 범위 밖을 정상 0건으로 보고하지 않는다. 수집 계약과 작업·저장 모델은 공통이며 어댑터가 별도 스케줄러나 DB 계약을 만들지 않는다. 정기 수집·검증은 [ADR-S002](ADR-S002.md), 콘텐츠 세부 경계는 [수집원과 검증기 계약](../source-and-validator-contract.md)을 따른다.
 
 참고: [Kubernetes Secret](https://kubernetes.io/docs/concepts/configuration/secret/), [공식 Java 클라이언트](https://github.com/kubernetes-client/java), [호환표](https://github.com/kubernetes-client/java/wiki/2.-Versioning-and-Compatibility), [AWS SDK for Java](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/), [GitHub App 권한](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app).
+
+## 적용 범위
+
+원천별 독립 권한 원칙은 유지한다. 제품의 승인 수집 범위는 GitHub 현재 커밋, AWS 명시적 메타데이터·단일 값, Notion 승인 페이지·지원 블록으로 한정한다. 위 Kubernetes 접근 경계는 별도 수집 capability를 채택할 때의 제약이며 현재 제품 계약에서 Kubernetes 수집을 활성화하는 결정이 아니다. [수집 계약](../source-and-validator-contract.md)을 기준으로 지원 여부를 표시한다.

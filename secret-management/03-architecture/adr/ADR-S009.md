@@ -23,3 +23,7 @@ AI는 노출·유효성·심각도·건 상태를 판정하지 않으며 외부 
 공급자와 화면 응답 계약을 분리해 Claude 등 승인된 다른 공급자로 교체해도 업무 규칙을 바꾸지 않는다. 공급자 활성화·변경 시 외부 전송 범위·보관 설정·비용·한도를 검토하고 합성 표본으로 검증한다. 제외 필드가 요청·로그에 들어가지 않고 AI 결과가 판정·상태를 바꾸지 않는지 검사한다.
 
 참고: [Groq 호출 한도](https://console.groq.com/docs/rate-limits), [구조화 응답](https://console.groq.com/docs/structured-outputs), [데이터 제어](https://console.groq.com/docs/your-data).
+
+## 별도 조사 요약과의 경계
+
+이 결정의 합성 TEST 제한과 다섯 enum 입력은 기존 대응 가이드 자원에 적용한다. 근거를 정리하는 별도 risk-briefing은 [ADR-S011](ADR-S011.md)과 [전용 계약](../risk-briefing-contract.md)을 따른다. 기존 가이드의 제한은 해제하지 않으며 외부 공급자 호출 예산은 두 기능과 모든 replica가 같은 DB 원장을 공유한다. 새 기능이 활성화돼도 기존 가이드가 실데이터를 전송할 권한을 얻지 않는다.
