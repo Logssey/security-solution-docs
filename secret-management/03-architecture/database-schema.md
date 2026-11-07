@@ -306,18 +306,22 @@ identity는 부모의 실제 공급자 관측 시각을 참조하고 `expires_at
 
 기존 키·위치·Finding, 인증 시도, 노출 판정, 보관 정책, 권한 후보·결정, 위험 근거·평가, 조사 과제·감사 원장을 재사용한다. AI 출력과 사용 기록을 secret_risk_evidence의 ABUSE_LINK로 저장하지 않는다. 기존 secret_location_activities는 담당자·조치 타임라인이며 키 사용 로그로 재사용하지 않는다.
 
-새 논리 모델은 다음 여섯 가지다. SQL 버전 번호는 공동 DB 담당자와 구현 직전에 조율하며 과거 마이그레이션을 복제하지 않는다. 테이블마다 별도 마이그레이션을 만들지 않고 함께 배포하는 기능의 변경을 묶는다.
+사용·AI 원장과 실행 지원 모델은 다음과 같다. 사용 이력의 테이블·제약·작업 목적·키 ID 보호 지문은 V41 하나에 묶는다. 과거 마이그레이션을 수정하거나 테이블마다 별도 버전을 만들지 않는다. AI 저장 구조의 SQL 버전은 해당 기능 구현 시 공동 DB 담당자와 조율한다.
 
 | 모델 | 저장 내용과 제약 |
 |---|---|
 | secret_usage_requests | 기존 ENRICH job_id, 서버 고정 범위·기간·키 결합·원천/승인 revision·멱등키, 실행 상태·페이지/이벤트 수·조회 커버리지·실패/누락 사유. 이벤트 0건과 불가 조회도 요약 행을 보존 |
 | secret_usage_observations | sourceKind=PROVIDER 또는 MANUAL, nullable request_id·provider event 참조, 키/주체·적용 기간·결합 수준·행위 결과·안전한 자원 참조. 공급자 관측은 등록 adapter와 event/key 중복 키, 수동 자료는 actor/occurrence/idempotency로 중복 방지 |
-| secret_usage_observation_decisions | observation_id·기준 revision·ACCEPT/REJECT/WITHDRAW·사유·typed 근거·담당자·시각. MANUAL 제출 수용과 철회를 추가 전용으로 보존 |
+| secret_usage_decisions | observation_id·기준 revision·ACCEPT/REJECT/WITHDRAW·사유·담당자·시각. MANUAL 제출 수용과 철회를 추가 전용으로 보존하며 관측·결정 원행의 UPDATE/DELETE를 차단 |
+| secret_usage_targets | 위치·자격 증명/원천 revision, 승인된 관리 연결·IAM 범위·계정·리전, 승인자·승인 revision·활성화. 정기 조회는 별도 opt-in이며 next_scheduled_at만 워커가 갱신 |
+| secret_usage_rate_limits | 계정·리전별 다음 호출 슬롯. 여러 워커도 초당 1회 기준을 공유하며 발견 키 ID는 저장하지 않음 |
 | secret_ai_analysis_requests | 독립 큐. 위치·요청자·평가·근거/인증/사용/ACL/전송 정책 revision·전체 contextDigest·로컬 alias 대응·상태·lease·generation·멱등키·검증 결과 코드 |
 | secret_ai_analysis_attempts | 시도 ID·요청 ID·모델/prompt/schema·전송 시각·결과 사유·token 사용·예산 예약·응답 digest. 원문 응답 없음 |
 | secret_ai_budget_windows | 배포·분/일 구간의 한도·예약·전송 횟수, 동시 실행 lease. 공급자 호출 전 원자 예약 |
 
 사용 조회 요청은 기존 secret_jobs의 ENRICH 목적을 확장해 USAGE_OBSERVATION으로 구분한다. 범용 job에 존재하지 않는 context/result 필드를 가정하지 않고 조회 기간·대상·revision·완료/부분 실패·0건 요약은 secret_usage_requests에 보존한다. 요청과 job을 같은 트랜잭션에서 연결하고 기존 lease/fencing 계약으로 실행한다. 자동 관측의 event ID·고유 키와 수동 자료의 멱등키는 별도다. 스캔 횟수나 ScanRun을 만들지 않는다. AI 큐는 수집·권한·평가 큐와 별도로 처리하여 외부 AI 지연이 스캔을 막지 않는다.
+
+secret_credential_sets.aws_key_id_fingerprint는 AWS 영구 키 ID 전용 domain HMAC이다. 전체 자격 증명 지문과 별개이며 원문 키 ID가 아니다. 기존 행은 역추정하지 않고 다음 승인된 수집에서 채운다. 공급자 이벤트는 위치·자격 증명 revision·원천 context·허용 조회 연결·계정·리전·이벤트 ID로 중복을 막는다. 반복 요청은 현재 허용 범위의 이전 관측도 읽으며, 최신 request_id만으로 관측을 제한하지 않는다. operation_code는 등록된 AWS 행위 또는 UNKNOWN만 허용한다. 원시 이벤트 JSON과 자격 증명 값은 저장하지 않는다.
 
 기존 정기 예약·수집·권한 워커의 기본 polling 30초와 정기 스캔 6시간을 유지한다. 30초는 작업 확인 간격이며 시작·완료 보장이 아니다. 수동 요청은 다음 선점에서 처리하고 대기·실행 상태를 표시한다. 새 AI 큐만 기본 2초 polling을 사용하되 큐가 비었으면 10초까지 완화하며 수동 요청은 즉시 wake-up 신호를 줄 수 있다. wake-up은 성능 최적화이고 DB가 요청 원본이다.
 

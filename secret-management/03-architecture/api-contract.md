@@ -546,10 +546,14 @@ GitHub PAT 권한 보조는 GitHub 수집 원천과 지원 PAT 유형의 조합�
 
 | Method·경로 | 입력과 결과 |
 |---|---|
-| GET /{credentialId}/usage?occurrenceId=... | 선택 위치·키의 허용 사용 사실, 요청 상태·조회 기간/범위·커버리지·결합 수준·미지원 사유 |
-| POST /{credentialId}/usage-requests | occurrenceId, serverRegisteredTargetId, 기간, expectedCredentialRevision, idempotencyKey. 현재 역할·원천·승인 범위 재검사 후 202와 requestId |
+| GET /{credentialId}/usage?occurrenceId=... | page=1·pageSize=20(최대 100). 선택 위치·키의 허용 사용 사실, 요청 상태·조회 기간/범위·커버리지·결합 수준·미지원 사유, 별도 iamLastUsed |
+| POST /{credentialId}/usage-requests | occurrenceId, serverRegisteredTargetId, windowStart?, windowEnd?, expectedCredentialRevision, expectedScopeRevision, idempotencyKey. 생략 기간은 최근 7일. 현재 역할·원천·승인 범위 재검사 후 202와 요청 상태 |
 | GET /usage-requests/{requestId} | 허용 요청의 대기·실행·완료·부분 실패·0건 결과 요약. raw provider body 없음 |
 | POST /{credentialId}/usage-observations | SECURITY 또는 할당 REMEDIATOR. occurrenceId, 현재 credential/scope revision, typed sourceRef, 기간·행위 코드·결과·대상 참조·idempotencyKey. 201, MANUAL 자료 제출 |
 | POST /usage-observations/{observationId}/decisions | SECURITY. ACCEPT/REJECT/WITHDRAW, expectedObservationRevision, reasonCode, idempotencyKey. 200, 원행 수정 없이 결정 추가 |
 
 작업 등록은 임의 계정·리전·키 ID·endpoint·로그 본문을 받지 않는다. 별도 수동 자료 API도 승인된 구조화 사실만 받고 원문 로그·토큰·자유 URL은 거부한다. 요청과 결과 모두 현재 권한을 검사하고 등록 후 변경·철회 시 취소하거나 현재 적용을 막는다. 동일 멱등키의 다른 본문·기준 버전 불일치는 409다. 수동 자료는 PROVIDER 관측으로 승격하지 않으며 EXACT_CREDENTIAL 결합은 서버 증명이 있어야 한다.
+
+수동 자료 본문은 `{occurrenceId,expectedCredentialRevision,expectedScopeRevision,sourceRef:{type,id},targetRef:{type,id},windowStart,windowEnd,eventAt,actionCode,actionResult,actorAttribution,idempotencyKey}`다. sourceRef는 같은 위치 또는 승인 범위의 INVESTIGATION_HISTORY/ACTION_RECORD, targetRef는 현재 APPROVED_SCOPE/연결 ASSET만 허용한다. 등록 자료·대상 목록은 서버가 제공하며 읽기용 표제·시각을 제출 본문에 복사하지 않는다. 시각은 UTC, 수동 자료의 발생 시각은 [windowStart, windowEnd)에 포함된다. 자료 제출로 공급자 이벤트나 정확한 키 결합을 만들지 않는다.
+
+조회는 `support`, `capabilities`, `keyIdentifierStatus`, `targetOptions`, `availableSourceRefs`, `availableTargetRefs`, `latestRequest`, `iamLastUsed`, `observations:{items,page,pageSize,totalElements}`를 제공한다. 요청 상태는 PENDING/RUNNING/COMPLETE/PARTIAL/UNAVAILABLE/CANCELLED다. 관측은 actionCode와 등록 operationCode, serviceCode, 결합 수준·커버리지·행위 결과·출처·수동 검토 상태·결정 이력을 제공한다. allowedDecisions와 observationRevision에 따라 검토하고 과거 조건의 자료는 현재 사실과 구분한다. 계정은 안전한 별칭으로 표시하고 수집 연결 인증 참조·원문 승인 URI·키 지문은 응답하지 않는다.
