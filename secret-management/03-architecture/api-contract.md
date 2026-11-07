@@ -556,4 +556,6 @@ GitHub PAT 권한 보조는 GitHub 수집 원천과 지원 PAT 유형의 조합�
 
 수동 자료 본문은 `{occurrenceId,expectedCredentialRevision,expectedScopeRevision,sourceRef:{type,id},targetRef:{type,id},windowStart,windowEnd,eventAt,actionCode,actionResult,actorAttribution,idempotencyKey}`다. sourceRef는 같은 위치 또는 승인 범위의 INVESTIGATION_HISTORY/ACTION_RECORD, targetRef는 현재 APPROVED_SCOPE/연결 ASSET만 허용한다. 등록 자료·대상 목록은 서버가 제공하며 읽기용 표제·시각을 제출 본문에 복사하지 않는다. 시각은 UTC, 수동 자료의 발생 시각은 [windowStart, windowEnd)에 포함된다. 자료 제출로 공급자 이벤트나 정확한 키 결합을 만들지 않는다.
 
+자료와 원본 조사·조치 기록의 읽기 권한을 각각 검사한다. 대응 건 종료만으로 SECURITY에게 허용된 기존 사용 관측과 결정 이력을 숨기지 않는다. 종료된 조치 기록을 새 자료의 근거로 선택하거나 새로 수용하는 조건과 과거 이력 열람·철회 조건은 별도로 적용한다. 권한 철회와 자격 증명·원천 기준 변경은 현재 적격성에 계속 반영한다.
+
 조회는 `support`, `capabilities`, `keyIdentifierStatus`, `targetOptions`, `availableSourceRefs`, `availableTargetRefs`, `latestRequest`, `iamLastUsed`, `observations:{items,page,pageSize,totalElements}`를 제공한다. 요청 상태는 PENDING/RUNNING/COMPLETE/PARTIAL/UNAVAILABLE/CANCELLED다. 관측은 actionCode와 등록 operationCode, serviceCode, 결합 수준·커버리지·행위 결과·출처·수동 검토 상태·결정 이력을 제공한다. allowedDecisions와 observationRevision에 따라 검토하고 과거 조건의 자료는 현재 사실과 구분한다. 계정은 안전한 별칭으로 표시하고 수집 연결 인증 참조·원문 승인 URI·키 지문은 응답하지 않는다.
