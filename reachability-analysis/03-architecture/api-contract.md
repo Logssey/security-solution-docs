@@ -45,7 +45,7 @@
 |---|---|---|
 | OCSF 클래스·필드 매핑 | 팀 스키마 합의 필요(5절) | 팀 합의(인프라 담당) |
 | 역할 분리 | MVP는 대시보드 공통의 `ADMIN` 하나로 조회·스캔 요청·사람 검토를 모두 한다(2-2). 조회 전용, 검토자, 게이트 예외 승인자를 나눌지는 대시보드 공통 역할 체계와 함께 정한다 | 팀 합의, 대시보드 ADR |
-| L1 수집 결과를 올리는 내부 API | 클러스터 안 수집기(ARD 7-3 선택지 A)를 쓰면 k8s 서비스 계정 토큰으로 워크로드 조회 결과를 기록하는 내부 API가 필요하다. 수집 위치가 정해지면 더한다 | ARD Q-03 |
+| L1 수집 결과를 올리는 내부 API | 클러스터 안 수집기(ARD 7-3 선택지 A)가 k8s 서비스 계정 토큰으로 워크로드 조회 결과를 기록하는 내부 API(`PUT /internal/v1/reach/l1/workloads`)는 [계획]이다. 본문과 처리 규칙은 수동 업로드(API-07 아래 "L1 수집 결과 올리기")와 같고 인증만 다르다 | ARD Q-03 |
 | 취약 함수 클래스 이름 표기 | 데이터 파일이 패키지를 포함한 이름을 쓰는지 확인 필요. 이 문서 예시는 원자료에 적힌 짧은 이름이다 | 규칙명세서 |
 | `make_spec.py` 실행 인자 | 원자료에 없다. 확인 필요 | 8절 |
 | Jackson 2 사본 7행 | 제안(확정 대기). 89407·89425는 도달 불가, 나머지 5개는 도달 불가(발동 조건 없음)로 제안했다. 사람이 확정하기 전까지 도구 판정은 `NOT_ANALYZED`, 검토 상태는 `UNREVIEWED`이고, 제안은 `review.proposal`로 준다(3-10). 상세는 규칙명세서 9-1 | 사람 검토(FR-08) |
@@ -306,6 +306,9 @@ flowchart LR
 
 - 예: CVE-2026-89407은 `tools.jackson.core:jackson-core` 3.1.5와 `com.fasterxml.jackson.core:jackson-core` 2.21.5에서 각각 한 건이다(FR-07).
 - `deployment`: image 대상은 digest가 실행 중 파드의 imageID에 있으면 `RUNNING`, 조회했는데 없으면 `NOT_RUNNING`, 조회하지 못하면 `UNKNOWN`이다. repo 대상은 실행 중 이미지의 revision 라벨이 이 커밋이거나 소스 트리 해시가 같으면 `RUNNING`이다(FR-04).
+  - image 대상의 계산(규칙명세서 10-2): 허용한 (클러스터, 네임스페이스)의 조회 중 48시간 안의 것만 믿는다. 그 조회에 digest가 있으면 `RUNNING`이다. 허용한 네임스페이스가 모두 48시간 안에, 그리고 대상이 생긴 뒤에 조회됐는데 digest가 없으면 `NOT_RUNNING`이다. 그 밖(조회 없음, 일부만 신선, 대상이 마지막 조회보다 새것)은 `UNKNOWN`이다. 수집기가 보내는 방식이라 서버는 조회 실패를 직접 알 수 없어, 마지막 조회 시각으로 판단한다(FR-04, ARD TM-09).
+  - 다시 계산하는 때: L1 수집 결과를 올릴 때, 6시간마다(UTC 00:05·06:05·12:05·18:05), 분석 결과 업로드(API-13) 끝 [계획]. 그래서 수집이 끊기면 늦어도 마지막 조회 48시간 + 6시간 뒤에 `UNKNOWN`이 된다.
+  - repo 대상은 지금 다시 계산하지 않는다 [계획].
 - 결과는 지우지 않는다. 다음 스캔에서 보이지 않으면 `lastSeenAt`이 그대로 남는다.
 
 ### 3-4. Verdict
@@ -422,6 +425,7 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `source` | enum | 예 | `MANUAL`(사람이 kubectl로 조회) / `CLUSTER_READER`(읽기 전용 자동 조회, [계획]) |
 
 - 실행 중인 이미지는 파드의 `imageID`로 정한다. gitops 태그만으로는 확정하지 못한다(태그 MUTABLE, `pullPolicy: IfNotPresent`).
+- 수집 규칙: phase가 `Running`인 파드만 본다. digest는 `status.containerStatuses[].imageID`의 `@sha256:` 뒤 값이고, 아직 이미지를 받지 않아 digest가 없는 컨테이너는 뺀다. 이미지 이름(`image.repository`의 원본)은 파드 spec(`spec.containers[].image`)에서 컨테이너 이름으로 찾는다. `status.containerStatuses[].image`는 노드가 그 이미지에 붙여 둔 이름 중 사전순 첫 번째라 spec과 다를 수 있다. 워크로드 안에서 (컨테이너 이름, digest)마다 한 항목이고, `replicas.ready`는 그 digest를 돌리는 Ready 파드 수다. 롤아웃 중이면 같은 워크로드에 digest별 항목이 둘 생긴다.
 - `scanMatch.status`: `MATCH`는 이 digest를 스캔했거나(`matchedBy: DIGEST`), 배포 커밋과 소스 트리가 같은 커밋을 스캔한 경우(`matchedBy: SOURCE_TREE`)다. `MISMATCH`는 같은 `app`의 스캔은 있지만 digest도 소스 트리도 다른 경우다. 이때 `scanId`는 그 앱의 최신 `SUCCEEDED` 스캔이고, 그 판정을 배포물에 그대로 쓸 수 없다. `NO_SCAN`은 같은 `app`의 스캔이 없는 경우다.
 - 자동 조회에는 클러스터 읽기 전용 권한이 필요하다(NFR-05). 지금은 클러스터 API 서버가 SSM을 거쳐야 닿아서 사람이 조회한다.
 - 클러스터에서 본 워크로드는 등록 여부와 관계없이 모두 준다. 대상(서비스) 등록 목록(PRD FR-15)에 없으면 `registered: false`다. 등록하지 않은 서비스가 감시에서 조용히 빠지지 않게 하려는 것이다. 등록은 레포에 커밋한 설정 파일로 하고, 등록 API는 확장 단계라 이 초안에 없다(1-2).
@@ -558,6 +562,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | API-05 | `GET /api/v1/reach/findings/{findingId}` | `ADMIN` | Finding 상세 | FR-05, FR-06, FR-07 | SCR-03 | `verdicts.json` 한 항목 |
 | API-06 | `PATCH /api/v1/reach/findings/{findingId}/review` | `ADMIN` | 사람 검토 기록 | FR-08 | SCR-03 | `answer-key.md` [부분] |
 | API-07 | `GET /api/v1/reach/workloads` | `ADMIN` | 실행 중 워크로드와 digest, 스캔 연결, 등록 여부 | FR-04, FR-15 | SCR-04 | l1 스크립트 + 수동 kubectl [부분] |
+| (API-07 아래) | `PUT /api/v1/reach/l1/workloads` | `ADMIN` | L1 수집 결과 올리기(수동). 수집기용 내부 경로는 [계획](1-5) | FR-04 | - | 사람이 kubectl로 조회한 결과 |
 | API-08 | `GET /api/v1/reach/summary` | `ADMIN` | 대시보드 요약 | FR-12 | SCR-01 | 없음 |
 | API-09 | `GET /api/v1/reach/rules`, `GET /api/v1/reach/rules/{ruleId}` | `ADMIN` | 규칙 조회 | FR-06 | SCR-06 | `data/rules.json` |
 | API-10 | `GET /api/v1/reach/vuln-functions` | `ADMIN` | 취약 함수 데이터 조회 | FR-09 | SCR-06 | `data/vuln-functions.json` |
@@ -1274,6 +1279,54 @@ Content-Type: application/json; charset=utf-8
 - `registered`·`service`는 [계획]이라 예시에 넣지 않았다. 서비스 등록 설정 파일(PRD FR-15)이 아직 없다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `UNAVAILABLE`, `RATE_LIMITED`
+
+#### L1 수집 결과 올리기 (수동 업로드)
+
+| 항목 | 내용 |
+|---|---|
+| 메서드·경로 | `PUT /api/v1/reach/l1/workloads` |
+| 권한 | `ADMIN`(대시보드 세션). 쓰기라 `X-XSRF-TOKEN` 헤더가 필요하다(없으면 세션 확인보다 먼저 403) |
+| 설명 | 한 (클러스터, 네임스페이스)의 조회 결과를 통째로 바꾸고 Finding `deployment`를 다시 계산한다(3-3). 그 네임스페이스의 예전 워크로드는 지우고 본문 것만 남긴다. 다른 네임스페이스는 그대로다 |
+| 관련 | FR-04 · 3-6 수집 규칙 |
+| 지금 같은 일 | 사람이 SSM으로 접속해 `kubectl get pods -o json`으로 조회한 결과. 수집기(ARD 7-3 선택지 A)는 같은 본문을 내부 경로로 보낸다 [계획] |
+
+```json
+{
+  "cluster": "reused-prod",
+  "namespace": "reused",
+  "observedAt": "2026-11-07T03:17:05Z",
+  "workloads": [
+    { "kind": "Deployment", "name": "reused-api",
+      "containers": [ { "name": "api",
+        "image": "794386801311.dkr.ecr.ap-northeast-1.amazonaws.com/logssey/reused-api:bb4639b7e45c21d5ced03a5f541b1982093e0865",
+        "imageDigest": "sha256:a6ffffef7fc1f9e876f02884ff708d90cb223d8ece7ddab7b8690441d10529d5",
+        "readyReplicas": 2 } ] }
+  ]
+}
+```
+
+| 필드 | 규칙 (어기면 400 `INVALID_INPUT`) |
+|---|---|
+| `cluster` · `namespace` | 서버가 허용한 값만. 지금은 `reused-prod` · `reused` |
+| `observedAt` | 필수. 오프셋을 포함한 ISO-8601. 지금 + 5분보다 미래면 400(시계 차이는 5분까지 받는다). 저장된 조회보다 오래되면 409 `CONFLICT`이고 아무것도 바꾸지 않는다. 같은 시각은 받는다(재시도) |
+| `workloads` | 필수. 빈 배열도 받는다(조회했는데 파드가 없음). `containers`가 빈 워크로드는 저장하지 않는다 |
+| `kind` · `name` · `containers[].name` · `containers[].image` | 비지 않은 문자열. 최대 30 · 253 · 253 · 512자(유니코드 문자 수) |
+| `containers[].imageDigest` | `^sha256:[0-9a-f]{64}$`. 대문자는 400 |
+| `containers[].readyReplicas` | 필수, 0 이상. 그 digest를 돌리는 Ready 파드 수(3-6) |
+| 중복 | 같은 (`kind`, `name`, 컨테이너 이름, digest)가 두 번이면 400. `image`는 비교하지 않는다 |
+| 개수 | 컨테이너 합계 1,000개까지(넘으면 413이 아니라 400) |
+
+응답(200):
+
+```json
+{ "cluster": "reused-prod", "namespace": "reused", "observedAt": "2026-11-07T03:17:05Z", "workloads": 1, "findingsUpdated": 23 }
+```
+
+- `workloads`는 받은 워크로드 수, `findingsUpdated`는 이번 계산으로 `deployment`가 바뀐 Finding 수다. 같은 내용을 다시 올리면 0이다.
+- 응답 시각은 UTC로 준다(`+09:00`으로 보내도 UTC로 바꿔 저장한다).
+- 업로드와 다시 계산(3-3)은 한 번에 하나씩 처리한다. 동시에 올리면 차례로 처리된다.
+
+**오류**: `INVALID_INPUT`(400), `UNAUTHENTICATED`(401), `FORBIDDEN`(403, `ADMIN` 아님 또는 CSRF 토큰 없음), `CONFLICT`(409, 저장된 조회보다 오래된 `observedAt`)
 
 ### API-08 대시보드 요약
 
