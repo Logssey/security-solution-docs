@@ -307,7 +307,7 @@ flowchart LR
 - 예: CVE-2026-89407은 `tools.jackson.core:jackson-core` 3.1.5와 `com.fasterxml.jackson.core:jackson-core` 2.21.5에서 각각 한 건이다(FR-07).
 - `deployment`: image 대상은 digest가 실행 중 파드의 imageID에 있으면 `RUNNING`, 조회했는데 없으면 `NOT_RUNNING`, 조회하지 못하면 `UNKNOWN`이다. repo 대상은 실행 중 이미지의 revision 라벨이 이 커밋이거나 소스 트리 해시가 같으면 `RUNNING`이다(FR-04).
   - image 대상의 계산(규칙명세서 10-2): 허용한 (클러스터, 네임스페이스)의 조회 중 48시간 안의 것만 믿는다. 그 조회에 digest가 있으면 `RUNNING`이다. 허용한 네임스페이스가 모두 48시간 안에, 그리고 대상이 생긴 뒤에 조회됐는데 digest가 없으면 `NOT_RUNNING`이다. 그 밖(조회 없음, 일부만 신선, 대상이 마지막 조회보다 새것)은 `UNKNOWN`이다. 수집기가 보내는 방식이라 서버는 조회 실패를 직접 알 수 없어, 마지막 조회 시각으로 판단한다(FR-04, ARD TM-09).
-  - 다시 계산하는 때: L1 수집 결과를 올릴 때, 6시간마다(UTC 00:05·06:05·12:05·18:05), 분석 결과 업로드(API-13) 끝 [계획]. 그래서 수집이 끊기면 늦어도 마지막 조회 48시간 + 6시간 뒤에 `UNKNOWN`이 된다.
+  - 다시 계산하는 때: L1 수집 결과를 올릴 때, 6시간마다(UTC 00:05·06:05·12:05·18:05), 분석 결과 업로드(API-13) 끝(그 대상만). 그래서 수집이 끊기면 늦어도 마지막 조회 48시간 + 6시간 뒤에 `UNKNOWN`이 된다.
   - repo 대상은 지금 다시 계산하지 않는다 [계획].
 - 결과는 지우지 않는다. 다음 스캔에서 보이지 않으면 `lastSeenAt`이 그대로 남는다.
 
@@ -1697,7 +1697,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | `component` | 예 | `purl`, `name`, `version`, `ecosystem`(없으면 purl 타입), `path` |
 | `vulnerability` | 예 | `id`, `severity`, `severityNote`, `title`, `description`, `affectedFeature`, `fixedVersions`, `cwe`, `references` |
 | `sources` | 예 | `TRIVY`, `GRYPE` 중 하나 이상 |
-| `deployment` | 아니요 | 없으면 `UNKNOWN`(L1 자동화 전) |
+| `deployment` | 아니요 | 새 Finding을 만들 때만 쓰고, 없으면 `UNKNOWN`이다. 이미 있는 Finding의 값은 바꾸지 않는다. image 대상은 업로드 끝에서 L1 조회로 다시 계산하므로(3-3) 이 값이 남지 않는다 |
 | `upgrade` | 아니요 | 3-3 `upgrade` |
 | `verdict` | 예 | `status`, `method`, `summary`, `notAnalyzedReason`, `ruleId`, `vulnFunctionIds`, `callgraph`, `evidence`, `analyzedAt`(없으면 받은 시각), `engine`(필수) |
 | `proposal` | 아니요 | 검토 전 제안(3-10 `proposal`). 새 Finding과 되돌린 검토에만 넣고, 이미 있던 검토 전 Finding의 제안은 바꾸지 않는다 |
