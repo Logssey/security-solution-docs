@@ -439,16 +439,19 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 |---|---|---|---|
 | `id` | string | 예 | `RULE-<CVE ID>` |
 | `cve` | string | 예 | CVE ID |
-| `packages` | string 배열 | 예 | 적용 패키지(purl, 버전 제외) |
-| `summary` | string | 예 | 판정 조건 요약 |
-| `facts` | string 배열 | 예 | 판정에 쓰는 사실 `F-…` |
+| `method` | enum | 예 | 판정 방식. `RULE`(설정·타입 사실로 판정) / `CALLGRAPH`(호출 그래프로 판정) |
+| `packages` | string 배열 | 예 | 적용 패키지(purl, 버전 제외). 같은 CVE의 취약 함수 데이터(3-8)에서 가져온다 |
+| `summary` | string | 아니요 [계획] | 판정 조건 요약. 지금 데이터에 없어 주지 않는다. 상태별 이유는 `reasons`에 있다 |
+| `facts` | string 배열 | 예 | 판정 조건에 나오는 사실 `F-<사실 이름>`(조건 순서, 중복 없음, 부정 `!`은 뗀다). Finding 근거의 `factId`(3-5)와 같은 표기다. 호출 그래프 결과(`sink`, `sink_weak`, `sinks_missing`)는 사실이 아니라 넣지 않고 `definition`에만 있다 |
 | `infoFacts` | string 배열 | 아니요 | 판정에 쓰지 않고 참고로만 보여 주는 사실. `rules.json`의 `info`를 그대로 옮긴다. 근거에서는 Evidence의 `informational`이 true다 |
 | `evaluationOrder` | string 배열 | 예 | 항상 `REACHABLE`, `UNREACHABLE`, `UNKNOWN`, `DEFAULT` 순서 |
-| `vulnFunctionIds` | integer 배열 | 아니요 | 함께 쓰는 취약 함수 |
-| `regressionApps` | string 배열 | 아니요 | 이 규칙을 검사하는 샘플 앱 |
-| `definition` | object | 아니요 | `include=definition`일 때. 조건식 원문을 그대로 준다 |
-| `version` | string | 예 | 규칙 데이터 버전 |
-| `updatedAt` | date-time | 예 | 마지막 변경 시각 |
+| `defaultStatus` | enum | 예 | 어느 조건에도 맞지 않을 때(`DEFAULT`)의 상태. `rules.json`의 `otherwise`. 지금 규칙은 모두 `UNREACHABLE` |
+| `reasons` | object | 예 | 상태(`REACHABLE` / `UNREACHABLE` / `UNKNOWN`)별 판정 이유(한국어). `rules.json`의 `why_ko`. 데이터에 없는 상태는 키가 없다 |
+| `vulnFunctionIds` | integer 배열 | 예 | 같은 CVE의 취약 함수 `id`(3-8). 같은 데이터 버전 안에서만 같다 |
+| `regressionApps` | string 배열 | 아니요 [계획] | 이 규칙을 검사하는 샘플 앱. 지금 데이터에 없어 주지 않는다 |
+| `definition` | object | 아니요 | `include=definition`일 때. `verdict`(조건식 원문)와 `facts`(그 조건과 `infoFacts`에 나오는 사실의 정의 원문). 원문이라 사실 이름에 `F-`가 없다 |
+| `version` | string | 예 | 규칙 데이터 버전(스키마 `reach-rules/v0`의 `v0`) |
+| `updatedAt` | date-time | 아니요 [계획] | 마지막 변경 시각. 지금 데이터에 없어 주지 않는다 |
 
 - 규칙은 데이터 파일(`data/rules.json`)에 있다. CVE를 더할 때 분석기 코드를 고치지 않는다(NFR-07).
 
@@ -1413,13 +1416,13 @@ Content-Type: application/json; charset=utf-8
 | `ruleId` | 경로 | string | 단건 조회에서 예 | `RULE-<CVE ID>` |
 | `cve` | 쿼리 | string 목록 | 아니요 | CVE ID |
 | `package` | 쿼리 | string | 아니요 | purl 앞부분 일치 |
-| `fact` | 쿼리 | string | 아니요 | 이 사실 `F-…`을 쓰는 규칙 |
-| `sort` | 쿼리 | string | 아니요 | 기본 `id`. 허용: `id`, `cve`, `updatedAt` |
+| `fact` | 쿼리 | string | 아니요 | 이 사실 `F-<사실 이름>`을 판정 조건(`facts`)에 쓰는 규칙. `infoFacts`만 있는 규칙은 나오지 않는다. 접두사 없는 이름은 다른 값이라 아무것도 맞지 않는다 |
+| `sort` | 쿼리 | string | 아니요 | 기본 `id`. 허용: `id`, `cve`(둘 다 CVE 연도·번호 숫자 순). `updatedAt`은 데이터에 변경 시각이 없어 400 |
 | `size`, `cursor`, `include` | 쿼리 | - | 아니요 | 2-4. `include`는 `total`, `definition`을 받는다 |
 
-요청 예시: `GET /api/v1/reach/rules?package=pkg%3Amaven%2Ftools.jackson.core`
+요청 예시: `GET /api/v1/reach/rules?cve=CVE-2026-89407,CVE-2026-91777`
 
-응답 예시(200). 사실 이름과 샘플 앱은 PoC 기록에 나온 것만 적었다. 전체 조건은 규칙명세서의 RULE-CVE-2026-89407, RULE-CVE-2026-91777이 정한다.
+응답 예시(200). 지금 데이터(reach-rules/v0)의 실제 값이다. 89407의 `reasons`는 길어서 줄였다(…). 조건식 원문은 `include=definition`일 때 `definition`에 있다.
 
 ```json
 {
@@ -1427,36 +1430,88 @@ Content-Type: application/json; charset=utf-8
     {
       "id": "RULE-CVE-2026-89407",
       "cve": "CVE-2026-89407",
-      "packages": ["pkg:maven/tools.jackson.core/jackson-core"],
-      "summary": "Jackson에 타입을 알려줄 수 있는 자리(tokens)에 나온 타입의 실수형 필드를 본다. 반환만 하는 응답 전용 타입은 세지 않는다",
-      "facts": ["F-dto.floating.tokens", "F-jackson.polymorphicSerializer"],
-      "infoFacts": ["F-dto.floating.any"],
-      "evaluationOrder": ["REACHABLE", "UNREACHABLE", "UNKNOWN", "DEFAULT"],
-      "regressionApps": ["app-like", "app-positive", "app-tokens", "app-indirect", "app-blindspots"],
-      "version": "v0",
-      "updatedAt": "2026-10-10T09:00:00Z"
+      "method": "RULE",
+      "packages": [
+        "pkg:maven/tools.jackson.core/jackson-core"
+      ],
+      "facts": [
+        "F-dto.floating",
+        "F-dto.floating.tokens",
+        "F-jackson.jsonNodeNumeric",
+        "F-jackson.defaultTyping",
+        "F-jackson.polymorphicSerializer"
+      ],
+      "infoFacts": [
+        "F-dto.floating.any"
+      ],
+      "evaluationOrder": [
+        "REACHABLE",
+        "UNREACHABLE",
+        "UNKNOWN",
+        "DEFAULT"
+      ],
+      "defaultStatus": "UNREACHABLE",
+      "reasons": {
+        "REACHABLE": "외부 입력을 역직렬화하는 타입에 float/double/BigDecimal/Number 필드가 있다. …",
+        "UNREACHABLE": "역직렬화될 수 있는 타입(…)에 실수형 필드가 없고, JsonNode 숫자 변환·다형성 타입 지정도 없다. …",
+        "UNKNOWN": "실수형 필드를 가진 타입이 class 리터럴·TypeReference 등으로 지정되거나 … 외부 입력으로 역직렬화되는지 정적으로 확정하지 못했다. …"
+      },
+      "vulnFunctionIds": [
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32
+      ],
+      "version": "v0"
     },
     {
       "id": "RULE-CVE-2026-91777",
       "cve": "CVE-2026-91777",
-      "packages": ["pkg:maven/tools.jackson.core/jackson-databind"],
-      "summary": "컬렉션·맵 필드의 원소 타입과, 루트 자체가 컬렉션·맵일 때의 원소 타입에 붙은 @JsonIdentityInfo만 센다. 타입 자체의 어노테이션은 91776 규칙에서 센다",
-      "facts": ["F-jsonIdentityInfo.any"],
-      "evaluationOrder": ["REACHABLE", "UNREACHABLE", "UNKNOWN", "DEFAULT"],
-      "regressionApps": ["app-like", "app-positive", "app-indirect", "app-blindspots"],
-      "version": "v0",
-      "updatedAt": "2026-10-10T09:00:00Z"
+      "method": "RULE",
+      "packages": [
+        "pkg:maven/tools.jackson.core/jackson-databind"
+      ],
+      "facts": [
+        "F-dto.identityCollection",
+        "F-jsonIdentityInfo.any"
+      ],
+      "infoFacts": [],
+      "evaluationOrder": [
+        "REACHABLE",
+        "UNREACHABLE",
+        "UNKNOWN",
+        "DEFAULT"
+      ],
+      "defaultStatus": "UNREACHABLE",
+      "reasons": {
+        "REACHABLE": "외부 입력 타입의 컬렉션·맵 원소에 @JsonIdentityInfo가 있다. 전방 참조가 많으면 제곱 시간이 걸린다.",
+        "UNREACHABLE": "@JsonIdentityInfo를 쓰지 않는다. 취약한 경로는 object id가 켜진 컬렉션·맵에서만 실행된다.",
+        "UNKNOWN": "@JsonIdentityInfo를 쓰지만 외부 입력 컬렉션과 연결되는지 확정하지 못했다."
+      },
+      "vulnFunctionIds": [
+        40,
+        41,
+        42,
+        43
+      ],
+      "version": "v0"
     }
   ],
   "nextCursor": null,
-  "hasNext": false
+  "hasNext": false,
+  "version": "v0"
 }
 ```
 
 - 89407 규칙은 처음에 앱 전체의 실수형 필드(`F-dto.floating.any`)로 미확인을 냈다. 응답 전용 record 때문에 정답지와 9/10이었고, tokens로 좁힌 뒤 10/10이 됐다. 앱 전체 사실은 지금 참고(`infoFacts`)로만 보인다.
-- 91777 규칙은 주입 실험에서 오탐 1건을 찾아 고쳤다. `app-blindspots`가 이 오탐을 회귀 테스트로 고정한다.
+- 91777 규칙은 주입 실험에서 오탐 1건을 찾아 고쳤다. `app-blindspots`가 이 오탐을 회귀 테스트로 고정한다(`regressionApps`는 [계획]).
+- 단건 `GET /api/v1/reach/rules/RULE-CVE-2026-89407`은 같은 항목 하나를 준다. 없는 `ruleId`면 404. `include`는 `definition`만 받는다.
+- 커서는 필터와 규칙 데이터 버전에 묶인다. 커서를 넣은 채 필터를 바꾸면 400이다.
 
-**오류**: `INVALID_INPUT`, `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: `INVALID_INPUT`(`cve` 형식, `sort`·`include`·`size`·`cursor` 값), `NOT_FOUND`(없는 `ruleId`), `UNAUTHENTICATED`, `FORBIDDEN`, `RATE_LIMITED`
 
 ### API-10 취약 함수 데이터
 
