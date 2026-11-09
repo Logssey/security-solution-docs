@@ -46,7 +46,6 @@
 | OCSF 클래스·필드 매핑 | 팀 스키마 합의 필요(5절) | 팀 합의(인프라 담당) |
 | 역할 분리 | MVP는 대시보드 공통의 `ADMIN` 하나로 조회·스캔 요청·사람 검토를 모두 한다(2-2). 조회 전용, 검토자, 게이트 예외 승인자를 나눌지는 대시보드 공통 역할 체계와 함께 정한다 | 팀 합의, 대시보드 ADR |
 | L1 수집 결과를 올리는 내부 API | 클러스터 안 수집기(ARD 7-3 선택지 A)가 k8s 서비스 계정 토큰으로 워크로드 조회 결과를 기록하는 내부 API(`PUT /internal/v1/reach/l1/workloads`)는 [계획]이다. 본문과 처리 규칙은 수동 업로드(API-07 아래 "L1 수집 결과 올리기")와 같고 인증만 다르다 | ARD Q-03 |
-| 취약 함수 클래스 이름 표기 | 데이터 파일이 패키지를 포함한 이름을 쓰는지 확인 필요. 이 문서 예시는 원자료에 적힌 짧은 이름이다 | 규칙명세서 |
 | `make_spec.py` 실행 인자 | 원자료에 없다. 확인 필요 | 8절 |
 | Jackson 2 사본 7행 | 제안(확정 대기). 89407·89425는 도달 불가, 나머지 5개는 도달 불가(발동 조건 없음)로 제안했다. 사람이 확정하기 전까지 도구 판정은 `NOT_ANALYZED`, 검토 상태는 `UNREVIEWED`이고, 제안은 `review.proposal`로 준다(3-10). 상세는 규칙명세서 9-1 | 사람 검토(FR-08) |
 | 게이트 예외 기록 | 게이트에 걸린 PR을 통과시키는 예외(사유, 만료일, 승인한 사람)를 어디에 어떤 형식으로 남길지 정하지 않았다. 검토 기록(3-10)을 넓힐지 별도 API를 둘지 정한다. 규칙은 6-2와 PRD FR-11을 따른다 | ARD Q-07 |
@@ -440,16 +439,19 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 |---|---|---|---|
 | `id` | string | 예 | `RULE-<CVE ID>` |
 | `cve` | string | 예 | CVE ID |
-| `packages` | string 배열 | 예 | 적용 패키지(purl, 버전 제외) |
-| `summary` | string | 예 | 판정 조건 요약 |
-| `facts` | string 배열 | 예 | 판정에 쓰는 사실 `F-…` |
+| `method` | enum | 예 | 판정 방식. `RULE`(설정·타입 사실로 판정) / `CALLGRAPH`(호출 그래프로 판정) |
+| `packages` | string 배열 | 예 | 적용 패키지(purl, 버전 제외). 같은 CVE의 취약 함수 데이터(3-8)에서 가져온다 |
+| `summary` | string | 아니요 [계획] | 판정 조건 요약. 지금 데이터에 없어 주지 않는다. 상태별 이유는 `reasons`에 있다 |
+| `facts` | string 배열 | 예 | 판정 조건에 나오는 사실 `F-<사실 이름>`(조건 순서, 중복 없음, 부정 `!`은 뗀다). Finding 근거의 `factId`(3-5)와 같은 표기다. 호출 그래프 결과(`sink`, `sink_weak`, `sinks_missing`)는 사실이 아니라 넣지 않고 `definition`에만 있다 |
 | `infoFacts` | string 배열 | 아니요 | 판정에 쓰지 않고 참고로만 보여 주는 사실. `rules.json`의 `info`를 그대로 옮긴다. 근거에서는 Evidence의 `informational`이 true다 |
 | `evaluationOrder` | string 배열 | 예 | 항상 `REACHABLE`, `UNREACHABLE`, `UNKNOWN`, `DEFAULT` 순서 |
-| `vulnFunctionIds` | integer 배열 | 아니요 | 함께 쓰는 취약 함수 |
-| `regressionApps` | string 배열 | 아니요 | 이 규칙을 검사하는 샘플 앱 |
-| `definition` | object | 아니요 | `include=definition`일 때. 조건식 원문을 그대로 준다 |
-| `version` | string | 예 | 규칙 데이터 버전 |
-| `updatedAt` | date-time | 예 | 마지막 변경 시각 |
+| `defaultStatus` | enum | 예 | 어느 조건에도 맞지 않을 때(`DEFAULT`)의 상태. `rules.json`의 `otherwise`. 지금 규칙은 모두 `UNREACHABLE` |
+| `reasons` | object | 예 | 상태(`REACHABLE` / `UNREACHABLE` / `UNKNOWN`)별 판정 이유(한국어). `rules.json`의 `why_ko`. 데이터에 없는 상태는 키가 없다 |
+| `vulnFunctionIds` | integer 배열 | 예 | 같은 CVE의 취약 함수 `id`(3-8). 같은 데이터 버전 안에서만 같다 |
+| `regressionApps` | string 배열 | 아니요 [계획] | 이 규칙을 검사하는 샘플 앱. 지금 데이터에 없어 주지 않는다 |
+| `definition` | object | 아니요 | `include=definition`일 때. `verdict`(조건식 원문)와 `facts`(그 조건과 `infoFacts`에 나오는 사실의 정의 원문). 원문이라 사실 이름에 `F-`가 없다 |
+| `version` | string | 예 | 규칙 데이터 버전(스키마 `reach-rules/v0`의 `v0`) |
+| `updatedAt` | date-time | 아니요 [계획] | 마지막 변경 시각. 지금 데이터에 없어 주지 않는다 |
 
 - 규칙은 데이터 파일(`data/rules.json`)에 있다. CVE를 더할 때 분석기 코드를 고치지 않는다(NFR-07).
 
@@ -459,19 +461,23 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 
 | 이름 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `id` | integer | 예 | 취약 함수 ID |
+| `id` | integer | 예 | 취약 함수 ID. 데이터 파일 순서로 매긴다. 같은 데이터 버전(API-10 `version`·`generated`) 안에서만 같은 함수를 가리킨다 |
 | `cve` | string | 예 | CVE ID |
-| `package` | string | 예 | purl(버전 제외) |
-| `class` | string | 예 | 클래스 이름(표기 형식은 1-5에서 확인 필요) |
+| `package` | string | 예 | purl(버전 제외). 데이터의 Maven 좌표 `group:artifact`를 `pkg:maven/group/artifact`로 바꾼다 |
+| `class` | string | 예 | 패키지를 포함한 클래스 이름(예: `org.bouncycastle.asn1.LazyEncodedSequence`). 데이터 파일 표기 그대로다 |
 | `method` | string | 예 | 메서드 이름. 생성자는 `<init>` |
 | `descriptor` | string | 아니요 | JVM 메서드 시그니처 |
-| `fixedVersion` | string | 아니요 | 수정 버전 |
-| `fixCommits` | string 배열 | `provenance=FIX_COMMIT_DIFF`일 때 | 근거로 쓴 수정 커밋. `VERSION_DIFF`여도 수정 커밋과 대조했으면 준다(예: Tomcat) |
-| `provenance` | enum | 예 | 정한 방법. `VERSION_DIFF`(취약 버전과 수정 버전의 소스 diff에서 바뀐 메서드) / `FIX_COMMIT_DIFF`(수정 커밋 diff에서 바뀐 메서드) |
-| `verifiedWith` | string | 아니요 | 확인 방법. 예: 대상 버전 jar를 `javap`로 확인 |
-| `candidateSource` | enum | 아니요 | 후보를 낸 곳: `MANUAL` / `PROSPECTOR` / `AI`. AI는 후보만 내고 사람이 확인한다(NFR-04) |
-| `excluded` | boolean | 아니요 | true면 일부러 뺀 메서드다. `include=excluded`일 때만 목록에 나온다 |
-| `exclusionReason` | string | `excluded`가 true일 때 | 뺀 이유 |
+| `fixedVersions` | string 배열 | 예 | 수정 버전 전부(릴리스 줄마다 하나, 버전 순). 예: Tomcat `9.0.121`, `10.1.59`, `11.0.25`. 하나만 고르지 않는다(설치 버전은 대상마다 달라서다) |
+| `fixCommits` | string 배열 | 예 | 출처 중 GitHub 수정 커밋을 `owner/repo@앞 8자리`로 줄인 것. 없으면 빈 배열 |
+| `confidence` | string | 아니요 | 데이터에 적힌 확신도(`high` / `medium`) |
+| `note` | string | 아니요 | 데이터에 적힌 메모 |
+| `provenance` | enum | 아니요 [계획] | 정한 방법. `VERSION_DIFF`(취약 버전과 수정 버전의 소스 diff에서 바뀐 메서드) / `FIX_COMMIT_DIFF`(수정 커밋 diff에서 바뀐 메서드) |
+| `verifiedWith` | string | 아니요 [계획] | 확인 방법. 예: 대상 버전 jar를 `javap`로 확인 |
+| `candidateSource` | enum | 아니요 [계획] | 후보를 낸 곳: `MANUAL` / `PROSPECTOR` / `AI`. AI는 후보만 내고 사람이 확인한다(NFR-04) |
+| `excluded` | boolean | 아니요 [계획] | true면 일부러 뺀 메서드다. `include=excluded`일 때만 목록에 나온다 |
+| `exclusionReason` | string | `excluded`가 true일 때 [계획] | 뺀 이유 |
+
+- [계획] `provenance`, `verifiedWith`, `candidateSource`, `excluded`, `exclusionReason`은 지금 데이터 파일(`data/vuln-functions.json`, reach-spec/v0)에 없어 주지 않는다. 생성 스크립트가 이 칸을 쓰게 되면 준다. 그때까지 정한 방법은 아래 메모를 본다.
 
 - 취약 함수 데이터는 조사 파일에서 생성 스크립트(`make_spec.py`)로 만든다(FR-09).
 - PoC의 CVE 14개: 처음 10개는 `VERSION_DIFF`다(Tomcat 3개는 수정 커밋을 찾아 태그 diff와 대조했다). CVE-2026-13506과 MEDIUM 3개(0636, 19032, 83557)는 `FIX_COMMIT_DIFF`다. 모두 `javap`로 시그니처를 확인했다.
@@ -1410,13 +1416,13 @@ Content-Type: application/json; charset=utf-8
 | `ruleId` | 경로 | string | 단건 조회에서 예 | `RULE-<CVE ID>` |
 | `cve` | 쿼리 | string 목록 | 아니요 | CVE ID |
 | `package` | 쿼리 | string | 아니요 | purl 앞부분 일치 |
-| `fact` | 쿼리 | string | 아니요 | 이 사실 `F-…`을 쓰는 규칙 |
-| `sort` | 쿼리 | string | 아니요 | 기본 `id`. 허용: `id`, `cve`, `updatedAt` |
+| `fact` | 쿼리 | string | 아니요 | 이 사실 `F-<사실 이름>`을 판정 조건(`facts`)에 쓰는 규칙. `infoFacts`만 있는 규칙은 나오지 않는다. 접두사 없는 이름은 다른 값이라 아무것도 맞지 않는다 |
+| `sort` | 쿼리 | string | 아니요 | 기본 `id`. 허용: `id`, `cve`(둘 다 CVE 연도·번호 숫자 순). `updatedAt`은 데이터에 변경 시각이 없어 400 |
 | `size`, `cursor`, `include` | 쿼리 | - | 아니요 | 2-4. `include`는 `total`, `definition`을 받는다 |
 
-요청 예시: `GET /api/v1/reach/rules?package=pkg%3Amaven%2Ftools.jackson.core`
+요청 예시: `GET /api/v1/reach/rules?cve=CVE-2026-89407,CVE-2026-91777`
 
-응답 예시(200). 사실 이름과 샘플 앱은 PoC 기록에 나온 것만 적었다. 전체 조건은 규칙명세서의 RULE-CVE-2026-89407, RULE-CVE-2026-91777이 정한다.
+응답 예시(200). 지금 데이터(reach-rules/v0)의 실제 값이다. 89407의 `reasons`는 길어서 줄였다(…). 조건식 원문은 `include=definition`일 때 `definition`에 있다.
 
 ```json
 {
@@ -1424,36 +1430,88 @@ Content-Type: application/json; charset=utf-8
     {
       "id": "RULE-CVE-2026-89407",
       "cve": "CVE-2026-89407",
-      "packages": ["pkg:maven/tools.jackson.core/jackson-core"],
-      "summary": "Jackson에 타입을 알려줄 수 있는 자리(tokens)에 나온 타입의 실수형 필드를 본다. 반환만 하는 응답 전용 타입은 세지 않는다",
-      "facts": ["F-dto.floating.tokens", "F-jackson.polymorphicSerializer"],
-      "infoFacts": ["F-dto.floating.any"],
-      "evaluationOrder": ["REACHABLE", "UNREACHABLE", "UNKNOWN", "DEFAULT"],
-      "regressionApps": ["app-like", "app-positive", "app-tokens", "app-indirect", "app-blindspots"],
-      "version": "v0",
-      "updatedAt": "2026-10-10T09:00:00Z"
+      "method": "RULE",
+      "packages": [
+        "pkg:maven/tools.jackson.core/jackson-core"
+      ],
+      "facts": [
+        "F-dto.floating",
+        "F-dto.floating.tokens",
+        "F-jackson.jsonNodeNumeric",
+        "F-jackson.defaultTyping",
+        "F-jackson.polymorphicSerializer"
+      ],
+      "infoFacts": [
+        "F-dto.floating.any"
+      ],
+      "evaluationOrder": [
+        "REACHABLE",
+        "UNREACHABLE",
+        "UNKNOWN",
+        "DEFAULT"
+      ],
+      "defaultStatus": "UNREACHABLE",
+      "reasons": {
+        "REACHABLE": "외부 입력을 역직렬화하는 타입에 float/double/BigDecimal/Number 필드가 있다. …",
+        "UNREACHABLE": "역직렬화될 수 있는 타입(…)에 실수형 필드가 없고, JsonNode 숫자 변환·다형성 타입 지정도 없다. …",
+        "UNKNOWN": "실수형 필드를 가진 타입이 class 리터럴·TypeReference 등으로 지정되거나 … 외부 입력으로 역직렬화되는지 정적으로 확정하지 못했다. …"
+      },
+      "vulnFunctionIds": [
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32
+      ],
+      "version": "v0"
     },
     {
       "id": "RULE-CVE-2026-91777",
       "cve": "CVE-2026-91777",
-      "packages": ["pkg:maven/tools.jackson.core/jackson-databind"],
-      "summary": "컬렉션·맵 필드의 원소 타입과, 루트 자체가 컬렉션·맵일 때의 원소 타입에 붙은 @JsonIdentityInfo만 센다. 타입 자체의 어노테이션은 91776 규칙에서 센다",
-      "facts": ["F-jsonIdentityInfo.any"],
-      "evaluationOrder": ["REACHABLE", "UNREACHABLE", "UNKNOWN", "DEFAULT"],
-      "regressionApps": ["app-like", "app-positive", "app-indirect", "app-blindspots"],
-      "version": "v0",
-      "updatedAt": "2026-10-10T09:00:00Z"
+      "method": "RULE",
+      "packages": [
+        "pkg:maven/tools.jackson.core/jackson-databind"
+      ],
+      "facts": [
+        "F-dto.identityCollection",
+        "F-jsonIdentityInfo.any"
+      ],
+      "infoFacts": [],
+      "evaluationOrder": [
+        "REACHABLE",
+        "UNREACHABLE",
+        "UNKNOWN",
+        "DEFAULT"
+      ],
+      "defaultStatus": "UNREACHABLE",
+      "reasons": {
+        "REACHABLE": "외부 입력 타입의 컬렉션·맵 원소에 @JsonIdentityInfo가 있다. 전방 참조가 많으면 제곱 시간이 걸린다.",
+        "UNREACHABLE": "@JsonIdentityInfo를 쓰지 않는다. 취약한 경로는 object id가 켜진 컬렉션·맵에서만 실행된다.",
+        "UNKNOWN": "@JsonIdentityInfo를 쓰지만 외부 입력 컬렉션과 연결되는지 확정하지 못했다."
+      },
+      "vulnFunctionIds": [
+        40,
+        41,
+        42,
+        43
+      ],
+      "version": "v0"
     }
   ],
   "nextCursor": null,
-  "hasNext": false
+  "hasNext": false,
+  "version": "v0"
 }
 ```
 
 - 89407 규칙은 처음에 앱 전체의 실수형 필드(`F-dto.floating.any`)로 미확인을 냈다. 응답 전용 record 때문에 정답지와 9/10이었고, tokens로 좁힌 뒤 10/10이 됐다. 앱 전체 사실은 지금 참고(`infoFacts`)로만 보인다.
-- 91777 규칙은 주입 실험에서 오탐 1건을 찾아 고쳤다. `app-blindspots`가 이 오탐을 회귀 테스트로 고정한다.
+- 91777 규칙은 주입 실험에서 오탐 1건을 찾아 고쳤다. `app-blindspots`가 이 오탐을 회귀 테스트로 고정한다(`regressionApps`는 [계획]).
+- 단건 `GET /api/v1/reach/rules/RULE-CVE-2026-89407`은 같은 항목 하나를 준다. 없는 `ruleId`면 404. `include`는 `definition`만 받는다.
+- 커서는 필터와 규칙 데이터 버전에 묶인다. 커서를 넣은 채 필터를 바꾸면 400이다.
 
-**오류**: `INVALID_INPUT`, `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: `INVALID_INPUT`(`cve` 형식, `sort`·`include`·`size`·`cursor` 값), `NOT_FOUND`(없는 `ruleId`), `UNAUTHENTICATED`, `FORBIDDEN`, `RATE_LIMITED`
 
 ### API-10 취약 함수 데이터
 
@@ -1469,69 +1527,62 @@ Content-Type: application/json; charset=utf-8
 |---|---|---|---|
 | `cve` | string 목록 | 아니요 | CVE ID |
 | `package` | string | 아니요 | purl 앞부분 일치 |
-| `sort` | string | 아니요 | 기본 `cve,class,method`. 허용: `cve`, `class`, `method` |
-| `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`, `excluded`를 받는다 |
+| `sort` | string | 아니요 | 하나만 고른다. 허용: `cve`(기본), `class`, `method`. 고른 칸이 먼저이고 나머지는 `cve` → `class` → `method` 순. `cve`는 연도·번호 숫자 순 |
+| `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`, `excluded`를 받는다. `excluded`는 지금 데이터에 뺀 메서드 기록이 없어 결과가 같다 |
 
-요청 예시: `GET /api/v1/reach/vuln-functions?cve=CVE-2026-13506&include=excluded`
+요청 예시: `GET /api/v1/reach/vuln-functions?cve=CVE-2026-13506`
 
-응답 예시(200). CVE-2026-13506(bcprov, HIGH)의 실제 조사 결과다.
+응답 예시(200). CVE-2026-13506(bcprov, HIGH)의 실제 데이터다. `version`·`generated`는 이 응답을 만든 데이터 파일의 버전과 생성 날짜다. 스캔이 쓴 데이터 버전(API-03 `tools.vulnFunctionsVersion`)과 다를 수 있다.
 
 ```json
 {
   "items": [
     {
-      "id": 11,
+      "id": 21,
       "cve": "CVE-2026-13506",
       "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "LazyEncodedSequence",
-      "method": "force",
-      "fixedVersion": "1.85",
-      "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "verifiedWith": "1.81 jar를 javap로 확인"
-    },
-    {
-      "id": 12,
-      "cve": "CVE-2026-13506",
-      "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "LazyEncodedSequence",
-      "method": "getObjects",
-      "fixedVersion": "1.85",
-      "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "verifiedWith": "1.81 jar를 javap로 확인"
-    },
-    {
-      "id": 13,
-      "cve": "CVE-2026-13506",
-      "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "LazyConstructionEnumeration",
+      "class": "org.bouncycastle.asn1.LazyConstructionEnumeration",
       "method": "<init>",
-      "fixedVersion": "1.85",
+      "descriptor": "([B)V",
+      "fixedVersions": ["1.85"],
       "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "verifiedWith": "1.81 jar를 javap로 확인"
+      "confidence": "high"
     },
     {
-      "id": 14,
+      "id": 19,
       "cve": "CVE-2026-13506",
       "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "ASN1InputStream",
-      "method": "buildObject",
+      "class": "org.bouncycastle.asn1.LazyEncodedSequence",
+      "method": "force",
+      "descriptor": "()V",
+      "fixedVersions": ["1.85"],
       "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "excluded": true,
-      "exclusionReason": "일반 파싱과 공유하는 메서드라 넣으면 오탐이 난다"
+      "confidence": "high"
+    },
+    {
+      "id": 20,
+      "cve": "CVE-2026-13506",
+      "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
+      "class": "org.bouncycastle.asn1.LazyEncodedSequence",
+      "method": "getObjects",
+      "descriptor": "()Ljava/util/Enumeration;",
+      "fixedVersions": ["1.85"],
+      "fixCommits": ["bcgit/bc-java@77454da9"],
+      "confidence": "high"
     }
   ],
   "nextCursor": null,
-  "hasNext": false
+  "hasNext": false,
+  "version": "v0",
+  "generated": "2026-10-10"
 }
 ```
 
+- 조사 때 일반 파싱과 공유해 뺀 `ASN1InputStream.buildObject`(오탐 방지)는 데이터 파일에 뺀 기록(`excluded`)이 없어 지금은 나오지 않는다 [계획].
+- 커서는 필터와 데이터 버전에 묶인다. 커서를 넣은 채 필터를 바꾸거나 데이터 파일이 바뀐 뒤의 커서는 400이다.
 - 이 CVE는 Argon2 클래스 단위 폐포에 취약 클래스가 들어 있어, 메서드 단위 호출 그래프로만 배제된다. 실제 앱은 `UNREACHABLE`, 사람 판정은 잠정이다.
 
-**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: `INVALID_INPUT`(`cve` 형식, `sort`·`include`·`size`·`cursor` 값), `UNAUTHENTICATED`, `FORBIDDEN`, `RATE_LIMITED`
 
 ### API-11 공통 Finding(OCSF) 내보내기
 
