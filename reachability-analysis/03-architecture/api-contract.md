@@ -1733,11 +1733,12 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | 권한 | CI(GitHub OIDC). 검사를 등록한 레포의 토큰만 받는다. [계획] 지금 구현은 대시보드 `ADMIN` 세션으로 받아(2-2) 레포를 확인하지 않는다. 그래서 `FORBIDDEN`(다른 레포의 검사)도 아직 없다 |
 | 설명 | 러너가 돌린 `SBOM`·`MATCH`·`L2`·`REPORT` 단계의 결과를 올린다. 서버는 받은 결과를 `reach_` 테이블에 저장하고, `L1`을 채우고, 사람 검토를 이어받은 뒤(FR-08) 스캔을 `SUCCEEDED`로 바꾼다. 분석은 서버에서 다시 하지 않는다(ARD AD-18) |
 | 관련 | FR-01, FR-07, FR-11 · 화면 없음 |
-| 지금 같은 일 | `run-reach.sh`가 만드는 `verdicts.json`, `reach-result.json`과 스캐너 결과 파일 [부분] |
+| 지금 같은 일 | `reach-analyzer/verdict/bundle.py`가 스캐너 결과와 `verdicts.json`, `reach-result.json`으로 결과 묶음을 만든다. 올리는 러너(CI)와 OIDC 인증은 [계획] |
 
 | 이름 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
 | `checkId` | 경로 | integer | 예 | API-12가 준 CI 검사 ID |
+| `Content-Type` | 헤더 | string | 예 | `application/json`(압축을 푼 본문의 형식). [계획] 지금 구현은 없으면 본문을 폼으로 읽으려다 500을 준다 |
 | `Content-Encoding` | 헤더 | string | 예 | `gzip`. 압축한 본문은 20MB 이하(초안 값, IaC와 같음). 없거나 `gzip`이 아니면 400, 넘으면 413 `PAYLOAD_TOO_LARGE`. 지금 구현은 푼 본문도 100MB(초안 값)로 막는다 |
 | `sbom` | 본문 | object | 예 | CycloneDX JSON. digest당 한 번 만들고 서버가 보관해 재대조(`rescanOf`)에 쓴다. [계획] 지금 구현은 객체인지만 보고 보관하지 않는다(보관 방식 ARD Q-06) |
 | `matches` | 본문 | object | 예 | 스캐너 원본 결과. `trivy`, `grype`(교차 확인을 했으면). [계획] 지금 구현은 보관하지 않는다 |
@@ -1748,11 +1749,11 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 - 응답은 202와 `{ "id": 1, "scanId": 2, "scanStatus": "RUNNING" }`이다. 저장과 게이트 계산이 끝나면 API-12 결과 조회에 반영된다. [계획] 지금 구현은 요청 안에서 저장까지 끝내 `SUCCEEDED`(실패 묶음이면 `FAILED`)를 준다.
 - 같은 검사에 두 번 올리면 409 `CONFLICT`다. 다시 돌리려면 API-12로 새 검사를 등록한다.
-- 결과 묶음 형식(필드 이름과 CLI 파일의 대응)은 `run-reach.sh`를 러너용으로 바꿀 때 확정한다.
+- 결과 묶음은 `reach-analyzer/verdict/bundle.py`가 만든다(아래 "결과 묶음 만들기").
 
 **결과 묶음 형식(지금 구현)**
 
-`run-reach.sh`를 러너용으로 바꿀 때까지 쓰는 형식이다. `verdicts`의 한 항목이 Finding 하나이고, 필드 이름은 3-3·3-4·3-5(API-05 상세)와 같다.
+`verdicts`의 한 항목이 Finding 하나이고, 필드 이름은 3-3·3-4·3-5(API-05 상세)와 같다.
 
 | 필드 | 필수 | 설명 |
 |---|---|---|
@@ -1770,6 +1771,18 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - PR 검사의 결과가 이미 스캔한 레포 커밋(같은 대상)의 Finding을 만나면, 그 스캔의 도구 판정만 남긴다. Finding의 스캐너 값·`scanId`·`lastSeenAt`, 지금 판정(`verdict`), 사람 검토는 기준 스캔의 것을 그대로 둔다(ARD SR-09). PR 결과 개수와 게이트는 그 스캔의 판정으로 센다.
 - 사람 판정이 남아 있고 새 도구 판정이 다시 `NOT_ANALYZED`면 사람 판정(`MANUAL`)이 계속 `verdict`다(API-06 예외). 이어받은 Finding도 같다.
 - 저장 중 서버 오류가 나면 저장한 것을 되돌리고 스캔만 `FAILED`(`failure.code`는 `INTERNAL_ERROR`, `stage`는 `REPORT`)로 남긴다. 이 검사에 다시 올리면 409다.
+
+**결과 묶음 만들기 (`bundle.py`)**
+
+러너가 스캐너와 L2 판정을 돌린 뒤 결과 묶음을 만든다. 입력은 CycloneDX SBOM, Trivy JSON, Grype JSON(교차 확인을 했으면), 분석 결과(`reach-result.json`), 판정(`verdicts.json`), 취약 함수 데이터(`vuln-functions.json`)와 규칙(`rules.json`)이다.
+
+- 스캐너가 찾은 매칭(purl × 취약점 ID) 하나가 `verdicts` 한 항목이다. Trivy와 Grype가 같은 purl × 취약점 ID를 찾으면 한 항목이고 `sources`에 둘 다 남는다. Grype가 GitHub 권고 ID(`GHSA-…`)로 준 것은 연결된 CVE가 있으면 CVE로 맞춘다. 심각도가 다르면 Trivy 값을 쓰고 `severityNote`에 둘 다 적는다(예: `Trivy HIGH, Grype MEDIUM`). 같은 패키지가 이미지 안 두 경로에 있어도 한 항목이다(`path`는 처음 것).
+- 스캐너가 같은 취약점을 다른 ID로 따로 보고하면(예: Trivy의 `NSWG-ECO-17`과 `CVE-2015-9235`) 항목도 둘이다. 별칭은 합치지 않는다.
+- 판정한 CVE·패키지(`verdicts.json`에 판정이 있는 것)는 그 판정을 옮긴다. 근거 순서는 사실(`FACT`) → 메모(`NOTE`) → 적용 규칙(`RULE`, `matchedCondition`) → 호출 경로(`PATH`)다. 규칙으로 판정했어도 호출 그래프가 취약 함수에 닿으면 후보 경로(`pathTarget` = `VULN_FUNCTION`, 최대 3개)와 판정에 쓰지 않은 이유(`NOTE`)를 남긴다. 확인했지만 없던 사실은 `value: false`로, 확인한 대상 수를 아는 사실(`F-dto.floating`, `F-dto.floating.tokens`)은 `checkedCount`를 함께 준다.
+- `vulnFunctionIds`는 API-10의 id(`vuln-functions.json` 함수 순서), `engine`의 `rulesVersion`·`vulnFunctionsVersion`은 API-09·10의 `version`과 같다.
+- 판정하지 않은 매칭은 `NOT_ANALYZED`와 사유다: OS 패키지(purl 타입 `apk`, `deb`, `rpm` 등) → `OS_PACKAGE`, maven이 아닌 생태계(`npm` 등) → `UNSUPPORTED_ECOSYSTEM`, 취약 함수 데이터에 있는 CVE지만 다른 패키지 좌표 → `UNANALYZED_COPY`, 취약 함수 데이터에 없는 CVE → `NO_VULN_FUNCTION_DATA`.
+- Java 코드가 없는 대상(npm만, OS 패키지만)은 L2를 돌리지 않는다. 이때 `reachResult`는 빈 객체이고 모든 항목이 `NOT_ANALYZED`다. maven 패키지가 있는데 L2 결과가 없거나, 데이터에 있는 CVE·패키지인데 판정이 없으면 묶음을 만들지 않고 실패한다(러너가 단계를 빠뜨린 것이다).
+- 단계(`stages`)는 러너가 잰 값을 넘긴다. 넘기지 않으면 `SBOM`·`MATCH`·`L2`·`REPORT`(L2를 안 돌렸으면 `L2` 빼고)를 `SUCCEEDED`로 둔다. 분석 전에 실패했으면 `tools`·`stages`·`failure`만 있는 실패 묶음을 만든다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포의 검사), `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`
 
@@ -1962,18 +1975,19 @@ sequenceDiagram
 
 ## 8. CLI 대응표
 
-지금 Reach는 CLI와 스크립트다. 아래 표는 각 도구가 어느 API와 같은 일을 하는지 적는다. 명령과 환경 변수는 원자료에 나온 것만 적었다. 경로는 노트북 `~/projects/sdev/reach-poc/` 기준이고, l1 스크립트만 데스크톱 `sca-eval/l1/`에 있다. API별로 보려면 4절 표의 "지금 같은 일" 열을 본다.
+판정 도구는 `dashboard-backend` 저장소의 하위 프로젝트 `reach-analyzer/`에 있다(서버와 따로 도는 명령줄 도구). 판정 데이터는 서버와 같은 `src/main/resources/reach/`의 파일을 쓴다. 아래 표는 각 도구가 어느 API와 같은 일을 하는지 적는다. 경로는 `dashboard-backend` 기준이다. `scripts/verify-laptop.sh`와 l1 스크립트는 옮기지 않아 PoC 위치(노트북 `~/projects/sdev/reach-poc/`, 데스크톱 `sca-eval/l1/`)에만 있다. API별로 보려면 4절 표의 "지금 같은 일" 열을 본다.
 
 | 도구·스크립트 | 지금 하는 일 | 명령·환경 변수 | 결과 | 대응 API |
 |---|---|---|---|---|
-| `scripts/run-reach.sh` | 판정 도구 v0(`reach.jar` + `verdict.py`)를 실제 bootJar에 돌린다. Trivy·Grype 결과를 입력으로 받는다 | `bash scripts/run-reach.sh`. 이미 빌드한 jar는 `JAR=<bootJar 경로> bash scripts/run-reach.sh`. 경로는 환경 변수 `SDEV`, `REPO`, `IMG`, `EVAL`, `JAR`로 바꾼다 | `sca-eval/reach/verdicts.md`(보고서), `verdicts.json`, `reach-result.json` | API-01(실행), API-03(`verdicts.md` 머리말), API-04·API-05(`verdicts.json`) |
-| `tool/reach.jar` | bootJar를 읽어 호출 그래프(RTA)를 만들고, 취약 함수 도달 여부와 사실을 뽑는다. Java 21 + ASM | `run-reach.sh`가 실행한다. 고친 뒤 다시 빌드: `ASM_JAR=<asm-9.x.jar> bash tool/build.sh` | reach 결과(호출 그래프 판정, 사실) | API-01의 `L2` 단계, API-05의 `verdict.callgraph`와 사실 근거 |
-| `tool/verdict.py` | reach 결과, Trivy 결과, 규칙을 합쳐 CVE별로 판정하고 보고서를 만든다. 같은 CVE의 다른 사본은 별도 행, 사실 먼저, 경로는 후보로 표시한다. Python, 외부 라이브러리 없음 | `run-reach.sh`가 실행한다 | `verdicts.md`, `verdicts.json` | API-01의 `L2`(규칙 평가)와 `report` 단계, API-03·API-04·API-05 응답 모양의 원형, API-08 집계 |
+| `reach-analyzer/scripts/run-reach.sh` | 서비스 레포의 bootJar를 빌드하고 분석기와 `verdict.py`를 돌린다 | `REPO=<서비스 레포> OUT=<결과 폴더> bash reach-analyzer/scripts/run-reach.sh`. 선택: `JAR`(이미 빌드한 bootJar), `TRIVY_DIR`(Trivy JSON 폴더) | `verdicts.md`(보고서), `verdicts.json`, `reach-result.json` | API-01(실행), API-03(`verdicts.md` 머리말), API-04·API-05(`verdicts.json`) |
+| 분석기 `reach-analyzer.jar` | bootJar를 읽어 호출 그래프(RTA)를 만들고, 취약 함수 도달 여부와 사실을 뽑는다. Java 21 + ASM | 빌드: `./gradlew :reach-analyzer:jar`. 실행: `java -jar reach-analyzer/build/libs/reach-analyzer.jar --app <bootJar> --spec … --rules … --out reach-result.json` | reach 결과(호출 그래프 판정, 사실) | API-01의 `L2` 단계, API-05의 `verdict.callgraph`와 사실 근거 |
+| `reach-analyzer/verdict/verdict.py` | reach 결과, Trivy 결과, 규칙을 합쳐 CVE별로 판정하고 보고서를 만든다. 같은 CVE의 다른 사본은 별도 행, 사실 먼저, 경로는 후보로 표시한다. Python, 외부 라이브러리 없음 | `run-reach.sh`가 실행한다 | `verdicts.md`, `verdicts.json` | API-01의 `L2`(규칙 평가)와 `report` 단계, API-03·API-04·API-05 응답 모양의 원형, API-08 집계 |
+| `reach-analyzer/verdict/bundle.py` | SBOM, 스캐너 결과, 분석 결과, 판정을 API-13 결과 묶음으로 바꾼다(API-13 "결과 묶음 만들기"). Python, 외부 라이브러리 없음 | `python3 reach-analyzer/verdict/bundle.py --sbom … --trivy … [--grype …] [--reach … --verdicts …] --spec … --rules … --out bundle.json.gz` | `bundle.json.gz` | API-13 본문 |
 | `scripts/verify-laptop.sh` | 노트북 확인 항목(이미지 jar와 bootJar의 라이브러리 비교, bctls·bcpkix 포함 여부, 런타임 provider 순서, Syft·Trivy fs 집계)과 정답지용 소스 grep | `bash scripts/verify-laptop.sh` | `sca-eval/verify-report.txt` | API-06(사람 검토 근거). 도구가 보지 못하는 런타임 설정을 확인해 API-05 근거를 보강한다 |
-| `scripts/make_spec.py` | 조사 파일(`data/research/`)에서 `data/vuln-functions.json`을 만든다 | 실행 인자는 원자료에 없다(확인 필요) | `data/vuln-functions.json` | API-10 |
-| `test/run-tests.sh`(참고) | 샘플 앱 5개 회귀 테스트. 기대값 `test/expected.json`과 비교한다(44/44 일치) | `GRADLE_LIB=<gradle-8.14.x/lib> COMMONS_LOGGING_JAR=<commons-logging-1.3.x.jar> bash test/run-tests.sh` | 일치 여부 | API-09(`regressionApps`) |
+| `reach-analyzer/scripts/make_spec.py` | 조사 파일(`reach-analyzer/research/*.json`)에서 취약 함수 데이터를 만든다 | `python3 reach-analyzer/scripts/make_spec.py`(인자 없음) | `src/main/resources/reach/vuln-functions.json` | API-10 |
+| 샘플 앱 회귀 테스트(참고) | 샘플 앱의 판정을 기대값 `reach-analyzer/fixtures/expected.json`과 비교한다 | `./gradlew :reach-analyzer:fixtureTest`(bash·`python3` 필요, 라이브러리 jar는 Gradle이 받는다). `bundle.py` 단위 테스트는 `./gradlew :reach-analyzer:verdictTest` | 일치 여부 | API-09(`regressionApps`) |
 | `sca-eval/l1/` 스크립트(참고) | 배포 digest 재스캔과 10/7 결과 비교, ECR 최신 푸시 확인(읽기 전용). 파드 imageID는 사람이 control plane 노드에 SSM으로 접속해 `kubectl get pods -n reused`로 본다. 읽기 명령만 쓰지만 관리자 kubeconfig로 실행한다(읽기 전용 계정은 [계획]) | `bash scan.sh && bash compare.sh`, `bash aws-check.sh` | `sca-eval/l1/result.md` | API-07 |
-| 데이터·문서(참고) | `data/rules.json`: 수집할 사실과 CVE별 규칙. `docs/answer-key.md`: 정답지와 도구 비교 | - | - | API-09, API-06 |
+| 데이터·문서(참고) | `src/main/resources/reach/rules.json`: 수집할 사실과 CVE별 규칙. `reach-analyzer/docs/answer-key.md`: 정답지와 도구 비교 | - | - | API-09, API-06 |
 
 API-01의 `SBOM`·`MATCH` 단계는 지금 아래 스캐너 명령으로 따로 돌린다(노트북 기준, 종합 정리 8절).
 
