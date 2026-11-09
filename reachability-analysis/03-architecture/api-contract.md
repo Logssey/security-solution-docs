@@ -46,7 +46,6 @@
 | OCSF 클래스·필드 매핑 | 팀 스키마 합의 필요(5절) | 팀 합의(인프라 담당) |
 | 역할 분리 | MVP는 대시보드 공통의 `ADMIN` 하나로 조회·스캔 요청·사람 검토를 모두 한다(2-2). 조회 전용, 검토자, 게이트 예외 승인자를 나눌지는 대시보드 공통 역할 체계와 함께 정한다 | 팀 합의, 대시보드 ADR |
 | L1 수집 결과를 올리는 내부 API | 클러스터 안 수집기(ARD 7-3 선택지 A)가 k8s 서비스 계정 토큰으로 워크로드 조회 결과를 기록하는 내부 API(`PUT /internal/v1/reach/l1/workloads`)는 [계획]이다. 본문과 처리 규칙은 수동 업로드(API-07 아래 "L1 수집 결과 올리기")와 같고 인증만 다르다 | ARD Q-03 |
-| 취약 함수 클래스 이름 표기 | 데이터 파일이 패키지를 포함한 이름을 쓰는지 확인 필요. 이 문서 예시는 원자료에 적힌 짧은 이름이다 | 규칙명세서 |
 | `make_spec.py` 실행 인자 | 원자료에 없다. 확인 필요 | 8절 |
 | Jackson 2 사본 7행 | 제안(확정 대기). 89407·89425는 도달 불가, 나머지 5개는 도달 불가(발동 조건 없음)로 제안했다. 사람이 확정하기 전까지 도구 판정은 `NOT_ANALYZED`, 검토 상태는 `UNREVIEWED`이고, 제안은 `review.proposal`로 준다(3-10). 상세는 규칙명세서 9-1 | 사람 검토(FR-08) |
 | 게이트 예외 기록 | 게이트에 걸린 PR을 통과시키는 예외(사유, 만료일, 승인한 사람)를 어디에 어떤 형식으로 남길지 정하지 않았다. 검토 기록(3-10)을 넓힐지 별도 API를 둘지 정한다. 규칙은 6-2와 PRD FR-11을 따른다 | ARD Q-07 |
@@ -459,19 +458,23 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 
 | 이름 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `id` | integer | 예 | 취약 함수 ID |
+| `id` | integer | 예 | 취약 함수 ID. 데이터 파일 순서로 매긴다. 같은 데이터 버전(API-10 `version`·`generated`) 안에서만 같은 함수를 가리킨다 |
 | `cve` | string | 예 | CVE ID |
-| `package` | string | 예 | purl(버전 제외) |
-| `class` | string | 예 | 클래스 이름(표기 형식은 1-5에서 확인 필요) |
+| `package` | string | 예 | purl(버전 제외). 데이터의 Maven 좌표 `group:artifact`를 `pkg:maven/group/artifact`로 바꾼다 |
+| `class` | string | 예 | 패키지를 포함한 클래스 이름(예: `org.bouncycastle.asn1.LazyEncodedSequence`). 데이터 파일 표기 그대로다 |
 | `method` | string | 예 | 메서드 이름. 생성자는 `<init>` |
 | `descriptor` | string | 아니요 | JVM 메서드 시그니처 |
-| `fixedVersion` | string | 아니요 | 수정 버전 |
-| `fixCommits` | string 배열 | `provenance=FIX_COMMIT_DIFF`일 때 | 근거로 쓴 수정 커밋. `VERSION_DIFF`여도 수정 커밋과 대조했으면 준다(예: Tomcat) |
-| `provenance` | enum | 예 | 정한 방법. `VERSION_DIFF`(취약 버전과 수정 버전의 소스 diff에서 바뀐 메서드) / `FIX_COMMIT_DIFF`(수정 커밋 diff에서 바뀐 메서드) |
-| `verifiedWith` | string | 아니요 | 확인 방법. 예: 대상 버전 jar를 `javap`로 확인 |
-| `candidateSource` | enum | 아니요 | 후보를 낸 곳: `MANUAL` / `PROSPECTOR` / `AI`. AI는 후보만 내고 사람이 확인한다(NFR-04) |
-| `excluded` | boolean | 아니요 | true면 일부러 뺀 메서드다. `include=excluded`일 때만 목록에 나온다 |
-| `exclusionReason` | string | `excluded`가 true일 때 | 뺀 이유 |
+| `fixedVersions` | string 배열 | 예 | 수정 버전 전부(릴리스 줄마다 하나, 버전 순). 예: Tomcat `9.0.121`, `10.1.59`, `11.0.25`. 하나만 고르지 않는다(설치 버전은 대상마다 달라서다) |
+| `fixCommits` | string 배열 | 예 | 출처 중 GitHub 수정 커밋을 `owner/repo@앞 8자리`로 줄인 것. 없으면 빈 배열 |
+| `confidence` | string | 아니요 | 데이터에 적힌 확신도(`high` / `medium`) |
+| `note` | string | 아니요 | 데이터에 적힌 메모 |
+| `provenance` | enum | 아니요 [계획] | 정한 방법. `VERSION_DIFF`(취약 버전과 수정 버전의 소스 diff에서 바뀐 메서드) / `FIX_COMMIT_DIFF`(수정 커밋 diff에서 바뀐 메서드) |
+| `verifiedWith` | string | 아니요 [계획] | 확인 방법. 예: 대상 버전 jar를 `javap`로 확인 |
+| `candidateSource` | enum | 아니요 [계획] | 후보를 낸 곳: `MANUAL` / `PROSPECTOR` / `AI`. AI는 후보만 내고 사람이 확인한다(NFR-04) |
+| `excluded` | boolean | 아니요 [계획] | true면 일부러 뺀 메서드다. `include=excluded`일 때만 목록에 나온다 |
+| `exclusionReason` | string | `excluded`가 true일 때 [계획] | 뺀 이유 |
+
+- [계획] `provenance`, `verifiedWith`, `candidateSource`, `excluded`, `exclusionReason`은 지금 데이터 파일(`data/vuln-functions.json`, reach-spec/v0)에 없어 주지 않는다. 생성 스크립트가 이 칸을 쓰게 되면 준다. 그때까지 정한 방법은 아래 메모를 본다.
 
 - 취약 함수 데이터는 조사 파일에서 생성 스크립트(`make_spec.py`)로 만든다(FR-09).
 - PoC의 CVE 14개: 처음 10개는 `VERSION_DIFF`다(Tomcat 3개는 수정 커밋을 찾아 태그 diff와 대조했다). CVE-2026-13506과 MEDIUM 3개(0636, 19032, 83557)는 `FIX_COMMIT_DIFF`다. 모두 `javap`로 시그니처를 확인했다.
@@ -1469,69 +1472,62 @@ Content-Type: application/json; charset=utf-8
 |---|---|---|---|
 | `cve` | string 목록 | 아니요 | CVE ID |
 | `package` | string | 아니요 | purl 앞부분 일치 |
-| `sort` | string | 아니요 | 기본 `cve,class,method`. 허용: `cve`, `class`, `method` |
-| `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`, `excluded`를 받는다 |
+| `sort` | string | 아니요 | 하나만 고른다. 허용: `cve`(기본), `class`, `method`. 고른 칸이 먼저이고 나머지는 `cve` → `class` → `method` 순. `cve`는 연도·번호 숫자 순 |
+| `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`, `excluded`를 받는다. `excluded`는 지금 데이터에 뺀 메서드 기록이 없어 결과가 같다 |
 
-요청 예시: `GET /api/v1/reach/vuln-functions?cve=CVE-2026-13506&include=excluded`
+요청 예시: `GET /api/v1/reach/vuln-functions?cve=CVE-2026-13506`
 
-응답 예시(200). CVE-2026-13506(bcprov, HIGH)의 실제 조사 결과다.
+응답 예시(200). CVE-2026-13506(bcprov, HIGH)의 실제 데이터다. `version`·`generated`는 이 응답을 만든 데이터 파일의 버전과 생성 날짜다. 스캔이 쓴 데이터 버전(API-03 `tools.vulnFunctionsVersion`)과 다를 수 있다.
 
 ```json
 {
   "items": [
     {
-      "id": 11,
+      "id": 21,
       "cve": "CVE-2026-13506",
       "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "LazyEncodedSequence",
-      "method": "force",
-      "fixedVersion": "1.85",
-      "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "verifiedWith": "1.81 jar를 javap로 확인"
-    },
-    {
-      "id": 12,
-      "cve": "CVE-2026-13506",
-      "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "LazyEncodedSequence",
-      "method": "getObjects",
-      "fixedVersion": "1.85",
-      "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "verifiedWith": "1.81 jar를 javap로 확인"
-    },
-    {
-      "id": 13,
-      "cve": "CVE-2026-13506",
-      "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "LazyConstructionEnumeration",
+      "class": "org.bouncycastle.asn1.LazyConstructionEnumeration",
       "method": "<init>",
-      "fixedVersion": "1.85",
+      "descriptor": "([B)V",
+      "fixedVersions": ["1.85"],
       "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "verifiedWith": "1.81 jar를 javap로 확인"
+      "confidence": "high"
     },
     {
-      "id": 14,
+      "id": 19,
       "cve": "CVE-2026-13506",
       "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
-      "class": "ASN1InputStream",
-      "method": "buildObject",
+      "class": "org.bouncycastle.asn1.LazyEncodedSequence",
+      "method": "force",
+      "descriptor": "()V",
+      "fixedVersions": ["1.85"],
       "fixCommits": ["bcgit/bc-java@77454da9"],
-      "provenance": "FIX_COMMIT_DIFF",
-      "excluded": true,
-      "exclusionReason": "일반 파싱과 공유하는 메서드라 넣으면 오탐이 난다"
+      "confidence": "high"
+    },
+    {
+      "id": 20,
+      "cve": "CVE-2026-13506",
+      "package": "pkg:maven/org.bouncycastle/bcprov-jdk18on",
+      "class": "org.bouncycastle.asn1.LazyEncodedSequence",
+      "method": "getObjects",
+      "descriptor": "()Ljava/util/Enumeration;",
+      "fixedVersions": ["1.85"],
+      "fixCommits": ["bcgit/bc-java@77454da9"],
+      "confidence": "high"
     }
   ],
   "nextCursor": null,
-  "hasNext": false
+  "hasNext": false,
+  "version": "v0",
+  "generated": "2026-10-10"
 }
 ```
 
+- 조사 때 일반 파싱과 공유해 뺀 `ASN1InputStream.buildObject`(오탐 방지)는 데이터 파일에 뺀 기록(`excluded`)이 없어 지금은 나오지 않는다 [계획].
+- 커서는 필터와 데이터 버전에 묶인다. 커서를 넣은 채 필터를 바꾸거나 데이터 파일이 바뀐 뒤의 커서는 400이다.
 - 이 CVE는 Argon2 클래스 단위 폐포에 취약 클래스가 들어 있어, 메서드 단위 호출 그래프로만 배제된다. 실제 앱은 `UNREACHABLE`, 사람 판정은 잠정이다.
 
-**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: `INVALID_INPUT`(`cve` 형식, `sort`·`include`·`size`·`cursor` 값), `UNAUTHENTICATED`, `FORBIDDEN`, `RATE_LIMITED`
 
 ### API-11 공통 Finding(OCSF) 내보내기
 
