@@ -307,6 +307,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | `F-dto.floating.tokens` | tokens 범위(6-1)의 타입에 실수형 필드가 있다 | tokens 출발점에서 필드 타입을 따라간다. 출발점 목록은 `dto_type_tokens`에 남는다 | RULE-CVE-2026-89407 미확인 조건 |
 | `F-dto.floating.any` | 앱 클래스 전체에 실수형 필드가 있다 | 앱 클래스 전체 | RULE-CVE-2026-89407 `info`(참고). 12절 개선 전에는 미확인 조건이었다 |
 | `F-jackson.polymorphicSerializer` | `@class`로 타입을 지정할 수 있는 직렬화기(`GenericJackson(2)JsonRedisSerializer`)를 쓴다 | 앱 코드에서 사용 여부 | RULE-CVE-2026-89407 미확인 조건. default typing이 이 사실에 들어가는지, 다른 규칙에서도 쓰는지는 원본(`rules.json`) 확인 필요 |
+| `F-jar.springBoot4` | bootJar에 Spring Boot 4 jar(`spring-boot-4.x.y.jar`)가 있다 | 라이브러리 jar 파일 이름(정규식 `^spring-boot-4\.[0-9]+\.[0-9]+`) | RULE-CVE-2026-65182·65905·68525 미확인 조건(`!F-jar.springBoot4`, 8-1) |
 | `F-jsonIdentityInfo.any` | 앱 코드에 `@JsonIdentityInfo`가 있다(mix-in 클래스에 붙은 것 포함) | 앱 코드의 어노테이션. 범위가 앱 전체인지는 이름으로 본 추정이다. 원본(`Facts.java`) 확인 필요 | RULE-CVE-2026-91777 미확인 조건 |
 
 "실수형"에 드는 타입 목록은 원본(`Facts.java`) 확인 필요. 원자료에 나온 것은 `double`, `Double`, `BigDecimal`이다. 공지는 89407의 대상 타입으로 `BigDecimal`, `BigInteger`, `Double`, `Float`를 적는다.
@@ -385,6 +386,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 ### 8-1. Tomcat (`org.apache.tomcat.embed:tomcat-embed-core` 11.0.24)
 
 - 세 CVE 모두 컨테이너가 실행한다. Spring Boot 내장 Tomcat은 기본 인증기 때문에 `RealmBase.findSecurityConstraints`를 요청마다 실행하지만, 제약 목록이 비어 있어 취약 구간에 들어가지 않는다. 그래서 "앱이 제약·인증기를 설정했나"를 보는 `RULE`로 판정한다(5-1).
+- "내장 Tomcat이 제약·인증기를 만들지 않는다"는 근거는 Spring Boot 4.0.8·4.1.1 소스로만 확인했다. 그래서 세 규칙 모두 Spring Boot 4가 아니면(`!F-jar.springBoot4`) 미확인 조건에 걸려 `UNREACHABLE`을 내지 않는다. Spring Boot 2·3, Spring Boot 없이 Tomcat을 쓰는 앱이 여기에 든다(GR-01, 거짓 `UNREACHABLE` 금지). 다른 버전을 소스로 확인하면 조건을 넓힌다. 공개 취약 앱(log4shell-vulnerable-app, Spring Boot 2.6.1 + Tomcat 9.0.55)에서 이 조건이 없을 때 세 CVE가 `UNREACHABLE`로 나온 것을 보고 더했다(2026-11-09).
 - Trivy 수정 버전은 11.0.25, 10.1.58, 9.0.121이다. 10.1.58은 릴리스되지 않아 10.1.x의 수정 버전은 10.1.59다(기록 3절). 우리 앱은 11.0.25다.
 
 #### RULE-CVE-2026-65182
@@ -397,11 +399,11 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 발동 조건 | 앱이 컨테이너 보안 제약을 추가하고, 한 컬렉션 안에서 긴 패턴이 짧은 패턴보다 먼저 온다. 호출 주체는 컨테이너 |
 | reachable 조건 | 없음. 설계상 최대 판정이 `UNKNOWN`이다(실험 A) |
 | unreachable 조건 | 앱 코드에 컨테이너 보안 제약 설정(`SecurityConstraint`, `LoginConfig`, `@ServletSecurity`, `addConstraint` 등)이 없다. 정확한 조건식은 원본(`rules.json`) 확인 필요. 괄호 안 목록은 정답지(사람 판정)의 근거다 |
-| unknown 조건 | 컨테이너 보안 제약을 설정한다(실험 A에서 `UNKNOWN`). 정확한 조건식은 원본(`rules.json`) 확인 필요 |
+| unknown 조건 | 컨테이너 보안 제약을 설정한다(실험 A에서 `UNKNOWN`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`, 8-1). 정확한 조건식은 원본(`rules.json`) 확인 필요 |
 | 방식 | `RULE` |
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. 컨테이너 보안 설정이 없고, Spring Boot는 제약을 만들지 않는다(verify 6절) |
-| 대조군 | 실험 A(직접 주입) → `UNKNOWN`(설계상 최대) |
+| 대조군 | 실험 A(직접 주입) → `UNKNOWN`(설계상 최대). app-boot2(Spring Boot 2) → `UNKNOWN` |
 
 #### RULE-CVE-2026-65905
 
@@ -413,11 +415,11 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 발동 조건 | Tomcat DIGEST 인증기를 설치한다. 호출 주체는 컨테이너 |
 | reachable 조건 | 앱 코드가 DIGEST 인증기를 만든다(`new DigestAuthenticator`, 실험 A) |
 | unreachable 조건 | `DigestAuthenticator` 사용이 없다(컨테이너 DIGEST 인증 미설정). Spring Boot는 `web.xml`을 읽지 않는다. 정확한 조건식은 원본(`rules.json`) 확인 필요. "Spring Boot는 …" 문장은 정답지(사람 판정)의 근거다 |
-| unknown 조건 | 원본(`rules.json`) 확인 필요 |
+| unknown 조건 | Spring Boot 4가 아니다(`!F-jar.springBoot4`, 8-1). 그 밖의 조건식은 원본(`rules.json`) 확인 필요 |
 | 방식 | `RULE` |
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. `DigestAuthenticator` 사용 없음(verify 6절) |
-| 대조군 | app-positive(Tomcat DIGEST 인증), 실험 A → `REACHABLE` |
+| 대조군 | app-positive(Tomcat DIGEST 인증), 실험 A → `REACHABLE`. app-boot2(Spring Boot 2) → `UNKNOWN` |
 
 #### RULE-CVE-2026-68525
 
@@ -429,11 +431,11 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 발동 조건 | Tomcat FORM 인증기와 메서드별 제약. 호출 주체는 컨테이너 |
 | reachable 조건 | FORM 인증기와 메서드별 제약을 함께 설정한다(`new FormAuthenticator` + `addMethod`, 실험 A) |
 | unreachable 조건 | `FormAuthenticator` 사용이 없다(FORM 인증 `LoginConfig` 미설정). Spring Security의 `formLogin`은 별개 구현이다. 정확한 조건식은 원본(`rules.json`) 확인 필요. `formLogin` 문장은 정답지(사람 판정)의 근거다 |
-| unknown 조건 | 원본(`rules.json`) 확인 필요 |
+| unknown 조건 | Spring Boot 4가 아니다(`!F-jar.springBoot4`, 8-1). 그 밖의 조건식은 원본(`rules.json`) 확인 필요 |
 | 방식 | `RULE` |
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. `FormAuthenticator` 사용 없음(verify 6절) |
-| 대조군 | app-positive(Tomcat FORM 인증), 실험 A → `REACHABLE` |
+| 대조군 | app-positive(Tomcat FORM 인증), 실험 A → `REACHABLE`. app-boot2(Spring Boot 2) → `UNKNOWN` |
 
 실험 B에서 Tomcat 3개는 Authenticator 하위 클래스, `@ServletSecurity`, `HttpMethodConstraintElement`로 우회해 넣었고 모두 기대대로 나왔다. CVE별 대응은 원본(`rules.json`) 확인 필요.
 
