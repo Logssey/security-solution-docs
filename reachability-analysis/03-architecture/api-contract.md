@@ -180,7 +180,7 @@
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드한 결과 묶음이 한도를 넘음 | `limitBytes` | API-13 | Reach 추가(IaC와 같은 이름) |
 | `RATE_LIMITED` | 429 | 속도 제한을 넘음 | `retryAfterSeconds` | 전체 | 공통 |
 | `INTERNAL_ERROR` | 500 | 서버 오류 | - | 전체 | 공통 |
-| `UNAVAILABLE` | 503 | 의존 서비스를 잠시 쓸 수 없음(GitHub 워크플로 실행 요청 실패, 워크로드 조회 기록 없음 등) | `dependency` | API-01, API-07, API-12 | Reach 추가(IaC와 같은 이름) |
+| `UNAVAILABLE` | 503 | 의존 서비스를 잠시 쓸 수 없음(GitHub 워크플로 실행 요청 실패 등) | `dependency` | API-01, API-12 | Reach 추가(IaC와 같은 이름) |
 | `BUILD_FAILED` | - | 레포 대상의 빌드 실패. HTTP 응답이 아니라 스캔 실패 사유(`failure.code`)로만 쓴다 | `stage` | API-03 | Reach 추가 |
 | `ANALYSIS_FAILED` | - | L2 분석 실패. 스캔 실패 사유로만 쓴다 | `stage` | API-03 | Reach 추가 |
 
@@ -409,24 +409,26 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 
 | 이름 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `id` | integer | 예 | 워크로드 ID |
+| `id` | integer | 예 | 항목 ID. 업로드할 때마다 새로 매겨진다(API-07) |
+| `cluster` | string | 예 | 예: `reused-prod` |
 | `namespace` | string | 예 | 예: `reused` |
 | `kind` | string | 예 | 예: `Deployment` |
 | `name` | string | 예 | 예: `reused-api` |
-| `app` | enum | 아니요 | `API` / `WEB` / `CHAT` |
-| `image` | object | 예 | `repository`, `digest`(파드 imageID에서 얻은 값), `revision`(확인한 경우) |
-| `replicas` | object | 예 | `ready`(준비된 파드 수), `desired`(디플로이먼트가 원하는 파드 수. 디플로이먼트를 조회했을 때만 준다) |
-| `pods` | object 배열 | 아니요 | `include=pods`일 때. `name`, `imageId`, `ready` |
+| `container` | string | 예 | 컨테이너 이름. 예: `api` |
+| `app` | enum | 아니요 | `API` / `WEB` / `CHAT`. 같은 digest나 같은 이미지 저장소의 이미지 대상이 없으면 `null`(API-07) |
+| `image` | object | 예 | `repository`, `digest`(파드 imageID에서 얻은 값), `revision`(이미지 태그. 태그가 없으면 주지 않는다) |
+| `replicas` | object | 예 | `ready`(준비된 파드 수), `desired`(디플로이먼트가 원하는 파드 수. 디플로이먼트를 조회했을 때만 준다 [계획]) |
+| `pods` | object 배열 | 아니요 | `include=pods`일 때. `name`, `imageId`, `ready` [계획] |
 | `deployment` | enum | 예 | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
-| `scanMatch` | object | 예 | 스캔 결과와의 연결. `status`(`MATCH` / `MISMATCH` / `NO_SCAN`), `scanId`, `matchedBy`(`DIGEST` / `SOURCE_TREE`), `deployedRevision`, `analyzedCommit`, `sourceTreeEqual`. `NO_SCAN`이면 `status`만 준다 |
-| `registered` | boolean | 예 | 대상(서비스) 등록 목록(PRD FR-15)에 있는 워크로드면 true, 없으면 false다. false면 화면은 "미등록"으로 보인다(SCR-04) [계획] |
+| `scanMatch` | object | 예 | 스캔 결과와의 연결. `status`(`MATCH` / `MISMATCH` / `NO_SCAN`), `scanId`, `matchedBy`(`DIGEST`. `SOURCE_TREE`는 [계획]). `NO_SCAN`이면 `status`만 준다. `deployedRevision`, `analyzedCommit`, `sourceTreeEqual`은 [계획] |
+| `registered` | boolean | 아니요 | 대상(서비스) 등록 목록(PRD FR-15)에 있는 워크로드면 true, 없으면 false다. false면 화면은 "미등록"으로 보인다(SCR-04) [계획] |
 | `service` | string | 아니요 | 이 워크로드를 묶은 등록 서비스 이름(예: `API`). `registered`가 true일 때만 준다 [계획] |
 | `observedAt` | date-time | 예 | 클러스터를 조회한 시각 |
 | `source` | enum | 예 | `MANUAL`(사람이 kubectl로 조회) / `CLUSTER_READER`(읽기 전용 자동 조회, [계획]) |
 
 - 실행 중인 이미지는 파드의 `imageID`로 정한다. gitops 태그만으로는 확정하지 못한다(태그 MUTABLE, `pullPolicy: IfNotPresent`).
 - 수집 규칙: phase가 `Running`인 파드만 본다. digest는 `status.containerStatuses[].imageID`의 `@sha256:` 뒤 값이고, 아직 이미지를 받지 않아 digest가 없는 컨테이너는 뺀다. 이미지 이름(`image.repository`의 원본)은 파드 spec(`spec.containers[].image`)에서 컨테이너 이름으로 찾는다. `status.containerStatuses[].image`는 노드가 그 이미지에 붙여 둔 이름 중 사전순 첫 번째라 spec과 다를 수 있다. 워크로드 안에서 (컨테이너 이름, digest)마다 한 항목이고, `replicas.ready`는 그 digest를 돌리는 Ready 파드 수다. 롤아웃 중이면 같은 워크로드에 digest별 항목이 둘 생긴다.
-- `scanMatch.status`: `MATCH`는 이 digest를 스캔했거나(`matchedBy: DIGEST`), 배포 커밋과 소스 트리가 같은 커밋을 스캔한 경우(`matchedBy: SOURCE_TREE`)다. `MISMATCH`는 같은 `app`의 스캔은 있지만 digest도 소스 트리도 다른 경우다. 이때 `scanId`는 그 앱의 최신 `SUCCEEDED` 스캔이고, 그 판정을 배포물에 그대로 쓸 수 없다. `NO_SCAN`은 같은 `app`의 스캔이 없는 경우다.
+- `scanMatch.status`: `MATCH`는 이 digest를 스캔했거나(`matchedBy: DIGEST`), 배포 커밋과 소스 트리가 같은 커밋을 스캔한 경우(`matchedBy: SOURCE_TREE`)다. `MISMATCH`는 같은 `app`의 스캔은 있지만 digest도 소스 트리도 다른 경우다. 이때 `scanId`는 그 앱의 최신 `SUCCEEDED` 스캔이고, 그 판정을 배포물에 그대로 쓸 수 없다. `NO_SCAN`은 같은 `app`의 스캔이 없는 경우다. 지금 구현은 digest만 비교한다(API-07).
 - 자동 조회에는 클러스터 읽기 전용 권한이 필요하다(NFR-05). 지금은 클러스터 API 서버가 SSM을 거쳐야 닿아서 사람이 조회한다.
 - 클러스터에서 본 워크로드는 등록 여부와 관계없이 모두 준다. 대상(서비스) 등록 목록(PRD FR-15)에 없으면 `registered: false`다. 등록하지 않은 서비스가 감시에서 조용히 빠지지 않게 하려는 것이다. 등록은 레포에 커밋한 설정 파일로 하고, 등록 API는 확장 단계라 이 초안에 없다(1-2).
 
@@ -561,7 +563,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | API-04 | `GET /api/v1/reach/findings` | `ADMIN` | Finding 목록 | FR-07, FR-12 | SCR-02 | `verdicts.json` |
 | API-05 | `GET /api/v1/reach/findings/{findingId}` | `ADMIN` | Finding 상세 | FR-05, FR-06, FR-07 | SCR-03 | `verdicts.json` 한 항목 |
 | API-06 | `PATCH /api/v1/reach/findings/{findingId}/review` | `ADMIN` | 사람 검토 기록 | FR-08 | SCR-03 | `answer-key.md` [부분] |
-| API-07 | `GET /api/v1/reach/workloads` | `ADMIN` | 실행 중 워크로드와 digest, 스캔 연결, 등록 여부 | FR-04, FR-15 | SCR-04 | l1 스크립트 + 수동 kubectl [부분] |
+| API-07 | `GET /api/v1/reach/workloads` | `ADMIN` | 마지막 조회의 워크로드와 digest, 스캔 연결. 등록 여부는 [계획] | FR-04, FR-15 | SCR-04 | 수동 kubectl 결과 업로드 |
 | (API-07 아래) | `PUT /api/v1/reach/l1/workloads` | `ADMIN` | L1 수집 결과 올리기(수동). 수집기용 내부 경로는 [계획](1-5) | FR-04 | - | 사람이 kubectl로 조회한 결과 |
 | API-08 | `GET /api/v1/reach/summary` | `ADMIN` | 대시보드 요약 | FR-12 | SCR-01 | 없음 |
 | API-09 | `GET /api/v1/reach/rules`, `GET /api/v1/reach/rules/{ruleId}` | `ADMIN` | 규칙 조회 | FR-06 | SCR-06 | `data/rules.json` |
@@ -1196,75 +1198,66 @@ Content-Type: application/json; charset=utf-8
 |---|---|
 | 메서드·경로 | `GET /api/v1/reach/workloads` |
 | 권한 | `ADMIN`(대시보드 세션) |
-| 설명 | 실행 중인 워크로드와 그 이미지 digest, 같은 digest를 스캔한 결과와의 연결을 준다(L1). 클러스터를 조회하지 못하면 마지막 조회 결과를 주고 `observedAt`으로 시점을 보인다. 조회 기록이 전혀 없으면 503 `UNAVAILABLE`이다 |
-| 관련 | FR-04, FR-15 · SCR-04 |
-| 지금 같은 일 | `sca-eval/l1/` 스크립트 + 수동 `kubectl get pods -n reused` [부분] |
+| 설명 | 마지막으로 조회한 워크로드와 그 이미지 digest, 같은 digest를 스캔한 결과와의 연결을 준다(L1). 클러스터를 직접 조회하지 않고, 저장된 조회 결과(수동 업로드, 수집기는 [계획])를 준다. 조회 시점은 `observations`와 각 항목의 `observedAt`으로 보인다 |
+| 관련 | FR-04 · SCR-04 |
+| 지금 같은 일 | 수동 `kubectl get pods -n reused -o json` 결과를 "L1 수집 결과 올리기"로 올린 것 |
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `namespace` | string 목록 | 아니요 | 예: `reused` |
-| `app` | enum 목록 | 아니요 | `API`, `WEB`, `CHAT` |
-| `digest` | string | 아니요 | 이미지 digest 일치 |
-| `deployment` | enum 목록 | 아니요 | 배포 상태 |
-| `registered` | boolean | 아니요 | true면 등록된 워크로드만, false면 미등록 워크로드만 준다(PRD FR-15) [계획] |
-| `sort` | string | 아니요 | 기본 `namespace,name`. 허용: `namespace`, `name`, `observedAt` |
-| `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`, `pods`를 받는다 |
+| `namespace` | string 목록 | 아니요 | 예: `reused`. 허용 목록 밖 값은 400이 아니라 빈 결과다 |
+| `app` | enum 목록 | 아니요 | `API`, `WEB`, `CHAT`. `app`을 정하지 못한 항목(아래)은 이 필터를 걸면 빠진다 |
+| `digest` | string | 아니요 | 이미지 digest 일치. `^sha256:[0-9a-f]{64}$`가 아니면 400 |
+| `deployment` | enum 목록 | 아니요 | `RUNNING`, `NOT_RUNNING`, `UNKNOWN`. 항목은 `NOT_RUNNING`이 되지 않으므로 `NOT_RUNNING`만 걸면 빈 결과다 |
+| `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
+
+- 순서는 `namespace`, `name`, `kind`, 컨테이너 이름, `image.digest` 오름차순으로 고정이고 `sort`는 받지 않는다. 화면의 묶음 순서(불일치 → 스캔 없음 → 일치)는 화면이 정한다.
+- 허용한 (클러스터, 네임스페이스)의 조회만 준다(3-3과 같은 목록, 지금은 `reused-prod` · `reused`).
 
 요청 예시: `GET /api/v1/reach/workloads?namespace=reused`
 
-응답 예시(200). reused-api는 PoC L1 결과다. web·chat은 같은 조회에서 본 digest이고, 아직 Reach 스캔이 없어 `scanMatch.status`가 `NO_SCAN`이다.
+응답 예시(200). reused-api는 스캔한 digest가 그대로 돌고 있다. reused-chat은 아직 Reach 스캔이 없다. reused-web은 줄였다.
 
 ```json
 {
+  "observations": [
+    { "cluster": "reused-prod", "namespace": "reused", "observedAt": "2026-11-07T03:17:05Z", "source": "MANUAL", "fresh": true }
+  ],
   "items": [
     {
-      "id": 1,
+      "id": 41,
+      "cluster": "reused-prod",
       "namespace": "reused",
       "kind": "Deployment",
       "name": "reused-api",
+      "container": "api",
       "app": "API",
       "image": {
         "repository": "logssey/reused-api",
-        "digest": "sha256:a6ffffef…",
-        "revision": "bb4639b"
+        "digest": "sha256:a6ffffef7fc1f9e876f02884ff708d90cb223d8ece7ddab7b8690441d10529d5",
+        "revision": "bb4639b7e45c21d5ced03a5f541b1982093e0865"
       },
       "replicas": { "ready": 2 },
       "deployment": "RUNNING",
-      "scanMatch": {
-        "status": "MATCH",
-        "scanId": 1,
-        "matchedBy": "DIGEST",
-        "deployedRevision": "bb4639b",
-        "analyzedCommit": "6583020",
-        "sourceTreeEqual": true
-      },
-      "observedAt": "2026-10-11T01:00:30Z",
+      "scanMatch": { "status": "MATCH", "scanId": 1, "matchedBy": "DIGEST" },
+      "observedAt": "2026-11-07T03:17:05Z",
       "source": "MANUAL"
     },
     {
-      "id": 2,
+      "id": 42,
+      "cluster": "reused-prod",
       "namespace": "reused",
       "kind": "Deployment",
       "name": "reused-chat",
-      "app": "CHAT",
-      "image": { "repository": "logssey/reused-chat", "digest": "sha256:4b57e13c…" },
+      "container": "chat",
+      "app": null,
+      "image": {
+        "repository": "logssey/reused-chat",
+        "digest": "sha256:4b57e13cfad629d039e76b4d865d0c6ca1a4d00d352ddd90f2216364d1be99ee"
+      },
       "replicas": { "ready": 2 },
       "deployment": "RUNNING",
       "scanMatch": { "status": "NO_SCAN" },
-      "observedAt": "2026-10-11T01:00:30Z",
-      "source": "MANUAL"
-    },
-    {
-      "id": 3,
-      "namespace": "reused",
-      "kind": "Deployment",
-      "name": "reused-web",
-      "app": "WEB",
-      "image": { "repository": "logssey/reused-web", "digest": "sha256:a89a79ed…" },
-      "replicas": { "ready": 2 },
-      "deployment": "RUNNING",
-      "scanMatch": { "status": "NO_SCAN" },
-      "observedAt": "2026-10-11T01:00:30Z",
+      "observedAt": "2026-11-07T03:17:05Z",
       "source": "MANUAL"
     }
   ],
@@ -1273,12 +1266,30 @@ Content-Type: application/json; charset=utf-8
 }
 ```
 
-- reused-api의 연결 근거: 운영 파드 2개가 모두 `a6ffffef…`다. 이미지 revision 라벨 `bb4639b`는 분석 커밋 `6583020`과 소스 트리 해시가 같다. 배포 digest 재스캔 23행이 10/7 스캔과 모두 같다.
-- PoC L1은 파드 목록(`kubectl get pods`)만 조회했다. 그래서 예시에 `replicas.desired`가 없고, `ready`는 조회한 파드 수(앱마다 2개)다.
-- `source: MANUAL`은 지금 방식(사람이 SSM으로 접속해 kubectl로 조회)이다. 읽기 명령만 썼지만 관리자 kubeconfig로 실행했다. 읽기 전용 계정과 자동 조회(`CLUSTER_READER`)는 [계획]이다.
-- `registered`·`service`는 [계획]이라 예시에 넣지 않았다. 서비스 등록 설정 파일(PRD FR-15)이 아직 없다.
+**`observations`** (페이지와 관계없이 매번 준다. `namespace` 필터만 적용한다)
 
-**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `UNAVAILABLE`, `RATE_LIMITED`
+- 허용한 네임스페이스 중 조회 기록이 있는 것마다 하나다. 조회 기록이 전혀 없으면 빈 배열이고 `items`도 빈 배열이다(503이 아니라 200).
+- 조회는 했는데 파드가 없는 네임스페이스는 `observations`에만 있고 `items`에는 없다. 화면은 이것으로 "조회 기록 없음"과 "실행 중인 워크로드 없음"을 구분한다.
+- `fresh`는 `observedAt`이 48시간 안이면 true다(3-3 신선도와 같은 기준).
+
+**항목** (3-6 Workload)
+
+- 한 항목은 워크로드 안의 (컨테이너, digest) 하나다. 롤아웃 중이면 같은 워크로드에 digest별 항목이 둘이다. `replicas.ready`는 그 digest를 돌리는 Ready 파드 수다.
+- `id`는 업로드할 때마다 새로 매겨진다. 업로드를 넘어 같은 항목을 가리키려면 (`cluster`, `namespace`, `kind`, `name`, `container`, `image.digest`)를 쓴다.
+- `image.repository`: 파드 spec의 이미지에서 레지스트리 주소(첫 `/` 앞이 `.`·`:`를 포함하거나 `localhost`인 경우)와 `:태그`·`@digest`를 뺀 값. 예: `794386801311.dkr.ecr.ap-northeast-1.amazonaws.com/logssey/reused-api:bb4639b…` → `logssey/reused-api`.
+- `image.revision`: 이미지의 태그. 태그가 없으면 주지 않는다. Re:Used 차트는 태그로 전체 커밋 SHA를 쓴다. 태그는 바뀔 수 있어 참고 값이고, 실행 이미지는 `image.digest`로 정한다.
+- `app`: 이 digest의 이미지 대상이 있으면 그 `app`, 없으면 `image.repository`가 같은 이미지 대상(API-01로 등록된 대상)의 `app`이다. 여럿이면 가장 최근에 등록된 대상을 따른다. 둘 다 없으면 `null`이다.
+- `deployment`: 그 항목의 조회가 신선하면(`fresh`) `RUNNING`, 아니면 `UNKNOWN`이다. 실행 중인 파드에서 본 항목이라 `NOT_RUNNING`은 없다. 준비 수가 0인 항목도 `RUNNING`이다(3-6, 팀 결정 대기).
+- `scanMatch`:
+  - `MATCH`: 이 digest의 이미지 대상에 PR이 아닌 `SUCCEEDED` 스캔이 있다. `scanId`는 그중 최신, `matchedBy`는 `DIGEST`.
+  - `MISMATCH`: `MATCH`가 아니고, 같은 `app`의 이미지 대상에 PR이 아닌 `SUCCEEDED` 스캔이 있다. `scanId`는 그 앱의 기본 범위 스캔(최신)이다. 그 판정을 이 배포물에 그대로 쓸 수 없다는 뜻이다. `matchedBy`는 주지 않는다.
+  - `NO_SCAN`: 둘 다 아니다(`app`이 `null`이면 항상 이것). `status`만 준다.
+  - 소스 트리 비교(`matchedBy: SOURCE_TREE`)는 [계획]이다. 배포 이미지의 소스 트리를 알려면 그 이미지를 스캔해야 한다.
+- 응답 시각은 UTC다.
+
+**지금 주지 않는 것**: `replicas.desired`(디플로이먼트를 조회하지 않음), `pods`·`include=pods`(파드 단위로 저장하지 않음), `registered`·`service`(FR-15 등록 목록이 없음), `scanMatch`의 `deployedRevision`·`analyzedCommit`·`sourceTreeEqual`(배포 쪽 revision은 `image.revision`, 분석 쪽은 API-03 `target`으로 본다). 모두 [계획]이다.
+
+**오류**: `INVALID_INPUT`(enum·`digest` 형식·`size`·`cursor`·`include` 값), `UNAUTHENTICATED`, `FORBIDDEN`(`ADMIN` 아님), `RATE_LIMITED`
 
 #### L1 수집 결과 올리기 (수동 업로드)
 
