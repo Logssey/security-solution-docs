@@ -298,6 +298,8 @@ Notion 발급 토큰의 권한 관측기는 등록 전 `UNSUPPORTED`다. 등록�
 
 스냅샷을 오래된 상태의 쓰기 근거로 쓰지 않는다. 상세 진입은 현재 상태를 읽고 `readAt`, 버전, `changedSinceSnapshot`을 표시하며, 판정·조치는 최신 버전으로 다시 검사한다. 변경 성공 후에는 `requiresSnapshotRefresh=true`를 반환하고 화면이 요약·목록을 함께 다시 읽는다. 갱신하지 않은 카드만 감소시키는 클라이언트 추정 집계는 금지한다. 스냅샷 생성은 화면 초기 진입·명시 새로고침·변경 후 재조회에 한정하고 초 단위 폴링마다 새로 생성하지 않는다. 사용자별 동시 유효 스냅샷 상한은 5개이며 넘으면 가장 오래된 스냅샷을 만료시키고 기존 조회에 같은 새로고침 흐름을 적용한다.
 
+WORKBENCH·INVENTORY·HISTORY의 동시 스냅샷 생성에서 SQLSTATE `40001`이 발생하면 해당 읽기 트랜잭션을 전부 롤백하고 권한 확인·원천 조회·스냅샷 저장을 새 REPEATABLE READ 트랜잭션에서 최대 3회 시도한다. 재시도 소진과 외부 트랜잭션이 소유한 충돌은 409 `SNAPSHOT_RETRY`와 `retryable=true`로 안내한다. 다른 SQL 오류와 권한 거부는 이 재시도 대상에서 제외한다.
+
 기간은 지표마다 의미가 다르므로 현황의 현재 상태 카드에는 공통 `from/to`를 받지 않는다. `/cases?changedFrom=&changedTo=`는 `updatedAt`의 `[from,to)`, `/review-queue?observedFrom=&observedTo=`는 위치의 `lastSeenAt`의 `[from,to)`, `/runs?from=&to=`는 `requestedAt`의 `[from,to)`다. 날짜만 있는 입력은 화면이 사용자의 표시 시간대 기준 경계를 UTC로 변환한다. 불완전 경계·역전·형식 오류는 400이다. 기간 필터가 있는 도착 목록은 동일 기간이 적용된 별도 집계로 표시하고 무기간 현황 카드 수와 같다고 주장하지 않는다. 보존된 기간 밖 요청은 빈 결과를 실제 무발생으로 해석하지 않게 `retainedFrom`·`historyComplete=false`를 반환한다.
 
 ### 5.7. 키별 위치 시각화의 안전한 읽기 모델
