@@ -467,7 +467,11 @@ SECURITY 또는 해당 위치의 현재 지정 REMEDIATOR가 승인된 능력 �
 
 권한 없는 대상은 기존 404/필드 차단 규칙, 지원·구성·승인 부족은 422의 안전한 사유, 오래된 context는 409, 대시보드 요청 한도는 429를 사용한다. 공급자의 401/403/429는 대시보드 세션 오류로 중계하지 않는다.
 
-검증 설정 조회는 기존 연결·범위 설정 응답에 현재 서버 검증 profile 버전·활성화·scope 승인 revision·승인 여부·지원 유형과 `canConfigureValidation`을 추가한다. `PATCH /api/v1/secrets/scopes/{scopeId}/validation-policy`는 `{expectedValidationApprovalRevision,idempotencyKey,enabled,reasonCode}`를 받으며 현재 범위 SECURITY만 수행한다. 이는 이미 승인된 범위의 등록 검증기를 허용/철회하는 직접 결정이고 수집 범위를 넓히거나 endpoint·원문·권한을 지정하지 못한다. 서버 profile 활성화는 승인된 운영 배포 설정의 책임이다. 연결·서버 profile이 꺼져 있으면 범위 허용만으로 외부 호출하지 않는다. 결정자·시각·승인 revision·감사를 원자 저장하고 철회는 대기 요청 취소와 현재 투영 무효화를 수행한다. 서버 profile이 바뀌면 기존 scope 승인을 자동 확대하지 않는다.
+`GET /api/v1/secrets/connections/{connectionId}/validation-policy`는 현재 연결 사실 열람 권한을 확인하고 `{connectionId,provider,enabled,allowedIssuers,expectedValidationRevision,profileStatus,canConfigure,blockedReasonCodes,enabledIssuers,approvedScopeCount,scopeCount}`를 반환한다. `allowedIssuers`는 연결에서 허용한 키 발급 서비스이며 `enabledIssuers`는 서버에서 활성화한 서비스다. profileStatus는 ENABLED·DISABLED·UNCONFIGURED를 구별한다.
+
+`PATCH /api/v1/secrets/connections/{connectionId}/validation-policy`는 `{expectedValidationRevision,idempotencyKey,enabled,allowedIssuers,reasonCode}`를 받으며 해당 연결의 SECURITY만 수행한다. allowedIssuers는 AWS·GITHUB·NOTION의 명시적 선택이며 활성화할 때 하나 이상 필요하다. reasonCode는 VALIDATION_APPROVED·VALIDATION_DISABLED를 사용한다. 서버가 등록 profile `credential-validation-v1`을 결합하고 검증 revision·현재 관측 적격성·대기 요청·`VALIDATION_PROFILE_CHANGED` 감사를 같은 명령 트랜잭션에서 갱신한다. 권한 회수, 기대 revision 충돌과 멱등 재전송은 공통 명령 계약을 따른다. 저장으로 수집 대상을 넓히거나 외부 인증 요청을 자동 등록하지 않는다.
+
+범위 검증 설정은 `connectionId`, `connectionEnabled`, `allowedIssuers`와 현재 승인 revision·허용 여부·서버 준비 상태·설정 권한을 제공한다. `PATCH /api/v1/secrets/scopes/{scopeId}/validation-policy`는 `{expectedValidationApprovalRevision,idempotencyKey,enabled,reasonCode}`를 받으며 현재 범위 SECURITY가 등록 검증기를 허용/철회한다. 결정자·시각·승인 revision·감사를 원자 저장하고 철회는 대기 요청 취소와 현재 투영 무효화를 수행한다. 연결·서버 설정과 범위 승인은 실제 호출 시 함께 검사한다. 서버 검증기 활성화는 운영 배포 설정으로 관리한다. `VALIDATOR_NOT_ALLOWED`는 해당 키 발급 서비스의 연결 허용이 필요한 상태를 뜻한다.
 
 ### 6.1. Notion 인증과 원천 capability
 
