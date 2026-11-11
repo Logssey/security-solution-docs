@@ -1,6 +1,6 @@
 # AI 조사 요약 계약
 
-기준: [심각도 평가](risk-assessment-contract.md), [API](api-contract.md), [사용 이력](usage-observation-contract.md), [실행 정책](security-and-runtime.md). `risk-briefing`은 기존 합성 TEST 대응 가이드와 독립된 요청·결과 자원이다. 기존 가이드의 대상 제한을 해제하지 않으며 공급자 호출 예산은 공유한다.
+기준: [심각도 평가](risk-assessment-contract.md), [API](api-contract.md), [사용 이력](usage-observation-contract.md), [실행 정책](security-and-runtime.md). `risk-briefing`은 대응 가이드와 독립된 요청·결과 자원이다. 대응 가이드의 공급자별 대상 정책은 [ADR-S009](adr/ADR-S009.md)를 따르고, 조사 요약은 이 문서의 전용 활성화·전송 정책을 적용한다. 공급자 호출 예산은 공유한다.
 
 ### 역할과 제품 표현
 
@@ -14,7 +14,7 @@ AI는 등급·정책·자산 중요도·권한을 새로 정하지 않는다. �
 
 새 기능의 모드는 OFF / SYNTHETIC_ONLY / SANITIZED_APPROVED다. 기본은 OFF다. SYNTHETIC_ONLY는 서버가 확인한 합성 fixture에만 허용한다. 실제 키가 시험 페이지에 있다는 이유로 합성으로 취급하지 않는다.
 
-SANITIZED_APPROVED는 조직 운영자가 허용된 필드 목록·공급자 데이터 처리 정책을 확인하여 새 기능 전용 정책을 활성화한 경우만 사용한다. 기존 guide의 합성 제한은 자동 해제하지 않는다. 외부 호출 전에 매번 이 활성 상태와 현재 권한을 검사한다.
+SANITIZED_APPROVED는 조직 운영자가 허용된 필드 목록·공급자 데이터 처리 정책을 확인하여 새 기능 전용 정책을 활성화한 경우만 사용한다. 이 모드는 조사 요약에 적용한다. Claude 대응 가이드의 다섯 enum 정책과 Groq 대응 가이드의 합성 TEST 제한은 ADR-S009를 따른다. 외부 호출 전에 매번 이 활성 상태와 현재 권한을 검사한다.
 
 초기 공급자는 Groq의 openai/gpt-oss-20b와 strict JSON schema다.[Groq structured outputs](https://console.groq.com/docs/structured-outputs) 배포 설정에 모델 ID·schema·prompt·카탈로그 버전을 함께 고정한다. 모델이 중단되거나 변경되면 기본 설명으로 전환하며 다른 모델·유료 공급자로 자동 대체하지 않는다. Claude adapter는 이 계약을 구현하고 같은 수용 시험을 통과한 별도 배포에서만 선택할 수 있다.
 

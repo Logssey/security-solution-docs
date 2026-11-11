@@ -308,7 +308,7 @@ identity는 부모의 실제 공급자 관측 시각을 참조하고 `expires_at
 
 기존 키·위치·Finding, 인증 시도, 노출 판정, 보관 정책, 권한 후보·결정, 위험 근거·평가, 조사 과제·감사 원장을 재사용한다. AI 출력과 사용 기록을 secret_risk_evidence의 ABUSE_LINK로 저장하지 않는다. 기존 secret_location_activities는 담당자·조치 타임라인이며 키 사용 로그로 재사용하지 않는다.
 
-사용·AI 원장과 실행 지원 모델은 다음과 같다. 사용 이력의 테이블·제약·작업 목적·키 ID 보호 지문은 V41 하나에 묶는다. 과거 마이그레이션을 수정하거나 테이블마다 별도 버전을 만들지 않는다. AI 저장 구조의 SQL 버전은 해당 기능 구현 시 공동 DB 담당자와 조율한다.
+사용·AI 원장과 실행 지원 모델은 다음과 같다. 사용 이력의 테이블·제약·작업 목적·키 ID 보호 지문은 V41 하나에 묶는다. 과거 마이그레이션을 수정하거나 테이블마다 별도 버전을 만들지 않는다. 공급자 공통 호출 원장은 V46에 정의한다. 조사 요약 전용 요청·시도 모델의 SQL 버전은 해당 기능 구현 시 공동 DB 담당자와 조율한다.
 
 | 모델 | 저장 내용과 제약 |
 |---|---|
@@ -319,7 +319,11 @@ identity는 부모의 실제 공급자 관측 시각을 참조하고 `expires_at
 | secret_usage_rate_limits | 계정·리전별 다음 호출 슬롯. 여러 워커도 초당 1회 기준을 공유하며 발견 키 ID는 저장하지 않음 |
 | secret_ai_analysis_requests | 독립 큐. 위치·요청자·평가·근거/인증/사용/ACL/전송 정책 revision·전체 contextDigest·로컬 alias 대응·상태·lease·generation·멱등키·검증 결과 코드 |
 | secret_ai_analysis_attempts | 시도 ID·요청 ID·모델/prompt/schema·전송 시각·결과 사유·token 사용·예산 예약·응답 digest. 원문 응답 없음 |
-| secret_ai_budget_windows | 배포·분/일 구간의 한도·예약·전송 횟수, 동시 실행 lease. 공급자 호출 전 원자 예약 |
+| secret_ai_call_ledger | UUID call_id PK, provider·model, purpose=GUIDE/BRIEFING, state=DISPATCHING/COMPLETED, reserved_at·deadline_at·nullable completed_at. 공급자·기능·API replica가 공유하는 외부 호출별 예산 원장 |
+
+`secret_ai_call_ledger`의 provider·model 조합은 CLAUDE/claude-sonnet-5-5와 GROQ/openai/gpt-oss-20b로 제한한다. `deadline_at`은 `reserved_at`보다 크고 90초 이내여야 한다. DISPATCHING은 completed_at=NULL, COMPLETED는 completed_at>=reserved_at을 만족한다. 예약 시각 인덱스와 미완료 deadline 부분 인덱스를 사용하고 PUBLIC 권한을 회수한다. 원장에는 호출·제공자·모델·목적·시간·상태만 기록한다.
+
+공급자 호출 직전 별도 트랜잭션과 공통 advisory lock으로 활성 호출·최근 1분·UTC 당일 호출량을 검사한다. 배포 전체 동시 실행 1건·최근 1분 6회·UTC 하루 100회를 허용하며 승인 시 DISPATCHING 행을 먼저 커밋한다. deadline은 예약 시각에 공급자 timeout과 15초를 더해 정한다. 완료 시 COMPLETED와 completed_at을 기록한다. 미완료 deadline이 지나면 동시 실행 슬롯을 사용할 수 있고, DISPATCHING·COMPLETED 행 모두 분/일 호출량에 포함한다. 완료 기록이 실패하면 기존 예약과 deadline을 보존한다. GET·캐시 적중은 신규 호출 행을 만들지 않는다. 조사 요약의 요청·attempt·lease와 결과 상태는 각 전용 모델이 관리하고, 실제 전송 시 이 공통 원장을 사용한다.
 
 사용 조회 요청은 기존 secret_jobs의 ENRICH 목적을 확장해 USAGE_OBSERVATION으로 구분한다. 범용 job에 존재하지 않는 context/result 필드를 가정하지 않고 조회 기간·대상·revision·완료/부분 실패·0건 요약은 secret_usage_requests에 보존한다. 요청과 job을 같은 트랜잭션에서 연결하고 기존 lease/fencing 계약으로 실행한다. 자동 관측의 event ID·고유 키와 수동 자료의 멱등키는 별도다. 스캔 횟수나 ScanRun을 만들지 않는다. AI 큐는 수집·권한·평가 큐와 별도로 처리하여 외부 AI 지연이 스캔을 막지 않는다.
 

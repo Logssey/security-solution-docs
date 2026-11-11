@@ -101,7 +101,7 @@ Notion 기본 인증의 제한된 identity와 권한 보조 지원은 별도다.
 
 [사용 이력 계약](usage-observation-contract.md)은 기본 false의 별도 opt-in과 승인 관리 연결·정확한 키 결합을 요구한다. AccessKeyId는 승인 원천 재취득 또는 키 ID 전용 지문 대조로 확보해 실행 메모리에서만 사용한다. 원시 CloudTrailEvent를 DB·로그에 저장하지 않는다. 새로운 trail·버킷·유료 조회 자원·쓰기 권한을 자동 생성하지 않는다.
 
-[AI 조사 요약 계약](risk-briefing-contract.md)은 OFF/SYNTHETIC_ONLY/SANITIZED_APPROVED와 별도 외부 전송 정책을 적용한다. 기존 합성 가이드의 대상 제한은 유지한다. 서버가 allowlist 필드로 새 입력을 만들며 원문·마스킹 키·지문·경로·계정·ARN·이메일·IP·자유 텍스트는 전송하지 않는다. 근거 생성과 전송 직전에 모든 입력의 현재 ACL·조직·키·위치 결합을 검사한다.
+[AI 조사 요약 계약](risk-briefing-contract.md)은 OFF/SYNTHETIC_ONLY/SANITIZED_APPROVED와 전용 외부 전송 정책을 적용한다. 대응 가이드는 ADR-S009의 공급자별 대상 정책을 따르며 Groq 어댑터의 합성 TEST 제한을 유지한다. 서버가 allowlist 필드로 새 입력을 만들며 원문·마스킹 키·지문·경로·계정·ARN·이메일·IP·자유 텍스트는 전송하지 않는다. 근거 생성과 전송 직전에 모든 입력의 현재 ACL·조직·키·위치 결합을 검사한다.
 
 출력은 strict schema뿐 아니라 허용 코드·근거 predicate·권한·필수 행동 순서를 검증한다. 잘못된 항목이 하나라도 있으면 전체 결과를 폐기하고 서버 기본 설명을 유지한다. AI에게 상태 변경·원천 읽기·외부 도구 실행 권한을 제공하지 않는다. 미설정·만료·429·5xx·timeout·잘린 응답·워커 종료는 안전한 사유로 기록한다.
 
