@@ -87,7 +87,7 @@ PostgreSQL에 저장하는 Secret 사실 원본, 관계, 제약과 조회 스냅
 
 | 테이블 | 컬럼과 타입 | 핵심 제약과 의미 |
 |---|---|---|
-| `secret_response_cases` | `case_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `previous_case_id BIGINT FK`, `opening_occurrence_id BIGINT NOT NULL FK`, `opening_decision_id BIGINT FK`, `opened_by_user_id BIGINT NOT NULL FK`, `opening_reason VARCHAR(80) NOT NULL`, `case_origin VARCHAR(20) NOT NULL`, `is_current BOOLEAN NOT NULL`, `disposition VARCHAR(20) NOT NULL`, `action_status VARCHAR(30) NOT NULL`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT FK`, `version BIGINT NOT NULL`, `opened_at`, `updated_at TIMESTAMPTZ NOT NULL`, `resolved_at`, `closed_at TIMESTAMPTZ` | 같은 키·PRODUCTION 또는 TEST 출처 현재 건 최대 하나. 새 개설 결정·위치는 같은 키·출처의 유효 ABNORMAL 근거다. 과거 건의 결정 ID는 근거 없이 소급 생성하지 않는다. OPEN·IN_PROGRESS·REVALIDATION_PENDING·RESOLVED를 사용하고 예외는 독립 보존한다. 개설 결정을 다시 승인하는 검토/빈 시작 게이트 없음. 해결 후 재발은 previous_case_id를 가진 새 건이다. |
+| `secret_response_cases` | `case_id BIGINT PK`, `credential_set_id BIGINT NOT NULL FK`, `previous_case_id BIGINT FK`, `opening_occurrence_id BIGINT NOT NULL FK`, `opening_decision_id BIGINT FK`, `opened_by_user_id BIGINT NOT NULL FK`, `opening_reason VARCHAR(80) NOT NULL`, `case_origin VARCHAR(20) NOT NULL`, `is_current BOOLEAN NOT NULL`, `disposition VARCHAR(20) NOT NULL`, `action_status VARCHAR(30) NOT NULL`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT FK`, `version BIGINT NOT NULL`, `opened_at`, `updated_at TIMESTAMPTZ NOT NULL`, `resolved_at`, `closed_at TIMESTAMPTZ` | 같은 키·actual origin(PRODUCTION·TEST·UNCLASSIFIED)당 현재 건 최대 하나. ALL은 조회 선택이며 이 칼럼에 저장하지 않는다. 새 개설 결정·위치는 같은 키·출처의 유효 ABNORMAL 근거다. 과거 건의 결정 ID는 근거 없이 소급 생성하지 않는다. OPEN·IN_PROGRESS·REVALIDATION_PENDING·RESOLVED를 사용하고 예외는 독립 보존한다. 개설 결정을 다시 승인하는 검토/빈 시작 게이트 없음. 해결 후 재발은 previous_case_id를 가진 새 건이다. |
 | `secret_case_occurrences` | `case_id`, `occurrence_id`, `credential_set_id BIGINT NOT NULL FK`, `linked_decision_id BIGINT FK`, `assigned_team VARCHAR(100)`, `assigned_user_id BIGINT FK`, `response_status VARCHAR(30) NOT NULL`, `version`, `action_cycle BIGINT NOT NULL`, `last_material_action_at`, `actions_completed_at`, `linked_at TIMESTAMPTZ NOT NULL`, `resolved_at TIMESTAMPTZ`, 복합 PK `(case_id,occurrence_id)` | 건·위치·결정의 키·출처를 검사한다. action_cycle은 해당 위치의 현재 조치 주기 번호이며 별도 주기 테이블은 없다. 새 주기에서 현재 완료/조치 시각은 초기화하고 이전 기록의 주기 번호·활동을 보존한다. 위치 담당자는 해당 연결의 적격 REMEDIATOR다. |
 | `secret_location_activities` | `activity_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `occurrence_id BIGINT`, `activity_type VARCHAR(40) NOT NULL`, `actor_user_id BIGINT NOT NULL FK`, `case_version BIGINT NOT NULL`, `occurrence_version BIGINT`, `reference_id BIGINT`, `reason_code VARCHAR(40)`, `happened_at TIMESTAMPTZ NOT NULL` | 위치 담당·조치·기록 마침·재개·체크·이관·예외·해결 활동. occurrence_id가 있으면 건/위치 복합 FK. 조치 주기별 원본 기록과 참조 ID를 연결하고 일반 API는 허용 위치 활동만 읽는다. |
 | `secret_assignment_history` | `assignment_id BIGINT PK`, `case_id BIGINT NOT NULL FK`, `from_team`, `to_team VARCHAR(100)`, `from_user_id`, `to_user_id BIGINT FK`, `reason VARCHAR(80) NOT NULL`, `changed_by_user_id BIGINT NOT NULL FK`, `changed_at TIMESTAMPTZ NOT NULL`, `case_version BIGINT NOT NULL` | 건 조정자 변경 이력이다. 위치 담당 변경은 secret_location_activities에 위치 버전·사유와 함께 보존한다. 건 조정자를 지정해도 위치 조치 권한은 늘어나지 않는다. |
@@ -220,7 +220,7 @@ secret_exposure_assessments는 재생성되는 Finding에 의존해 과거 증�
 
 ## 6. 적재와 집계
 
-1. 수집 범위 허가와 출처·정책을 분리한다. 영향별 직접 결정·독립 검토로 출처 버전·정책 바인딩·감사를 고정하고, 이름·공급자·환경으로 운영/시험을 추정하지 않는다. 범위 설정 사유는 현재 분류·정책·대기·영향 처리에서 계산하며 일부 사유만 해소돼도 나머지를 유지한다.
+1. 수집 범위 허가와 출처·정책을 분리한다. 영향별 직접 결정·독립 검토로 출처 버전·정책 바인딩·감사를 고정하고, 이름·공급자·환경으로 운영/시험을 추정하지 않는다. 범위 설정 사유는 실제 정책·변경 검토·영향 처리에서 계산하고 미분류 값·분류 원장 부재 자체를 미완료로 만들지 않는다. 일부 사유만 해소돼도 나머지는 유지한다.
 2. 도래한 작업은 FOR UPDATE SKIP LOCKED로 선점해 임대 상태·소유자·시각을 원자 저장한다. 6시간 정기는 실제 예약 시각 기준이며 수동 실행은 그 시각을 바꾸지 않는다. 중단 중 놓친 슬롯은 한 번만 예약하고 연속 재생하지 않는다. DB 근거만 평가하는 ASSESS는 원천 스캔 분모·성공 횟수에 넣지 않는다.
 3. 도구 출력·원문은 승인 워커 메모리에서 정규화·HMAC·선택 검증 후 폐기한다. 동일성 고유 제약 아래 최초 삽입 실행을 고정하고 재발견·새 위치·구성 승격에서 변경하지 않는다.
 4. 같은 키·원천 위치를 재사용하고 Finding은 엔진별 보존한다. 전체 스캔은 작업·실행 전체 성공과 해당 범위 필수 수집·탐지 성공을 확인하고 최신 양성 Finding의 범위·출처 승인·연결·설정·엔진·HMAC 버전이 현재와 같을 때만 미관측 위치를 MISSING으로 기록한다. Notion 현재 페이지는 자동 부재 확정 대상에서 제외하고 미관측 위치를 UNKNOWN으로 보존한다. 실패·부분 실행·증거 부재·불일치는 UNKNOWN이다. 이미 완전한 동일성 키가 있는 과거 partial 후보를 근거 없이 합치지 않으며 그 후보의 현재 부재도 이 비교 절차를 따른다. 수동 노출·수명주기 사실과 마지막 완전 검사 이력은 보존한다.
@@ -328,3 +328,17 @@ secret_credential_sets.aws_key_id_fingerprint는 AWS 영구 키 ID 전용 domain
 외부 조회의 정상적인 제한·재시도는 기존 검증·수집 계약을 유지한다. 새 CloudTrail 조회는 한 페이지당 일시 오류 최대 2회 재시도, 1초·3초 지연과 jitter를 쓰고 Retry-After가 길면 lease를 반환해 재예약한다. 인증/권한 거절은 재시도하지 않는다. 실패한 페이지 이후를 COMPLETE로 처리하지 않는다. 원천 스캔·인증·사용 조회·AI의 성공 상태와 집계는 분리한다.
 
 신규 안전한 사용 관측과 AI 요청/결과 메타데이터는 초기 365일 보존한다. AI 응답 원문은 보존하지 않으며 cache 적격 기간은 별도 24시간이다. 사고·미해결 대응 또는 평가의 근거로 참조된 기록은 365일을 지나도 참조가 해소되기 전 자동 삭제하지 않는다. 기존 평가·감사 원장은 현재 보존 계약을 유지한다. 정리는 운영 유지보수 권한으로만 수행하며 일반 API에는 삭제 기능을 추가하지 않는다.
+
+## 12. 통합 읽기와 실제 실행 이벤트
+
+조회 선택 ALL은 스냅샷 normalized_filters·조회 메타데이터에만 사용한다. MANAGED_LOCATIONS는 origin별 인벤토리 적격 조건을 합성한 읽기 분류이며 별도 저장 상태나 폐기 증거를 만들지 않는다. 실제 scope·위치·대응과 수명주기·해결 근거의 origin은 PRODUCTION·TEST·UNCLASSIFIED다. 같은 키의 여러 actual origin 대응을 하나의 현재 대응으로 합치지 않는다. 원본 분류를 보존하는 정책-only 승인도 scope 정책 승인 원장과 기존 binding FK로 연결하며, actual origin을 자동 변경하지 않는다.
+
+| 저장 자원 | 역할과 제약 |
+|---|---|
+| secret_scan_runs의 execution_* 필드 | trace 버전, 실제 기록 시작·마지막 활동·만료, 실행별 기록 수·생략 수. 상세 미기록과 만료를 구별 |
+| secret_run_execution_events | run별 event_id 순번, 시도·generation·run scope, 단계·operation·결과 enum, HTTP 코드·안전 사유·관측 수량·시간. PK(run_id,event_id), 현재 lease fencing과 run 잠금으로 commit 순서 보장 |
+| secret_run_execution_stage_facts | run·시도·단계별 실제 관측 시각과 처리량 요약. 상세 이벤트 제한 이후에도 단계의 실제 관측을 보존 |
+
+이벤트의 필드·수량·보존·권한은 [스캔 실행 계약](scan-execution-contract.md)을 따른다. 실행별 2,000개·시도별 상세 1,000개·lifecycle 공간 128개를 사용하고 상세는 30일 보존한다. 원문 URL·경로·인증·본문·공급자 raw 응답·예외·자유 로그 문자열 저장은 제공하지 않는다. 범위·검증·작업의 실제 트랜잭션과 관측 context에 연결한다.
+
+공유 develop의 V42는 원본을 사용한다. 본 기능의 스캔 이벤트와 actual UNCLASSIFIED 정책·대응·수명주기 CHECK 및 관련 읽기 view 변경은 단일 V43으로 적용한다. 기존 자료를 일괄 재분류하거나 합성 인증 가드를 제거하지 않는다.

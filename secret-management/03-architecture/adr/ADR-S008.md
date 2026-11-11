@@ -18,7 +18,7 @@ API는 화면의 유일한 조회·변경 경계이며 인증·대상 범위 권
 
 Connection·ScanRun, CredentialSet·Occurrence, ValidationAttempt, Assessment, ResponseCase·AssignmentHistory를 구별한다. 범용 detection_events는 일반 탐지 이력이며 Secret 기록의 원본은 전용 모델이다. 통합 조회는 권한·단위·기준시점을 맞춰 전용 기록을 합성한다. 동일 이벤트를 양쪽에서 중복 집계하지 않는다.
 
-CredentialSet·출처마다 현재 대응 건은 최대 하나이며 여러 위치·시도·조치·재발 이력을 보존한다. TEST는 PRODUCTION과 분리하고 기본 운영 조회에서 제외하되 실키 의심 경고는 숨기지 않는다. 재검사 대기·미평가·환경 미확인·위치별 담당자를 독립적으로 표현한다.
+CredentialSet·출처마다 현재 대응 건은 최대 하나이며 여러 위치·시도·조치·재발 이력을 보존한다. actual origin은 PRODUCTION·TEST·UNCLASSIFIED로 보존하고 일반·통합 조회는 ALL을 사용한다. caseId를 중복 집계하지 않으며 자격증명 확인 경고는 별도 업무로 제공한다. 재검사 대기·미평가·환경 미확인·위치별 담당자를 독립적으로 표현한다.
 
 물리 DB 위치와 실행 배치는 환경별 설정이다. 논리 경계가 물리 DB 한 개·독립 DB 여러 개 또는 모든 프로세스의 무제한 쓰기 권한을 뜻하지 않는다. 마이그레이션은 기존 이력을 보존하고 공통 DB 담당자가 번호·순서를 조율한다. 발행된 마이그레이션을 덮어쓰지 않는다.
 

@@ -50,10 +50,10 @@ VALID는 인증 가능성의 확인이며 사용·악용·영향을 입증하지
 |---|---|---|
 | 대응 대상 `ACTION_REQUIRED` | ResponseCase | 남은 작업이 있는 현재 OPEN / IN_PROGRESS / REVALIDATION_PENDING 건. 현황은 `대응 중 = OPEN + IN_PROGRESS`, `재검사 대기 = REVALIDATION_PENDING`으로 분리 |
 | 확인 필요 `NEEDS_DECISION` | Occurrence | 실제 값 후보의 부족·상충 근거, 재판정 필요 위치. 부족한 사실을 명시하고 사람의 추가 확인 요청은 담당·기한 필수. 자동 실키 경고의 미설정은 배정 대기 |
-| 인벤토리 `NORMAL_INVENTORY` | CredentialSet | 메타데이터 관측(METADATA_ONLY), 같은 출처의 모든 허용 위치가 유효 Finding·활성 ALLOWED 정책·NORMAL인 승인 보관(AUTHORIZED_STORAGE), 현재 유효한 공급자 폐기·교체 근거가 있는 과거 기록(RETIRED_HISTORY)을 구분. 과거 기록은 같은 출처의 활성 대응·판정 대기·현재 존재/판정 UNKNOWN이 없어야 하며 수동 승인·단순 INVALID·만료 추정은 포함하지 않음. 일부 위치 필터로 다른 확인 필요 위치를 가려 포함시키거나 숨은 증거로 상태를 만들지 않음 |
+| 인벤토리 `NORMAL_INVENTORY` | CredentialSet | 메타데이터 관측(METADATA_ONLY), 같은 출처의 모든 허용 위치가 유효 Finding·활성 ALLOWED 정책·NORMAL인 승인 보관(AUTHORIZED_STORAGE), 현재 유효한 공급자 폐기·교체 근거가 있는 과거 기록(RETIRED_HISTORY)을 구분. ALL에서 actual origin별 조건이 모두 충족되고 하위 유형이 서로 다르면 MANAGED_LOCATIONS로 표시. 과거 기록은 같은 출처의 활성 대응·판정 대기·현재 존재/판정 UNKNOWN이 없어야 하며 수동 승인·단순 INVALID·만료 추정은 포함하지 않음. 일부 위치 필터로 다른 확인 필요 위치를 가려 포함시키거나 숨은 증거로 상태를 만들지 않음 |
 | 건 연결 대기 `NEEDS_CASE_LINK` | Occurrence | 유효 ABNORMAL 판정이 있으나 같은 키·출처의 현재 건에 연결되지 않은 위치. 권한 경계를 포함한 연결 무결성을 보안 조정자가 복구하며 해결 조건에서는 제외하지 않음 |
 | 검사 누락 `coverage-gaps` | Scope | 실패·부분 실패·미지원·비교 불가 등 완전한 현재 검사가 없는 승인 범위. 대기·진행 중과 종료 후 누락은 구분 |
-| 설정 보완 `UNCLASSIFIED` | Scope | 출처 미분류·근거 재확인·보관 정책 미설정/만료/불일치·변경 검토 대기. `setupReasonCodes[]`로 사유를 독립 표시. 선택 출처의 활성 설정, 전역 미분류, 중지된 연결을 분리. 사유가 모두 해소돼야 해당 설정 목록에서 제외되며 위치의 확인 필요·대응과 함께 존재 가능 |
+| 설정 보완 `UNCLASSIFIED` | Scope | 보관 정책 미설정·만료·불일치, 변경 검토·분류 영향 검토 등 실제 설정 사유를 `setupReasonCodes[]`로 표시. UNCLASSIFIED라는 원본 값이나 분류 원장 부재만으로 작업을 만들지 않음. 선택 조회의 활성 설정과 중지된 연결을 구별하고 위치의 확인 필요·대응과 병행 |
 
 인벤토리는 그 키가 전반적으로 안전하다는 이름이 아니다. 내부 대기열명 NORMAL_INVENTORY를 사용자에게 정상 보증처럼 표시하지 않는다. 모든 키를 찾는 전체 인벤토리는 위 작업 묶음과 별개다. 허용·비정상 위치가 함께 있는 키의 허용 위치도 키 상세에서 계속 조회할 수 있다.
 
@@ -126,7 +126,7 @@ VALID는 인증 가능성의 확인이며 사용·악용·영향을 입증하지
 
 FULL은 선언된 지원·승인 범위의 모든 필수 확인이 성공했다는 뜻이며 모든 가능한 복사본·과거 악용 부재를 보증하지 않는다. LIMITED는 지원 밖 이력 또는 승인된 수동 확인 등 남은 한계를 적는 수준이며 확인된 미해결 노출·필수 검사 실패를 우회하지 못한다. SIMULATION은 키별 승인 fixture 일치가 확인된 시험 건의 제거·재검사 종료다. 실키 가능성이 있는 시험 키에는 허용하지 않는다. 자세한 해결 근거와 교정 종료는 [대응 정책](response-policy.md)에 둔다.
 
-기본 화면·통합 현황·CSV 운영 수치는 PRODUCTION이다. TEST는 명시적인 시험 보기의 표시를 유지하고 별도로 집계한다. 시험 출처의 실키 의심 경고와 UNCLASSIFIED 범위는 운영 화면에서 별도 주의 항목으로 제공하되 운영 건수에 더하지 않는다. 화면에서 TEST 단어를 숨기는 행위로 출처 구분을 없애지 않는다.
+기본 화면·통합 현황·CSV는 현재 권한이 있는 자료를 ALL로 조회한다. 키는 credentialSetId, 위치는 occurrenceId, 대응은 caseId로 중복 제거한다. 실제 origin(PRODUCTION·TEST·UNCLASSIFIED)별 원장·대응 관계·합성 근거를 보존하되 일반 화면에 분류 선택·시험 배지를 두지 않는다. 자격증명 확인 경고와 설정 보완은 각 단위를 유지하고 대응 건수에 더하지 않는다.
 
 ## 6. 실패·시차와 이력 보존
 

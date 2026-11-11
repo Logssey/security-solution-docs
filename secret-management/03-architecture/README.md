@@ -18,3 +18,7 @@ Secret 노출 탐지·대응의 구성요소, 처리 경계, 데이터·API 계�
 | [ADR 목록](adr/README.md) | 채택한 기술 결정과 선택 근거 |
 
 관련 기준: [PRD](../01-requirements/PRD.md), [기능 설계](../02-functional-design/README.md).
+
+## 스캔 진행 읽기
+
+[스캔 실행 계약](scan-execution-contract.md)은 실제 단계·구조화 이벤트·리스·cursor·보존과 단일 실행 패널의 갱신 경계를 정의한다.
