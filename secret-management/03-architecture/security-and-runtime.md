@@ -81,15 +81,17 @@ Notion 기본 인증의 제한된 identity와 권한 보조 지원은 별도다.
 
 ### 선택 AI 가이드
 
-[가이드 API](api-contract.md#33-기본-대응-안내와-선택-ai)의 GET은 외부 호출 없는 기본 안내·로컬 사용 조건 조회다. 키 상세의 기본 안내도 대응 건 생성 없이 열 수 있다. 외부 AI는 본문 없는 명시적 POST, 서버 opt-in·키 설정, AWS·GitHub 발급자, 현재 TEST 건·키별 합성 근거·실키 확인 근거 부재·모든 위치 열람 권한을 요구한다. 저장소 이름이나 TEST 표지만으로 허용하지 않으며 캐시 재사용 전에도 현재 대상 조건을 다시 검사한다. 안내 조회·선택은 키 변경·유효성·권한·심각도·노출·건 상태·해결 승인을 수행하지 않는다.
+가이드 API의 GET은 기본 안내와 로컬 사용 조건을 조회한다. 키 상세의 기본 안내도 대응 건 생성 없이 열 수 있다. 외부 AI는 본문 없는 명시적 POST, 서버 활성화·인증 설정과 모든 관련 위치의 열람 권한을 확인한다. Claude는 AWS·GitHub·Notion의 다섯 enum 문맥을 지원하고, Groq는 기존 합성 TEST 정책을 추가 적용한다. 캐시 재사용 전에도 현재 대상 조건을 다시 확인한다. 안내의 선택·조회는 기존 평가·대응 상태 전이와 독립적으로 처리한다. [가이드 API](api-contract.md#33-기본-대응-안내와-선택-ai)
 
-Groq의 런타임 목적지는 `https://api.groq.com/openai/v1/chat/completions`, 모델은 `openai/gpt-oss-20b`만 허용한다. 표준 HTTPS 포트 외 포트·사용자 정보·query·fragment·다른 경로·임의 HTTPS 호스트와 redirect를 거부한다. loopback HTTP는 주입된 어댑터 시험에서만 허용하고 배포 설정으로 활성화할 수 없다. 키·endpoint·원천 문맥은 클라이언트 본문으로 받지 않는다.
+서버 설정 `SECRET_GUIDE_PROVIDER=claude|groq`로 공급자를 선택한다. Claude의 런타임 목적지는 `https://api.anthropic.com/v1/messages`, 모델은 `claude-sonnet-5-5`, API 버전은 `2026-10-21`이다. `ANTHROPIC_API_KEY` 또는 `ANTHROPIC_API_KEY_FILE`을 사용하고 필요한 경우 `ANTHROPIC_WORKSPACE_ID`를 지정한다. Groq의 목적지는 `https://api.groq.com/openai/v1/chat/completions`, 모델은 `openai/gpt-oss-20b`다. 두 어댑터는 등록 HTTPS 호스트·경로·표준 포트를 검사하고 redirect를 거부한다. loopback HTTP는 주입된 어댑터 시험에서 사용한다. 인증·endpoint·원천 문맥은 서버 설정과 현재 DB 사실에서 구성한다.
 
-외부 문맥은 서버 허용 enum `issuer,credentialType,componentState,stage,validationStatus` 다섯 개뿐이다. 키 원문·마스킹 끝자리·지문·건/사용자 ID·계정/주체 식별자·저장소/객체 경로·증거·자유 메모를 제외한다. 공급자는 서버 문구가 아닌 절차 코드만 선택한다. strict JSON schema와 `reasoning_effort=low`, completion token 상한 512를 요청하고, 전체 응답 8192 byte·content 2048자·4–6개 등록 코드·필수 코드 중복 없음·허용 순서를 서버에서 재검사한다. 거부·잘림·형식 오류·알 수 없는 코드·위험한 순서는 기본 안내로 대체하며 원문 응답·오류를 로그나 API로 전달하지 않는다.
+외부 문맥은 서버 허용 enum `issuer,credentialType,componentState,stage,validationStatus` 다섯 개로 구성한다. 키 원문·마스킹 끝자리·지문·건/사용자 ID·계정/주체 식별자·저장소/객체 경로·증거·자유 메모는 내부 처리 경계에 둔다. 공급자는 등록 절차 코드를 선택하고 서버가 한국어 안내를 구성한다. Claude는 `output_config.format` JSON schema, `effort=low`, `thinking.type=between_tools`, 출력 토큰 상한 768을 사용한다. Groq는 strict JSON schema, `reasoning_effort=low`, 상한 512를 사용한다. 두 응답 모두 전체 8192 byte·text 2048자·4–6개 등록 코드·필수 코드의 유일성·허용 순서를 검사한다. 거부·잘림·형식 오류·알 수 없는 코드·위험한 순서는 기본 안내로 처리한다.
 
-응답 header와 전체 body를 합친 기한은 기본 5초, 허용 설정 250–8000 ms다. 길이 header가 없는 chunked body도 같은 크기·기한 제한을 적용하고 초과·중단 시 대기 요청을 취소한다. 자동 재시도는 없으며 공급자 동시 호출·분/일 예산은 새 AI 조사 요약과 공유하는 배포 전체 DB 원장을 따른다. 기본 전체 동시 1건, 분당 6회, 하루 100회다. 최대 128개 캐시의 키는 위 enum 문맥뿐이며 수용 결과는 기본 300초(설정 30–900), 실패 상태는 15초 동안 재사용한다. 로컬 문구 캐시는 재시작으로 초기화될 수 있으나 DB 예산은 유지하며 여러 replica와 두 AI 기능의 호출을 합산한다. 실제 전송 가능성이 있는 실패도 차감을 유지한다.
+응답 header와 전체 body를 합친 기한은 Claude 기본 45초·설정 250–60000 ms, Groq 기본 5초·설정 250–8000 ms다. 길이 header가 없는 chunked body에도 크기·기한 제한을 적용하고 초과·중단 시 대기 요청을 취소한다. 공급자 호출은 사용자 요청마다 한 번 시도한다. 동시 호출·분/일 예산은 배포 전체 DB 원장을 사용하며 전체 동시 1건, 최근 1분 6회, UTC 하루 100회다. 실제 전송 직전에 예약을 별도 트랜잭션으로 확정하고 실패·재시작·호출자 트랜잭션 취소 뒤에도 차감을 보존한다. 프로세스가 중단되면 요청 기한에 15초를 더한 예약 기한 뒤 동시 실행 슬롯을 회수한다. 원장은 호출 식별자·공급자·모델·기능·시각·처리 상태만 저장한다. 원장 확인 실패는 기본 가이드로 처리한다.
 
-`source=GROQ`는 수용된 선택 또는 그 캐시에만 사용하고 나머지는 DEFAULT다. `readiness`는 요청 여부·통신 시도·캐시 여부와 안전한 설정/제한/공급자 사유를 구분한다. 실패 대기 상태를 캐시에서 재사용한 경우 DEFAULT를 유지하므로 AI 생성 결과로 표시하지 않는다. GET의 READY는 로컬 설정·대상 조건만 확인한 결과이며 공급자 인증·사용량·네트워크·요금제 확인을 뜻하지 않는다. 유료 공급자 대체 호출은 하지 않는다.
+최대 128개 로컬 캐시는 위 enum 문맥을 키로 사용한다. 수용 결과는 기본 300초·설정 30–900초, 실패 상태는 15초 동안 재사용한다. 캐시 적중은 새 공급자 호출과 DB 호출 차감에서 제외한다. 여러 replica와 가이드·조사 요약 기능은 같은 예산 원장을 사용한다.
+
+`source=CLAUDE|GROQ`는 수용된 선택과 해당 캐시에 사용하고 기본 안내는 DEFAULT다. `readiness`는 공급자·모델·원래 생성 시각, 요청 여부·통신 시도·캐시 여부와 안전한 설정·한도·공급자 사유를 제공한다. 인증 실패·접근 거부·결제 필요·호출 제한·시간 초과를 구분하고 실패 캐시는 DEFAULT로 표시한다. GET의 READY는 로컬 설정과 대상 조건의 확인 결과다. 실제 공급자 호출과 그 캐시에는 별도의 실행 결과를 표시한다.
 
 ## 검증 기준
 
@@ -99,7 +101,7 @@ Groq의 런타임 목적지는 `https://api.groq.com/openai/v1/chat/completions`
 
 [사용 이력 계약](usage-observation-contract.md)은 기본 false의 별도 opt-in과 승인 관리 연결·정확한 키 결합을 요구한다. AccessKeyId는 승인 원천 재취득 또는 키 ID 전용 지문 대조로 확보해 실행 메모리에서만 사용한다. 원시 CloudTrailEvent를 DB·로그에 저장하지 않는다. 새로운 trail·버킷·유료 조회 자원·쓰기 권한을 자동 생성하지 않는다.
 
-[AI 조사 요약 계약](risk-briefing-contract.md)은 OFF/SYNTHETIC_ONLY/SANITIZED_APPROVED와 별도 외부 전송 정책을 적용한다. 기존 합성 가이드의 대상 제한은 유지한다. 서버가 allowlist 필드로 새 입력을 만들며 원문·마스킹 키·지문·경로·계정·ARN·이메일·IP·자유 텍스트는 전송하지 않는다. 근거 생성과 전송 직전에 모든 입력의 현재 ACL·조직·키·위치 결합을 검사한다.
+[AI 조사 요약 계약](risk-briefing-contract.md)은 OFF/SYNTHETIC_ONLY/SANITIZED_APPROVED와 전용 외부 전송 정책을 적용한다. 대응 가이드는 ADR-S009의 공급자별 대상 정책을 따르며 Groq 어댑터의 합성 TEST 제한을 유지한다. 서버가 allowlist 필드로 새 입력을 만들며 원문·마스킹 키·지문·경로·계정·ARN·이메일·IP·자유 텍스트는 전송하지 않는다. 근거 생성과 전송 직전에 모든 입력의 현재 ACL·조직·키·위치 결합을 검사한다.
 
 출력은 strict schema뿐 아니라 허용 코드·근거 predicate·권한·필수 행동 순서를 검증한다. 잘못된 항목이 하나라도 있으면 전체 결과를 폐기하고 서버 기본 설명을 유지한다. AI에게 상태 변경·원천 읽기·외부 도구 실행 권한을 제공하지 않는다. 미설정·만료·429·5xx·timeout·잘린 응답·워커 종료는 안전한 사유로 기록한다.
 

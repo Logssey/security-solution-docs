@@ -85,7 +85,7 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 | `POST /cases/{caseId}/exceptions/revoke` | 예외 ID·취소 사유·기대 버전. 만료·취소 뒤 남은 위험에 맞게 조치 재개 |
 
 위험 수용 OFF에서는 `eligibleOccurrences=[]`, `canApprove=false`, `fullyRiskAccepted=false`, `blockedReasonCodes=[RISK_ACCEPTANCE_DISABLED]`를 반환한다. `closure-checks.capabilities.canApproveException`도 false다. 현재 권한 검사를 먼저 수행하므로 다른 사용자의 건 존재를 비활성 오류로 노출하지 않는다. 과거 예외 취소는 기존 권한·버전 검사를 유지한다.
-| `POST /cases/{caseId}/guide` | 본문 없이 선택 AI를 명시적으로 요청. 허용 조건·설정·응답 검사를 통과하지 못하면 기본 안내 반환. 상태·DB 변경 없음. 3.3절 |
+| `POST /cases/{caseId}/guide` | 본문 없이 선택 AI를 명시적으로 요청. 권한·설정·응답 검사를 적용하고 필요하면 기본 안내 반환. 공급자 호출은 공유 DB 예산에 기록. 3.3절 |
 
 외부 조치 종류는 ROTATED·REVOKED·REMOVED_FROM_SOURCE·PERMISSION_REDUCED다. 외부 수행 시각은 요청보다 최대 5분 뒤부터 최근 30일 사이만 허용한다. 한 위치에 여러 기록을 남길 수 있고 PERMISSION_REDUCED는 임시 완화일 뿐 제거·폐기 증거를 대신하지 않는다. 체크리스트 기본 코드는 IDENTIFY_OWNER·ROTATE_OR_REVOKE·REMOVE_EXPOSURE·CHECK_ACCESS_LOGS이며 상태는 TODO·DONE이다. 체크리스트는 조치 주기·재검사·해결의 필수 사실을 대체하지 않는다.
 
@@ -93,13 +93,13 @@ AWS는 승인 계정과 STS GetCallerIdentity 신원을 비교하되 개별 IAM�
 
 ### 3.3. 기본 대응 안내와 선택 AI
 
-가이드 응답은 `{version,source:"DEFAULT|GROQ",title,steps:[{code,title,description}],notice,readiness}`다. `version=secret-response-guide-v2`는 발급자·진행 단계별 안내의 버전이며 심각도 정책과 저장된 체크리스트 `guideVersion=S2_V1`을 변경하지 않는다. 안내는 발급 서비스의 키 교체·폐기, 발견 위치의 원문 제거·안전한 저장 전환, 조치 기록과 재검사를 구분한다. 재검사 대기·해결 상태에서는 기존 근거 확인을 안내하며 새 조치나 완료 사실을 생성하지 않는다.
+가이드 응답은 `{version,source:"DEFAULT|CLAUDE|GROQ",title,steps:[{code,title,description}],notice,readiness}`다. `version=secret-response-guide-v3`는 심각도 정책과 저장된 체크리스트 버전에서 분리한다. 발급자·진행 단계·현재 적격 인증 결과에 맞춰 발견 위치 확인, 사용 이력·권한 검토, 발급 서비스의 조치, 원문 제거·안전한 저장 전환, 기록·재검사를 안내한다. 인증 거부의 원인과 재검사 대기·해결 여부는 각 증거 자원에서 확인한다.
 
-`GET /cases/{caseId}/guide`는 현재 건을 읽을 수 있는 사용자에게 `source=DEFAULT`와 사용 조건을 반환한다. 외부 호출·AI 예산 소비·이전 AI 결과 재생이 없으며 `aiRequested=false,providerCalled=false,cached=false`다. `POST`는 기존 세션·CSRF·대상 권한으로 선택 AI를 명시적으로 요청하고, 제한·비활성·설정 부족·공급자 실패에도 사용 가능한 기본 안내를 반환한다. 두 경로 모두 키·건 상태·체크리스트·감사를 변경하지 않는다.
+`GET /cases/{caseId}/guide`는 현재 건을 읽을 수 있는 사용자에게 `source=DEFAULT`와 사용 조건을 반환한다. `aiRequested=false,providerCalled=false,cached=false`이며 현재 설정 조회로 처리한다. `POST`는 기존 세션·CSRF·대상 권한으로 선택 AI를 요청하고, 제한·비활성·설정 부족·공급자 실패에도 사용 가능한 기본 안내를 반환한다. 가이드 요청은 키·건 상태·체크리스트에서 독립적이며 실제 공급자 호출에는 공유 DB 예산을 적용한다.
 
-`readiness={status,reasonCode,aiAvailable,aiRequested,providerCalled,cached}`다. 상태는 `READY|UNAVAILABLE|GENERATED|FALLBACK`이며 `aiAvailable`은 현재 대상·로컬 설정이 요청을 허용한다는 뜻이다. 공급자 인증·할당량·네트워크 성공을 보장하지 않는다. `providerCalled`는 해당 요청의 공급자 통신 시도, `cached`는 이전 결과 또는 실패 대기 상태의 재사용 여부다. 수용된 AI 선택만 `source=GROQ`이며 캐시 재사용은 `CACHE_HIT,providerCalled=false`다. 실패 캐시는 원래 실패 사유와 `source=DEFAULT,cached=true,providerCalled=false`를 유지하므로 AI 결과 생성으로 표시하지 않는다.
+`readiness={status,reasonCode,aiAvailable,aiRequested,providerCalled,cached,provider,model,generatedAt}`다. 상태는 `READY|UNAVAILABLE|GENERATED|FALLBACK`이며 `aiAvailable`은 현재 대상·로컬 설정이 요청을 허용한다는 뜻이다. `providerCalled`는 해당 요청의 공급자 통신 시도, `cached`는 이전 결과 또는 실패 대기 상태의 재사용 여부다. `provider`와 `model`은 서버 허용 값이며 `generatedAt`은 수용한 AI 선택의 실제 생성 시각이다. 캐시 재사용은 원래 생성 시각과 `CACHE_HIT,providerCalled=false`를 반환한다. 실패 캐시는 원래 실패 사유와 `source=DEFAULT,cached=true,providerCalled=false`를 유지한다.
 
-AI는 AWS·GitHub 발급자, TEST 건, 현재 유효한 키별 합성 표본 근거, 실키 확인 근거 부재, 모든 관련 위치의 열람 권한, 서버 opt-in과 유효한 키 설정을 모두 요구한다. 저장소 이름이나 TEST 표지만으로 허용하지 않으며 캐시 사용 전에도 대상 조건을 다시 검사한다. 사유는 `TEST_ONLY|SYNTHETIC_FIXTURE_REQUIRED|ALL_LOCATIONS_ACCESS_REQUIRED|UNSUPPORTED_ISSUER`, `DISABLED|KEY_MISSING|KEY_INVALID|ENDPOINT_NOT_ALLOWED|MODEL_NOT_ALLOWED|CONFIGURATION_INVALID`, `REQUEST_IN_PROGRESS|CALL_BUDGET_EXHAUSTED` 및 `PROVIDER_TIMEOUT|PROVIDER_REJECTED|PROVIDER_RATE_LIMITED|PROVIDER_UNAVAILABLE|PROVIDER_INVALID_RESPONSE|PROVIDER_RESPONSE_TOO_LARGE|PROVIDER_INTERRUPTED`로 구분한다. 공급자 원문 오류와 설정값은 반환하지 않는다. 전송·응답·호출량 경계는 [보안 실행 정책](security-and-runtime.md#선택-ai-가이드)을 따른다.
+Claude는 AWS·GitHub·Notion 대응 건의 모든 관련 위치 열람 권한, 서버 활성화와 유효한 인증 설정을 확인한다. Groq는 기존 합성 TEST 정책을 추가 적용한다. 캐시 사용 전에도 현재 대상 조건을 다시 검사한다. 사유 코드는 대상·설정·호출 예산·인증·접근 권한·결제·공급자 한도·시간 초과·응답 형식을 구분한다. 서버 설정값과 공급자 원문 오류는 내부 처리 경계에 둔다. 전송·응답·호출량은 보안 실행 정책을 따른다. [보안 실행 정책](security-and-runtime.md#선택-ai-가이드)
 
 ### 3.4. 발견 키 권한 자료와 담당자 확인
 
