@@ -100,12 +100,40 @@
 | SR-5 | plan JSON은 민감 표시된 값을 지운 뒤 전송, 분석 후 삭제. 결과만 저장 |
 | SR-6 | 스캐너는 노드 역할이 아닌 전용 읽기 역할 사용. State 버킷 읽기는 명시적 허용 목록으로만 |
 | SR-7 | 도구 이미지·Action은 버전 고정, 업데이트는 리뷰 후 반영 (2026년 3월 Trivy Action 사건) |
-| SR-8 | GitHub App은 최소 권한(checks 쓰기, pull requests 쓰기, contents 읽기, actions 쓰기(재검사용)). 수정 PR 생성용 컨텐츠 쓰기는 별도 App으로 분리. App 개인 키는 Secrets Manager에 보관 |
+| SR-8 | GitHub App은 최소 권한(checks 쓰기, pull requests 쓰기, contents 읽기). 대시보드에서 다시 검사하지 않으므로 actions 쓰기는 주지 않음 (10/21). 수정 PR 생성용 컨텐츠 쓰기는 별도 App으로 분리. App 개인 키는 Secrets Manager에 보관 |
 | SR-9 | 대시보드·API는 인증된 팀원만, CI 호출은 GitHub OIDC 토큰 검증. CI용 엔드포인트만 외부 노출(요청 크기·횟수 제한), Neo4j와 결과 DB는 클러스터 내부에만 |
 | SR-10 | 예외 승인, 재검사, 수정 PR 생성은 누가 언제 했는지 기록 |
+
+## 배포 전 점검 결과 (11/04)
+
+**SR 10개 중 6개 충족, 4개는 일부 충족. 남은 부분은 모두 배포(대시보드·CI → API 연결)나 팀 일정(apply 역할)에 묶여 있음.**
+
+- 근거는 infrastructure develop, dashboard-backend·dashboard-frontend develop + 11/04 브랜치, 로컬 데모 기준
+
+| ID | 결과 | 근거 | 남은 것 |
+|---|---|---|---|
+| SR-1 | 일부 | plan-ro: `ReadOnlyAccess` + 시크릿 값·버킷 객체 거부, 신뢰 정책 `sub`는 `…:pull_request`만 | apply 역할 없음. CI apply는 ADR-12 팀 일정 |
+| SR-2 | 일부 | 자격 증명 단계가 gate 단계 뒤에 있고, gate가 실패하면 받지 않음 | `id-token: write`가 gate·plan이 같이 도는 job 전체에 걸림. plan을 별도 job(`needs: gate`)으로 나누면 충족 |
+| SR-3 | 충족 | `pull_request_target` 없음, 포크 PR은 plan 안 함, Action 8곳 모두 커밋 SHA 고정 | |
+| SR-4 | 충족 | API·화면·PR 코멘트에 주소·속성 이름·개수만. plan은 2단계 지우기(ADR-06) 후 전송 | |
+| SR-5 | 충족 | `scrub-plan.sh` 2단계, 분석이 끝나면 `iac_plan_payloads` 삭제 (워커 테스트로 확인) | |
+| SR-6 | 충족 | 수집은 전용 `scanner-ro`(IRSA), 시크릿 값·객체 읽기 거부. State 내용은 읽지 않음 | |
+| SR-7 | 충족 | conftest·terraform 버전 + 체크섬, 컨테이너 이미지 digest, Action SHA | |
+| SR-8 | 일부 | App 권한 checks·pull requests 쓰기, contents 읽기. actions 쓰기 없음 | 개인 키는 Secrets Manager가 아니라 main 전용 environment(`iac-app`)의 GitHub secret |
+| SR-9 | 일부 | 대시보드 API는 로그인한 관리자만, Neo4j는 NetworkPolicy로 클러스터 안만 | CI OIDC 검증, 요청 횟수 제한, 결과 DB 위치는 배포 때 |
+| SR-10 | 충족 (지금 있는 쓰기 기능 기준) | 발견 건 담당·상태 변경은 `iac_audit_events`에 사용자와 전후 값 기록, 분석·점검 작업도 기록 | 예외 승인·수정 PR은 다음 단계 기능 |
+
+**NFR-1 속도**
+
+| 구간 | 목표 | 측정 | 방법 |
+|---|---|---|---|
+| ② gate | 1분 이내 | 1.1~2.6초 (3회, 도구 설치 제외) | 로컬 `GATE_BASE=origin/develop policy/gate.sh` |
+| ① 경로 분석 + ③ State 영향 | | 1.2초 (단독), 10.4~10.7초 (그래프 보강과 겹쳐 대기한 경우, IAM 시뮬레이터 호출 포함) | 로컬 데모, `iac_jobs` 등록 → 완료 시각 |
+| 그래프 보강 / State 점검 | | 6.2초 / 11.3초 | 같은 데모 (열린 경로 60개 그래프) |
+| PR 검사 전체 (② → plan → ① → ③) | 10분 이내 | 미측정 | CI plan과 CI → API 연결이 배포 뒤라 끝에서 끝까지는 아직 잴 수 없음 |
 
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-13 |
+| 수정일 | 2026-11-04 |

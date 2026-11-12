@@ -3,7 +3,15 @@
 **스캐너가 찾은 CVE 중 실제로 우리 코드에 닿는 것을 가려내고, 판정 근거를 남기는 모듈.** 의존성·이미지 CVE를 "실제로 배포돼 있나(L1)", "우리 코드에서 취약 함수까지 닿나(L2)", "실제로 호출됐나(L3)" 단계로 판정해 고칠 순서를 정한다. 10/7~10/11 PoC 결과를 바탕으로 정리했다.
 
 - **범위**: Reach만 다룬다. Logssey의 다른 모듈(시크릿, IaC, 런타임 등)은 범위 밖이고, Reach가 Logssey에 넘기는 접점(공통 Finding)만 다룬다.
-- **상태 표기**: [완료] PoC로 구현·검증됨 / [부분] 일부만 구현되었거나 수동 / [계획] 아직 없음(설계). 지금 Reach는 CLI와 스크립트로 돌아가고, API 서버와 대시보드는 [계획]이다.
+- **상태 표기**: [완료] PoC로 구현·검증됨 / [부분] 일부만 구현되었거나 수동 / [계획] 아직 없음(설계). 지금 Reach는 CLI와 스크립트로 돌아가고, API와 대시보드는 [계획]이다.
+- **구현 위치와 규약**: 별도 서비스를 만들지 않고 기존 대시보드에 붙인다. 시크릿·IaC·런타임과 같은 구조다(ARD AD-18).
+
+| 구성 | 위치 |
+|---|---|
+| API | [dashboard-backend](https://github.com/Logssey/dashboard-backend)의 `reach` 모듈, `/api/v1/reach`. 대시보드 세션 인증과 [API 공통 규약](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)(camelCase, 대문자 열거값, `{code, message}` 오류)을 따른다 |
+| 분석 | GitHub Actions 러너에서 `reach.jar`·`verdict.py`를 돌리고 결과만 올린다(API-13). CI는 GitHub OIDC로 인증한다 |
+| 결과 DB | 대시보드 PostgreSQL의 `reach_` 테이블(Flyway 후속 마이그레이션) |
+| 화면 | 대시보드 공통 레이아웃의 "취약점 관리" 메뉴 |
 - **기준일**: 2026-10-11
 
 ## 문서
@@ -15,6 +23,7 @@
 | [규칙 명세서](02-functional-design/rule-spec.md) | 판정 어휘, 일반 원칙, 평가 순서, 사실(fact), CVE별 규칙, 사람 검토, 규칙 추가 절차 | GR, F-, RULE- |
 | [API 명세서](03-architecture/api-contract.md) | 공통 규약, 리소스 스키마, 엔드포인트 12개(MVP 설계 초안), 지금의 CLI 대응 | API, E- |
 | [화면 명세서](02-functional-design/dashboard-flow.md) | 화면 6개의 명세와 와이어프레임 | SCR |
+| [PoC 결과](05-research/poc-results.md) | PoC 기준 실행, 실측 수치, 요구사항으로 이어진 관찰과 실험 근거 | - |
 
 권장 열람 순서: PRD → ARD → 규칙 명세서 → API 명세서 → 화면 명세서
 
@@ -27,4 +36,4 @@
 |---|---|
 | 작성자 | 김진섭 |
 | 작성일 | 2026-10-11 |
-| 수정일 | 2026-10-14 |
+| 수정일 | 2026-10-18 |
