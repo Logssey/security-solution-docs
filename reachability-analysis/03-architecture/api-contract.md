@@ -267,7 +267,7 @@ flowchart LR
 |---|---|---|---|
 | `id` | integer | 예 | 대상 ID |
 | `type` | enum | 예 | `REPO`(레포 커밋) / `IMAGE`(컨테이너 이미지 digest) |
-| `app` | enum | 예 | `API` / `WEB` / `CHAT` |
+| `app` | string | 예 | 앱 코드. 설치 설정 `logssey.reach.apps`에 등록한 값이다(아래). Re:Used 설치는 `API` / `WEB` / `CHAT` |
 | `repo` | object | `type=REPO`일 때 | `name`(예: `service-backend`), `path`(레포 안 하위 경로. chat은 `chat-server`), `commit`(커밋 SHA) |
 | `image` | object | `type=IMAGE`일 때 | `repository`(예: `logssey/reused-api`), `digest`, `revision`(OCI 라벨 `org.opencontainers.image.revision`), `createdAt` |
 | `sourceTree` | string | 아니요 | git 트리 해시. 배포 커밋과 분석 커밋이 같은 소스인지 비교할 때 쓴다 |
@@ -276,7 +276,11 @@ flowchart LR
 - 이미지는 digest로만 가리킨다. ECR 태그는 MUTABLE이라 태그로는 실행 중인 이미지를 확정하지 못한다.
 - `image.repository`에는 레지스트리 호스트를 넣지 않는다.
 - 요청(API-01, API-12)의 커밋은 40자, digest는 `sha256:`과 64자다. 대문자로 와도 소문자로 저장한다. 형식이 틀리거나 `image.repository`에 태그(`:`)·digest(`@`)를 붙이면 400 `INVALID_INPUT`이다.
-- `app`을 주지 않았는데 아래 표에 없는 레포·저장소면 422 `TARGET_UNRESOLVED`다. 이미 있는 대상(같은 digest, 또는 같은 레포·하위 경로·커밋)을 다른 `app`으로 요청해도 422다.
+- 감시 대상 앱은 코드에 두지 않고 설치마다 설정으로 등록한다(PRD FR-15). 앱 하나는 앱 코드(`code`), 레포(`repo`), 레포 안 하위 경로(`path`, 없으면 레포 전체), 이미지 저장소(`image`)다. `repo`와 `image` 중 하나는 있어야 한다. 앱 코드는 대문자로 시작하고 대문자·숫자·`_`로 최대 10자다. 형식이 틀리거나 코드·레포(+경로)·이미지 저장소가 겹치면 서버가 뜨지 않는다. 설정이 없으면 서버는 뜨지만 어떤 대상도 정하지 못한다. 등록한 앱 목록은 API-14로 본다.
+- `app`을 주면 설정에 있는 코드여야 한다. 없는 코드면 400 `INVALID_INPUT`이다.
+- `app`을 주지 않으면 설정으로 정한다. 레포는 소유자를 떼고 이름만 비교한다(`Logssey/service-backend`도 `service-backend`). 레포 이름과 하위 경로가 같은 등록을 먼저 찾고, 없으면 같은 레포를 경로 없이 등록한 앱을 쓴다. 이미지 저장소는 정확히 같은 이름만 찾는다. 찾지 못하면 422 `TARGET_UNRESOLVED`다. 이미 있는 대상(같은 digest, 또는 같은 레포·하위 경로·커밋)을 다른 `app`으로 요청해도 422다.
+
+Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `reach/local-targets.properties`).
 
 | `app` | 레포 | 이미지 저장소 | 주력 스캔 | L2 판정 |
 |---|---|---|---|---|
@@ -414,7 +418,7 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `kind` | string | 예 | 예: `Deployment` |
 | `name` | string | 예 | 예: `reused-api` |
 | `container` | string | 예 | 컨테이너 이름. 예: `api` |
-| `app` | enum | 아니요 | `API` / `WEB` / `CHAT`. 같은 digest나 같은 이미지 저장소의 이미지 대상이 없으면 `null`(API-07) |
+| `app` | string | 아니요 | 앱 코드(3-2). 같은 digest나 같은 이미지 저장소의 이미지 대상이 없으면 `null`(API-07) |
 | `image` | object | 예 | `repository`, `digest`(파드 imageID에서 얻은 값), `revision`(이미지 태그. 태그가 없으면 주지 않는다) |
 | `replicas` | object | 예 | `ready`(준비된 파드 수), `desired`(디플로이먼트가 원하는 파드 수. 디플로이먼트를 조회했을 때만 준다 [계획]) |
 | `pods` | object 배열 | 아니요 | `include=pods`일 때. `name`, `imageId`, `ready` [계획] |
@@ -537,7 +541,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | 필드 | 값 |
 |---|---|
 | Target `type` | `REPO` / `IMAGE` |
-| Target `app` | `API` / `WEB` / `CHAT` |
+| Target `app` | 열거값이 아니다. 설치 설정의 앱 코드(3-2, API-14) |
 | Scan `trigger` | `MANUAL` / `PR` / `IMAGE_BUILD` / `SCHEDULE` |
 | Scan `stages[].name` | `SBOM` / `MATCH` / `L1` / `L2` / `REPORT` |
 | Finding `sources` | `TRIVY` / `GRYPE` |
@@ -577,6 +581,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | API-11 | `GET /api/v1/reach/exports/ocsf?scanId=` | `ADMIN` | 공통 Finding(OCSF) 내보내기 | FR-10 | - | 없음 |
 | API-12 | `POST /api/v1/reach/ci/checks`, `GET /api/v1/reach/ci/checks/{checkId}` | CI(OIDC) | CI(PR) 검사 실행과 결과 | FR-11 | SCR-05 | 없음 |
 | API-13 | `PUT /api/v1/reach/ci/checks/{checkId}/results` | CI(OIDC) | 러너의 분석 결과 업로드 | FR-01, FR-11 | - | `run-reach.sh`가 만드는 파일 |
+| API-14 | `GET /api/v1/reach/apps` | `ADMIN` | 감시 대상 앱 목록(설치 설정) | FR-15 | SCR-02, SCR-04, SCR-05 | 없음 |
 
 **기본 흐름**
 
@@ -1211,13 +1216,13 @@ Content-Type: application/json; charset=utf-8
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `namespace` | string 목록 | 아니요 | 예: `reused`. 허용 목록 밖 값은 400이 아니라 빈 결과다 |
-| `app` | enum 목록 | 아니요 | `API`, `WEB`, `CHAT`. `app`을 정하지 못한 항목(아래)은 이 필터를 걸면 빠진다 |
+| `app` | string 목록 | 아니요 | 앱 코드(3-2). 설정에 없는 코드면 400. `app`을 정하지 못한 항목(아래)은 이 필터를 걸면 빠진다 |
 | `digest` | string | 아니요 | 이미지 digest 일치. `^sha256:[0-9a-f]{64}$`가 아니면 400 |
 | `deployment` | enum 목록 | 아니요 | `RUNNING`, `NOT_RUNNING`, `UNKNOWN`. 항목은 `NOT_RUNNING`이 되지 않으므로 `NOT_RUNNING`만 걸면 빈 결과다 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
 - 순서는 `namespace`, `name`, `kind`, 컨테이너 이름, `image.digest` 오름차순으로 고정이고 `sort`는 받지 않는다. 화면의 묶음 순서(불일치 → 스캔 없음 → 일치)는 화면이 정한다.
-- 허용한 (클러스터, 네임스페이스)의 조회만 준다(3-3과 같은 목록, 지금은 `reused-prod` · `reused`).
+- 허용한 (클러스터, 네임스페이스)의 조회만 준다(3-3과 같은 목록). 허용 목록은 설치 설정 `logssey.reach.l1`(클러스터 하나 `cluster`, 네임스페이스 목록 `namespaces`)이다. Re:Used 설치는 `reused-prod` · `reused`. 설정이 없으면 L1이 꺼진다: 목록은 빈 결과(200), 업로드는 400, `deployment`는 다시 계산하지 않는다.
 
 요청 예시: `GET /api/v1/reach/workloads?namespace=reused`
 
@@ -1324,7 +1329,7 @@ Content-Type: application/json; charset=utf-8
 
 | 필드 | 규칙 (어기면 400 `INVALID_INPUT`) |
 |---|---|
-| `cluster` · `namespace` | 서버가 허용한 값만. 지금은 `reused-prod` · `reused` |
+| `cluster` · `namespace` | 설치 설정 `logssey.reach.l1`이 허용한 값만(Re:Used 설치는 `reused-prod` · `reused`). L1 설정이 없으면 모두 400 |
 | `observedAt` | 필수. 오프셋을 포함한 ISO-8601. 지금 + 5분보다 미래면 400(시계 차이는 5분까지 받는다). 저장된 조회보다 오래되면 409 `CONFLICT`이고 아무것도 바꾸지 않는다. 같은 시각은 받는다(재시도) |
 | `workloads` | 필수. 빈 배열도 받는다(조회했는데 파드가 없음). `containers`가 빈 워크로드는 저장하지 않는다 |
 | `kind` · `name` · `containers[].name` · `containers[].image` | 비지 않은 문자열. 최대 30 · 253 · 253 · 512자(유니코드 문자 수) |
@@ -1785,6 +1790,41 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - 단계(`stages`)는 러너가 잰 값을 넘긴다. 넘기지 않으면 `SBOM`·`MATCH`·`L2`·`REPORT`(L2를 안 돌렸으면 `L2` 빼고)를 `SUCCEEDED`로 둔다. 분석 전에 실패했으면 `tools`·`stages`·`failure`만 있는 실패 묶음을 만든다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포의 검사), `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`
+
+### API-14 감시 대상 앱
+
+| 항목 | 내용 |
+|---|---|
+| 메서드·경로 | `GET /api/v1/reach/apps` |
+| 권한 | `ADMIN`(대시보드 세션) |
+| 설명 | 이 설치가 감시하는 앱(설정 `logssey.reach.apps`, 3-2)을 설정 순서대로 준다. 화면의 앱 선택지가 이 목록을 쓴다. 등록·수정 API는 없다(PRD FR-15 MVP는 설정 파일) |
+| 관련 | FR-15 · SCR-02, SCR-04, SCR-05 |
+| 지금 같은 일 | 없음 |
+
+쿼리는 없다. 페이지를 나누지 않는다(설정에 적은 앱 수만큼).
+
+응답 예시(200). Re:Used 설치의 값이다.
+
+```json
+{
+  "items": [
+    { "code": "API", "repo": "service-backend", "path": null, "image": "logssey/reused-api" },
+    { "code": "WEB", "repo": "service-frontend", "path": null, "image": "logssey/reused-web" },
+    { "code": "CHAT", "repo": "service-backend", "path": "chat-server", "image": "logssey/reused-chat" }
+  ]
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `code` | string | 예 | 앱 코드. 다른 API의 `app` 값 |
+| `repo` | string | 예(값은 `null` 가능) | 설정에 적은 레포 이름 그대로 |
+| `path` | string | 예(값은 `null` 가능) | 레포 안 하위 경로. `null`이면 레포 전체 |
+| `image` | string | 예(값은 `null` 가능) | 이미지 저장소 |
+
+- 설정이 없으면 `items`가 빈 배열이다(200).
+
+**오류**: `UNAUTHENTICATED`, `FORBIDDEN`
 
 ## 5. 공통 Finding(OCSF) 내보내기 (API-11)
 
