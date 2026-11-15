@@ -71,7 +71,27 @@
 - 세션이 없거나 만료되면 401 `UNAUTHENTICATED`다. CSRF 토큰이 없거나 다르면 403 `FORBIDDEN`이다(공통).
 - OIDC 토큰 검증에 실패하면 401 `UNAUTHENTICATED`, 허용 목록 밖의 레포·이벤트면 403 `FORBIDDEN`이다.
 - 쓰기 요청(API-01, API-06, API-12, API-13)은 누가·언제 했는지 남긴다(`requestedBy`, `reviewer`, `reviewedAt`). CI 요청은 OIDC 토큰의 `repository`와 `sub`를 남긴다.
-- [계획] 지금 구현은 OIDC 검증을 아직 붙이지 않아 CI 경로(API-12, API-13)도 대시보드 `ADMIN` 세션으로 받는다. 그래서 CI 검사가 만든 스캔도 `requestedBy.kind`가 `USER`다.
+- CI 경로(API-12, API-13)는 대시보드 `ADMIN` 세션도 받는다. `Authorization: Bearer` 헤더가 있는 `/api/v1/reach/**` 요청은 CI 요청으로 본다(세션 쿠키가 같이 와도 세션은 보지 않는다). 세션·CSRF는 쓰지 않는다.
+
+**CI 토큰 검증 (실패하면 401 `UNAUTHENTICATED`)**
+
+- 서명: 발급자의 공개 키(`https://token.actions.githubusercontent.com/.well-known/jwks`, RS256)
+- `iss = https://token.actions.githubusercontent.com`, 만료(`exp`), `aud`에 `logssey-reach` 포함
+- 클레임 `repository`(`소유자/이름`), `sub`, `event_name`, `ref`가 있어야 한다. `repository`는 200자, `sub`는 300자까지
+
+**CI가 할 수 있는 일 (어긋나면 403 `FORBIDDEN`)**
+
+| 조건 | 설명 |
+|---|---|
+| 감시 대상 레포 | 토큰 `repository`의 소유자가 설치 설정 `logssey.reach.ci.repository-owner`(예: `Logssey`)이고, 이름이 감시 대상 앱의 레포(FR-15, `logssey.reach.apps[*].repo`)다. 소유자 설정이 비어 있으면 모든 CI 토큰이 403이다 |
+| 본문·대상의 레포 | 본문 `repository`와 `target.repo.name`이 토큰 레포와 같다(소유자 없이 이름만 와도 된다, 대소문자 무시). 이미지 대상은 그 레포 앱의 이미지(`logssey.reach.apps[*].image`)여야 하고, `target.app`을 주면 그 레포의 앱이어야 한다 |
+| 이벤트 | `mode = PR`은 `event_name = pull_request`이고, `pullRequest.number`를 주면 토큰 `ref`가 `refs/pull/<번호>/merge`다. 그 밖의 mode(`IMAGE_BUILD`, `SCHEDULE`, `MANUAL`)는 토큰 `ref`가 `refs/heads/<기본 브랜치>`다. 기본 브랜치는 설치 설정 `logssey.reach.ci.default-branch`(기본 `main`) |
+| 재검사 | `rescanOf`는 사람만 쓴다 |
+| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰만. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404 |
+| 경로 | CI 토큰으로 `/api/v1/reach/ci/**` 밖의 Reach API를 부르면 403 |
+
+- 순서는 본문 형식(400) → 권한(403) → 멱등 충돌(409)이다.
+- CI가 만든 스캔은 `requestedBy = {kind: CI, repository: 토큰 repository, subject: 토큰 sub}`이고, 멱등 키 범위(2-7)는 `CI:<토큰 repository>`다. 토큰의 `ref`는 위 검사에만 쓰고 저장하지 않는다(PR 번호·브랜치는 검사 본문 값으로 남는다).
 
 ### 2-3. 요청·응답 형식
 
@@ -1639,7 +1659,7 @@ Content-Type: application/json; charset=utf-8
 | 항목 | 내용 |
 |---|---|
 | 메서드·경로 | `POST /api/v1/reach/ci/checks`(실행), `GET /api/v1/reach/ci/checks/{checkId}`(결과) |
-| 권한 | CI(GitHub OIDC). 결과 조회는 대시보드 세션 `ADMIN`도 된다 |
+| 권한 | CI(GitHub OIDC, 2-2) 또는 대시보드 세션 `ADMIN`. 결과 조회는 검사를 만든 레포의 토큰만 |
 | 설명 | CI가 PR·이미지 빌드·정기·수동 실행 때 검사를 등록한다. 서버는 검사와 스캔을 만들고 202를 준다. 러너가 분석한 결과를 API-13으로 올리면, 서버가 `L1`을 채우고 기준 스캔과 비교해 게이트 결과(`PASS` / `WARN` / `FAIL`)를 낸다. 정책은 6절. 경로는 실행(POST)과 결과(GET) 둘이고, 검사 목록 조회는 없다. PR 검사가 만든 스캔은 API-02(`trigger=PR`)로 본다 |
 | 관련 | FR-11 · SCR-05 |
 | 지금 같은 일 | 없음 [계획] |
@@ -1728,17 +1748,17 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 - `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. `findingsUrl`(API-04 `?scanId=`)로 열면 그 검사의 스캔 Finding이 나온다. PR 검사의 결과는 기준 범위에 없어서(ARD SR-09) 이렇게 본다.
 
-**오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `RATE_LIMITED`
+**오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포·사람이 만든 검사), `RATE_LIMITED`
 
 ### API-13 분석 결과 업로드
 
 | 항목 | 내용 |
 |---|---|
 | 메서드·경로 | `PUT /api/v1/reach/ci/checks/{checkId}/results` |
-| 권한 | CI(GitHub OIDC). 검사를 등록한 레포의 토큰만 받는다. [계획] 지금 구현은 대시보드 `ADMIN` 세션으로 받아(2-2) 레포를 확인하지 않는다. 그래서 `FORBIDDEN`(다른 레포의 검사)도 아직 없다 |
+| 권한 | CI(GitHub OIDC, 2-2). 검사를 등록한 레포의 토큰만 받는다(다른 레포·사람이 만든 검사는 본문을 보기 전에 403). 대시보드 세션 `ADMIN`도 된다 |
 | 설명 | 러너가 돌린 `SBOM`·`MATCH`·`L2`·`REPORT` 단계의 결과를 올린다. 서버는 받은 결과를 `reach_` 테이블에 저장하고, `L1`을 채우고, 사람 검토를 이어받은 뒤(FR-08) 스캔을 `SUCCEEDED`로 바꾼다. 분석은 서버에서 다시 하지 않는다(ARD AD-18) |
 | 관련 | FR-01, FR-07, FR-11 · 화면 없음 |
-| 지금 같은 일 | `reach-analyzer/verdict/bundle.py`가 스캐너 결과와 `verdicts.json`, `reach-result.json`으로 결과 묶음을 만든다. 올리는 러너(CI)와 OIDC 인증은 [계획] |
+| 지금 같은 일 | `reach-analyzer/verdict/bundle.py`가 스캐너 결과와 `verdicts.json`, `reach-result.json`으로 결과 묶음을 만든다. `dashboard-backend`의 `deploy/reach/ci/reach-scan.sh`가 OIDC 토큰으로 API-12·13을 부른다. 서비스 레포에 붙여 실제로 돌리는 일은 [계획] |
 
 | 이름 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
