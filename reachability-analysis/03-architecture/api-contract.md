@@ -18,7 +18,7 @@
 |---|---|
 | 포함 | 스캔 요청과 이력, Finding·판정·근거 조회, 사람 검토 기록, 워크로드(L1) 조회, 대시보드 요약, 규칙·취약 함수 조회, 공통 Finding(OCSF) 내보내기, CI 검사, 이벤트(선택), L3 능동 관측 근거(Evidence `kind=RUNTIME`, FR-14) |
 | 제외 | Logssey의 다른 모듈(시크릿, IaC, 런타임). 로그인과 사용자 관리(대시보드 공통, ADR-D003). L3 상시 관측(운영 트래픽 감시, 확장). 업그레이드 적용(팀 결정) |
-| 이번 초안에 없는 것 | 규칙·취약 함수를 쓰는 API. 지금처럼 데이터 파일로 추가한다(NFR-07). 사실(F-) 목록 조회와 CI 검사 목록 조회도 없다. 대상(서비스) 등록 API도 없다. MVP는 레포에 커밋한 설정 파일로 등록하고, 등록 API와 화면은 확장 단계다(PRD FR-15). 사실의 뜻과 수집 범위는 규칙명세서 7절을 본다. PR 검사가 만든 스캔은 API-02(`trigger=PR`)로 본다 |
+| 이번 초안에 없는 것 | 규칙·취약 함수를 쓰는 API. 지금처럼 데이터 파일로 추가한다(NFR-07). 사실(F-) 목록 조회도 없다. 대상(서비스) 등록 API도 없다. MVP는 레포에 커밋한 설정 파일로 등록하고, 등록 API와 화면은 확장 단계다(PRD FR-15). 사실의 뜻과 수집 범위는 규칙명세서 7절을 본다. PR 검사가 만든 스캔은 API-02(`trigger=PR`)로 본다 |
 
 ### 1-3. 상태
 
@@ -1658,9 +1658,9 @@ Content-Type: application/json; charset=utf-8
 
 | 항목 | 내용 |
 |---|---|
-| 메서드·경로 | `POST /api/v1/reach/ci/checks`(실행), `GET /api/v1/reach/ci/checks/{checkId}`(결과) |
-| 권한 | CI(GitHub OIDC, 2-2) 또는 대시보드 세션 `ADMIN`. 결과 조회는 검사를 만든 레포의 토큰만 |
-| 설명 | CI가 PR·이미지 빌드·정기·수동 실행 때 검사를 등록한다. 서버는 검사와 스캔을 만들고 202를 준다. 러너가 분석한 결과를 API-13으로 올리면, 서버가 `L1`을 채우고 기준 스캔과 비교해 게이트 결과(`PASS` / `WARN` / `FAIL`)를 낸다. 정책은 6절. 경로는 실행(POST)과 결과(GET) 둘이고, 검사 목록 조회는 없다. PR 검사가 만든 스캔은 API-02(`trigger=PR`)로 본다 |
+| 메서드·경로 | `POST /api/v1/reach/ci/checks`(실행), `GET /api/v1/reach/ci/checks/{checkId}`(결과), `GET /api/v1/reach/ci/checks`(목록) |
+| 권한 | CI(GitHub OIDC, 2-2) 또는 대시보드 세션 `ADMIN`. 결과 조회는 검사를 만든 레포의 토큰만. 목록은 대시보드 세션만(CI 토큰은 403: 한 레포의 토큰으로 모든 레포의 검사를 보지 않는다) |
+| 설명 | CI가 PR·이미지 빌드·정기·수동 실행 때 검사를 등록한다. 서버는 검사와 스캔을 만들고 202를 준다. 러너가 분석한 결과를 API-13으로 올리면, 서버가 `L1`을 채우고 기준 스캔과 비교해 게이트 결과(`PASS` / `WARN` / `FAIL`)를 낸다. 정책은 6절. 목록은 최신 검사부터 결과 조회와 같은 모양으로 준다(화면 SCR-05-10). PR 검사가 만든 스캔은 API-02(`trigger=PR`)로도 본다 |
 | 관련 | FR-11 · SCR-05 |
 | 지금 같은 일 | 없음 [계획] |
 
@@ -1676,6 +1676,10 @@ Content-Type: application/json; charset=utf-8
 | `policy` | 본문 | enum | 아니요 | `REPORT_ONLY`(기본) / `GATE` |
 | `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. `SUCCEEDED`여야 한다(아니면 400). 없으면 `baseRef`의 최신 `SUCCEEDED` 스캔을 쓴다. [계획] 스캔에 브랜치 정보가 없어 지금 구현은 찾지 않고 기준 없이(모든 Finding을 새 것으로) 본다. OIDC 토큰의 `ref`를 남길 때 한다 |
 | `checkId` | 경로 | integer | 예 | CI 검사 ID |
+| `repository` | 쿼리 | string | 아니요(목록) | 레포 이름. 대소문자를 가리지 않고, 소유자를 붙여도(`Logssey/service-backend`) 이름으로 맞춘다. 200자까지 |
+| `mode` | 쿼리 | enum[] | 아니요(목록) | 쉼표로 여러 개(`PR,IMAGE_BUILD`). 허용 밖이면 400 |
+| `scanStatus` | 쿼리 | enum[] | 아니요(목록) | 검사가 만든 스캔의 상태. 쉼표로 여러 개 |
+| `size`, `cursor`, `include` | 쿼리 | | 아니요(목록) | 2-4와 같다. 기본 20, 최대 100. 정렬은 최신(검사 ID 큰) 순 하나. 커서와 다른 필터를 같이 보내면 400. `include=total`이면 `totalCount` |
 
 요청 예시(실행)
 
@@ -1742,13 +1746,16 @@ Idempotency-Key: service-backend-pr-123-bb4639b
     }
   },
   "findingsUrl": "/api/v1/reach/findings?scanId=2",
+  "createdAt": "2026-10-11T03:00:00Z",
   "finishedAt": "2026-10-11T03:01:20Z"
 }
 ```
 
+- 결과 조회와 목록 항목에는 검사를 등록한 시각 `createdAt`도 있다.
+- 목록 응답은 `{ "items": [결과 조회와 같은 모양…], "nextCursor": …, "hasNext": …, "totalCount": … }`(2-4)이다. 끝난 검사는 항목마다 `gate`가 있다.
 - `gate`와 `findingsUrl`은 스캔이 `SUCCEEDED`일 때만 있다. `findingsUrl`(API-04 `?scanId=`)로 열면 그 검사의 스캔 Finding이 나온다. PR 검사의 결과는 기준 범위에 없어서(ARD SR-09) 이렇게 본다.
 
-**오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포·사람이 만든 검사), `RATE_LIMITED`
+**오류**: 실행은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`. 결과 조회는 `NOT_FOUND`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포·사람이 만든 검사), `RATE_LIMITED`. 목록은 `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`(CI 토큰)
 
 ### API-13 분석 결과 업로드
 
