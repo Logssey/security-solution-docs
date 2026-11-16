@@ -88,7 +88,7 @@
 | 본문·대상의 레포 | 본문 `repository`와 `target.repo.name`이 토큰 레포와 같다(소유자 없이 이름만 와도 된다, 대소문자 무시). 이미지 대상은 그 레포 앱의 이미지(`logssey.reach.apps[*].image`)여야 하고, `target.app`을 주면 그 레포의 앱이어야 한다 |
 | 이벤트 | `mode = PR`은 `event_name = pull_request`이고, `pullRequest.number`를 주면 토큰 `ref`가 `refs/pull/<번호>/merge`다. 그 밖의 mode(`IMAGE_BUILD`, `SCHEDULE`, `MANUAL`)는 토큰 `ref`가 `refs/heads/<기본 브랜치>`다. 기본 브랜치는 설치 설정 `logssey.reach.ci.default-branch`(기본 `main`) |
 | 재검사 | `rescanOf`는 사람만 쓴다 |
-| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰만. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404 |
+| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰만. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404. 예외: 대시보드에서 요청한 스캔(API-01, `mode = MANUAL`)은 서버가 띄운 실행의 토큰이 올린다. `event_name = workflow_dispatch`, `ref = refs/heads/<기본 브랜치>`이고 토큰 레포가 그 검사의 레포(레포 대상은 그 레포, 이미지 대상은 그 이미지 앱의 레포)여야 한다 |
 | 경로 | CI 토큰으로 `/api/v1/reach/ci/**` 밖의 Reach API를 부르면 403 |
 
 - 순서는 본문 형식(400) → 권한(403) → 멱등 충돌(409)이다.
@@ -209,6 +209,7 @@
 | `INTERNAL_ERROR` | 500 | 서버 오류 | - | 전체 | 공통 |
 | `UNAVAILABLE` | 503 | 의존 서비스를 잠시 쓸 수 없음(GitHub 워크플로 실행 요청 실패 등) | `dependency` | API-01, API-12 | Reach 추가(IaC와 같은 이름) |
 | `BUILD_FAILED` | - | 레포 대상의 빌드 실패. HTTP 응답이 아니라 스캔 실패 사유(`failure.code`)로만 쓴다 | `stage` | API-03 | Reach 추가 |
+| `IMAGE_PULL_FAILED` | - | 이미지 대상을 받지 못함(대시보드에서 요청한 스캔, API-01). 스캔 실패 사유로만 쓴다 | `stage` | API-03 | Reach 추가 |
 | `ANALYSIS_FAILED` | - | L2 분석 실패. 스캔 실패 사유로만 쓴다 | `stage` | API-03 | Reach 추가 |
 
 ### 2-7. 멱등성
@@ -739,7 +740,22 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 - 레포 대상은 cdxgen이 Gradle 빌드를 실행한다. 간접 의존성까지 잡지만 빌드 스크립트를 실행하므로, 빌드는 러너에서만 하고 서버는 PR 코드를 실행하지 않는다(ARD AD-18, SR-09).
 - `rescanOf`는 재빌드 없이 저장된 SBOM을 최신 DB로 다시 대조한다. 하루 1번 재대조(FR-11)에 쓴다.
 - 어떤 서비스를 스캔할지는 PRD FR-15의 대상(서비스) 등록 목록(레포에 커밋한 설정 파일)이 정한다. 하루 1번 재대조(`trigger=SCHEDULE`)는 이 목록의 서비스를 대상으로 한다. 등록하지 않은 대상을 API-01로 요청했을 때 받을지는 정하지 않았다. [계획] 지금 구현은 `app`을 정할 수 있으면(3-2) 받는다.
-- 서버는 요청과 함께 `mode=MANUAL`인 CI 검사를 만들고 `options`를 거기에 남긴다(러너가 읽는다). [계획] 지금 구현은 `workflow_dispatch`를 부르지 않아 스캔이 `QUEUED`에 머문다.
+- 서버는 요청과 함께 `mode=MANUAL`인 CI 검사를 만들고 `options`를 거기에 남긴다(러너가 읽는다). 검사의 `repository`는 레포 대상이면 그 레포, 이미지 대상이면 설정(`logssey.reach.apps`)에서 그 이미지 앱의 레포다.
+- 그다음 그 레포의 Reach 워크플로(`reach.yml`)를 기본 브랜치(`logssey.reach.ci.default-branch`)로 `workflow_dispatch`한다. 대시보드 설치의 GitHub App(설정 `logssey.reach.dispatch.app-id`·`private-key`, 권한 `Actions: write`)으로 부른다. inputs는 늘 아래 여섯 개를 모두 보내고 쓰지 않는 값은 빈 문자열이다.
+
+| input | 값 |
+|---|---|
+| `check_id` | 만든 검사 ID. 러너는 이 검사로 결과를 올린다(API-13) |
+| `target_type` | `REPO` / `IMAGE` |
+| `commit` | 레포 대상의 커밋(40자, 소문자) |
+| `path` | 레포 대상이면 `target.repo.path`, 이미지 대상이면 그 앱의 `path`. 없으면 빈 문자열 |
+| `image_repository`, `image_digest` | 이미지 대상의 저장소와 digest |
+
+- 워크플로를 띄우지 못하면(앱이 그 레포에 설치되지 않음, 워크플로나 `workflow_dispatch` 트리거가 없음, GitHub 오류·응답 없음) 503 `UNAVAILABLE`(`details.dependency = "github"`)이고 대상·스캔·검사를 남기지 않는다. 같은 `Idempotency-Key`로 다시 보내면 처음처럼 만들고 띄운다.
+- 같은 키로 다시 보낸 요청(`Idempotent-Replayed: true`)은 다시 띄우지 않는다.
+- 레포가 없는 이미지 앱(설정에 `image`만 있음)은 띄울 워크플로가 없어 422 `TARGET_UNRESOLVED`다.
+- 띄우지 않는 경우: 설치에 앱 설정이 없으면, 또는 `rescanOf`(러너가 저장된 SBOM 재대조를 아직 못 한다)면 띄우지 않고 스캔은 `QUEUED`로 남는다.
+- 러너가 스캔 전 단계(빌드, 이미지 받기, 도구 설치)에서 실패하면 실패 묶음을 올려 스캔이 `FAILED`가 된다. `failure.code`는 레포 대상 `BUILD_FAILED`, 이미지 대상 `IMAGE_PULL_FAILED`이고 `stage`는 `SBOM`이다(2-6).
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`
 
@@ -1667,7 +1683,7 @@ Content-Type: application/json; charset=utf-8
 | 항목 | 내용 |
 |---|---|
 | 메서드·경로 | `POST /api/v1/reach/ci/checks`(실행), `GET /api/v1/reach/ci/checks/{checkId}`(결과), `GET /api/v1/reach/ci/checks`(목록) |
-| 권한 | CI(GitHub OIDC, 2-2) 또는 대시보드 세션 `ADMIN`. 결과 조회는 검사를 만든 레포의 토큰만. 목록은 대시보드 세션만(CI 토큰은 403: 한 레포의 토큰으로 모든 레포의 검사를 보지 않는다) |
+| 권한 | CI(GitHub OIDC, 2-2) 또는 대시보드 세션 `ADMIN`. 결과 조회는 검사를 만든 레포의 토큰만(대시보드에서 요청한 스캔은 서버가 띄운 실행, 2-2). 목록은 대시보드 세션만(CI 토큰은 403: 한 레포의 토큰으로 모든 레포의 검사를 보지 않는다) |
 | 설명 | CI가 PR·이미지 빌드·정기·수동 실행 때 검사를 등록한다. 서버는 검사와 스캔을 만들고 202를 준다. 러너가 분석한 결과를 API-13으로 올리면, 서버가 `L1`을 채우고 기준 스캔과 비교해 게이트 결과(`PASS` / `WARN` / `FAIL`)를 낸다. 정책은 6절. 목록은 최신 검사부터 결과 조회와 같은 모양으로 준다(화면 SCR-05-10). PR 검사가 만든 스캔은 API-02(`trigger=PR`)로도 본다 |
 | 관련 | FR-11 · SCR-05 |
 | 지금 같은 일 | 없음 [계획] |
@@ -1770,7 +1786,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | 항목 | 내용 |
 |---|---|
 | 메서드·경로 | `PUT /api/v1/reach/ci/checks/{checkId}/results` |
-| 권한 | CI(GitHub OIDC, 2-2). 검사를 등록한 레포의 토큰만 받는다(다른 레포·사람이 만든 검사는 본문을 보기 전에 403). 대시보드 세션 `ADMIN`도 된다 |
+| 권한 | CI(GitHub OIDC, 2-2). 검사를 등록한 레포의 토큰만 받는다(다른 레포·사람이 만든 검사는 본문을 보기 전에 403). 대시보드에서 요청한 스캔(API-01)은 서버가 띄운 실행의 토큰이 올린다(2-2). 대시보드 세션 `ADMIN`도 된다 |
 | 설명 | 러너가 돌린 `SBOM`·`MATCH`·`L2`·`REPORT` 단계의 결과를 올린다. 서버는 받은 결과를 `reach_` 테이블에 저장하고, `L1`을 채우고, 사람 검토를 이어받은 뒤(FR-08) 스캔을 `SUCCEEDED`로 바꾼다. 분석은 서버에서 다시 하지 않는다(ARD AD-18) |
 | 관련 | FR-01, FR-07, FR-11 · 화면 없음 |
 | 지금 같은 일 | `reach-analyzer/verdict/bundle.py`가 스캐너 결과와 `verdicts.json`, `reach-result.json`으로 결과 묶음을 만든다. `dashboard-backend`의 `deploy/reach/ci/reach-scan.sh`가 OIDC 토큰으로 API-12·13을 부른다. 서비스 레포에 붙여 실제로 돌리는 일은 [계획] |
@@ -1954,7 +1970,7 @@ CVE-2026-68525(tomcat-embed-core 11.0.24) 한 건이다.
 | PR 검사 | `pull_request` | `PR` | 레포 SBOM(cdxgen)으로 대조하고 새 Finding을 판정(L2)한다. 게이트를 적용한다. L1·L3는 없다 |
 | 이미지 빌드(ECR push 전) | 배포 파이프라인의 이미지 빌드 단계 | `IMAGE_BUILD` | 이미지 SBOM(Trivy)을 digest와 함께 보관하고 대조·판정(L2)한다. 백엔드 테스트에 커버리지 에이전트를 붙여 L3 근거를 남긴다(PRD FR-14) |
 | 하루 1번 | `schedule` | `SCHEDULE` | 등록된 서비스(PRD FR-15)의 저장된 SBOM을 최신 DB로 재대조하고, 실행 중 digest를 조회하고(L1), 새 Finding을 판정(L2)한다. 새로 생긴 것만 알린다 |
-| 원할 때 | `workflow_dispatch` | `MANUAL` | 수동 실행. 대조·L1·L2를 모두 하고, 필요하면 특정 API를 직접 호출해 L3 근거를 남긴다(PRD FR-14) |
+| 원할 때 | `workflow_dispatch` | `MANUAL` | 대시보드에서 스캔을 요청하면(API-01) 서버가 띄운다. 레포 대상은 그 커밋을 빌드한 bootJar, 이미지 대상은 그 digest 이미지로 대조·판정(L2)하고 그 검사에 올린다. L1은 서버가 채운다. L3(PRD FR-14)는 아직 없다 |
 
 - PR 검사(`PR`)는 레포 대상(`type=REPO`, `headCommit`)이다. cdxgen으로 레포 SBOM을 만들고 새 Finding만 L2로 판정한다. 배포 전이라 L1은 없다(PRD FR-11).
 - 이미지 스캔(`IMAGE_BUILD`)은 ECR push 전에 한다(PRD FR-11). 러너가 방금 빌드한 이미지로 SBOM을 만들고 결과만 올리므로(API-13), 서버가 레지스트리에서 이미지를 읽을 필요가 없다.
