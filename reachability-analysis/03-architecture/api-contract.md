@@ -45,7 +45,6 @@
 |---|---|---|
 | OCSF 클래스·필드 매핑 | 팀 스키마 합의 필요(5절) | 팀 합의(인프라 담당) |
 | 역할 분리 | MVP는 대시보드 공통의 `ADMIN` 하나로 조회·스캔 요청·사람 검토를 모두 한다(2-2). 조회 전용, 검토자, 게이트 예외 승인자를 나눌지는 대시보드 공통 역할 체계와 함께 정한다 | 팀 합의, 대시보드 ADR |
-| L1 수집 결과를 올리는 내부 API | 클러스터 안 수집기(ARD 7-3 선택지 A)가 k8s 서비스 계정 토큰으로 워크로드 조회 결과를 기록하는 내부 API(`PUT /internal/v1/reach/l1/workloads`)는 [계획]이다. 본문과 처리 규칙은 수동 업로드(API-07 아래 "L1 수집 결과 올리기")와 같고 인증만 다르다 | ARD Q-03 |
 | `make_spec.py` 실행 인자 | 원자료에 없다. 확인 필요 | 8절 |
 | Jackson 2 사본 7행 | 제안(확정 대기). 89407·89425는 도달 불가, 나머지 5개는 도달 불가(발동 조건 없음)로 제안했다. 사람이 확정하기 전까지 도구 판정은 `NOT_ANALYZED`, 검토 상태는 `UNREVIEWED`이고, 제안은 `review.proposal`로 준다(3-10). 상세는 규칙명세서 9-1 | 사람 검토(FR-08) |
 | 게이트 예외 기록 | 게이트에 걸린 PR을 통과시키는 예외(사유, 만료일, 승인한 사람)를 어디에 어떤 형식으로 남길지 정하지 않았다. 검토 기록(3-10)을 넓힐지 별도 API를 둘지 정한다. 규칙은 6-2와 PRD FR-11을 따른다 | ARD Q-07 |
@@ -66,12 +65,14 @@
 |---|---|---|
 | 대시보드 | 통합 대시보드 로그인 세션(서버 세션, HttpOnly 쿠키, ADR-D003). 쓰기 요청(POST·PATCH·PUT·DELETE)은 `X-XSRF-TOKEN` 헤더가 필요하다 | MVP는 대시보드 공통 `ADMIN` 하나. 조회, 스캔 요청(API-01), 사람 검토(API-06) 모두 `ADMIN`이다. 역할 분리는 다음 단계다(1-5) |
 | CI (GitHub Actions) | GitHub OIDC 토큰(`Authorization: Bearer`). `aud = logssey-reach`. `repository`·`event_name`·`sub` 클레임을 허용 목록과 대조한다 | CI 검사 실행·결과 조회(API-12)와 결과 업로드(API-13)만. 조회 API와 사람 검토(API-06)는 쓸 수 없다 |
+| L1 수집기 (클러스터 CronJob, ARD 7-3 선택지 A) | 쿠버네티스 서비스 계정 토큰(`Authorization: Bearer`). `aud = logssey-reach-l1`. `sub`가 수집기 서비스 계정이어야 한다 | L1 수집 결과 올리기(`PUT /api/v1/reach/l1/workloads`)만 |
 
 - 사람 검토는 세션으로만 쓴다. CI 토큰으로는 API-06을 부를 수 없으므로, 역할을 나누지 않아도 CI가 사람 검토를 쓰는 일은 없다.
 - 세션이 없거나 만료되면 401 `UNAUTHENTICATED`다. CSRF 토큰이 없거나 다르면 403 `FORBIDDEN`이다(공통).
 - OIDC 토큰 검증에 실패하면 401 `UNAUTHENTICATED`, 허용 목록 밖의 레포·이벤트면 403 `FORBIDDEN`이다.
 - 쓰기 요청(API-01, API-06, API-12, API-13)은 누가·언제 했는지 남긴다(`requestedBy`, `reviewer`, `reviewedAt`). CI 요청은 OIDC 토큰의 `repository`와 `sub`를 남긴다.
-- CI 경로(API-12, API-13)는 대시보드 `ADMIN` 세션도 받는다. `Authorization: Bearer` 헤더가 있는 `/api/v1/reach/**` 요청은 CI 요청으로 본다(세션 쿠키가 같이 와도 세션은 보지 않는다). 세션·CSRF는 쓰지 않는다.
+- CI 경로(API-12, API-13)와 L1 수집 결과 올리기는 대시보드 `ADMIN` 세션도 받는다. `Authorization: Bearer` 헤더가 있는 `/api/v1/reach/**` 요청은 토큰 요청으로 본다(세션 쿠키가 같이 와도 세션은 보지 않는다). 세션·CSRF는 쓰지 않는다.
+- 토큰은 발급자(`iss`)로 구분한다. GitHub 발급자면 CI 토큰, 설치 설정 `logssey.reach.l1.collector.issuer`의 발급자면 L1 수집기 토큰이다. 두 발급자 밖의 토큰은 401이다. CI 토큰으로 L1 업로드, 수집기 토큰으로 CI 경로나 다른 Reach API를 부르면 403이다.
 
 **CI 토큰 검증 (실패하면 401 `UNAUTHENTICATED`)**
 
@@ -92,6 +93,13 @@
 
 - 순서는 본문 형식(400) → 권한(403) → 멱등 충돌(409)이다.
 - CI가 만든 스캔은 `requestedBy = {kind: CI, repository: 토큰 repository, subject: 토큰 sub}`이고, 멱등 키 범위(2-7)는 `CI:<토큰 repository>`다. 토큰의 `ref`는 위 검사에만 쓰고 저장하지 않는다(PR 번호·브랜치는 검사 본문 값으로 남는다).
+
+**L1 수집기 토큰 검증**
+
+- 서명: 클러스터 발급자의 공개 키(`<issuer>/openid/v1/jwks`, RS256). 발급자는 설치 설정 `logssey.reach.l1.collector.issuer`(Re:Used 설치는 `https://k8s-oidc.re-used.store`)이고, 비어 있으면 수집기 토큰은 모두 401이다
+- `iss`, 만료(`exp`·`nbf`), `aud`에 `logssey-reach-l1` 포함, `sub`가 있어야 한다(255자까지). 어긋나면 401 `UNAUTHENTICATED`
+- `sub`가 수집기 서비스 계정(기본 `system:serviceaccount:reach:reach-l1-collector`, 설정 `logssey.reach.l1.collector.subject`)이 아니면 403 `FORBIDDEN`. 같은 `aud`의 토큰은 클러스터의 어떤 파드든 요청해 받을 수 있어서 `sub`까지 본다
+- 수집기가 올린 조회는 `source = CLUSTER_READER`, 기록자는 토큰의 `sub`다(수동 업로드는 `MANUAL`, `USER:<사용자 ID>`)
 
 ### 2-3. 요청·응답 형식
 
@@ -447,7 +455,7 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `registered` | boolean | 아니요 | 대상(서비스) 등록 목록(PRD FR-15)에 있는 워크로드면 true, 없으면 false다. false면 화면은 "미등록"으로 보인다(SCR-04) [계획] |
 | `service` | string | 아니요 | 이 워크로드를 묶은 등록 서비스 이름(예: `API`). `registered`가 true일 때만 준다 [계획] |
 | `observedAt` | date-time | 예 | 클러스터를 조회한 시각 |
-| `source` | enum | 예 | `MANUAL`(사람이 kubectl로 조회) / `CLUSTER_READER`(읽기 전용 자동 조회, [계획]) |
+| `source` | enum | 예 | `MANUAL`(사람이 올린 조회) / `CLUSTER_READER`(클러스터 수집기가 올린 조회, 2-2) |
 
 - 실행 중인 이미지는 파드의 `imageID`로 정한다. gitops 태그만으로는 확정하지 못한다(태그 MUTABLE, `pullPolicy: IfNotPresent`).
 - 수집 규칙: phase가 `Running`인 파드만 본다. digest는 `status.containerStatuses[].imageID`의 `@sha256:` 뒤 값이고, 아직 이미지를 받지 않아 digest가 없는 컨테이너는 뺀다. 이미지 이름(`image.repository`의 원본)은 파드 spec(`spec.containers[].image`)에서 컨테이너 이름으로 찾는다. `status.containerStatuses[].image`는 노드가 그 이미지에 붙여 둔 이름 중 사전순 첫 번째라 spec과 다를 수 있다. 워크로드 안에서 (컨테이너 이름, digest)마다 한 항목이고, `replicas.ready`는 그 digest를 돌리는 Ready 파드 수다. 롤아웃 중이면 같은 워크로드에 digest별 항목이 둘 생긴다.
@@ -594,7 +602,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | API-05 | `GET /api/v1/reach/findings/{findingId}` | `ADMIN` | Finding 상세 | FR-05, FR-06, FR-07 | SCR-03 | `verdicts.json` 한 항목 |
 | API-06 | `PATCH /api/v1/reach/findings/{findingId}/review` | `ADMIN` | 사람 검토 기록 | FR-08 | SCR-03 | `answer-key.md` [부분] |
 | API-07 | `GET /api/v1/reach/workloads` | `ADMIN` | 마지막 조회의 워크로드와 digest, 스캔 연결. 등록 여부는 [계획] | FR-04, FR-15 | SCR-04 | 수동 kubectl 결과 업로드 |
-| (API-07 아래) | `PUT /api/v1/reach/l1/workloads` | `ADMIN` | L1 수집 결과 올리기(수동). 수집기용 내부 경로는 [계획](1-5) | FR-04 | - | 사람이 kubectl로 조회한 결과 |
+| (API-07 아래) | `PUT /api/v1/reach/l1/workloads` | `ADMIN` · L1 수집기 | L1 수집 결과 올리기(수동, 클러스터 수집기) | FR-04 | - | 사람이 kubectl로 조회한 결과 |
 | API-08 | `GET /api/v1/reach/summary` | `ADMIN` | 대시보드 요약 | FR-12 | SCR-01 | 없음 |
 | API-09 | `GET /api/v1/reach/rules`, `GET /api/v1/reach/rules/{ruleId}` | `ADMIN` | 규칙 조회 | FR-06 | SCR-06 | `data/rules.json` |
 | API-10 | `GET /api/v1/reach/vuln-functions` | `ADMIN` | 취약 함수 데이터 조회 | FR-09 | SCR-06 | `data/vuln-functions.json` |
@@ -1229,7 +1237,7 @@ Content-Type: application/json; charset=utf-8
 |---|---|
 | 메서드·경로 | `GET /api/v1/reach/workloads` |
 | 권한 | `ADMIN`(대시보드 세션) |
-| 설명 | 마지막으로 조회한 워크로드와 그 이미지 digest, 같은 digest를 스캔한 결과와의 연결을 준다(L1). 클러스터를 직접 조회하지 않고, 저장된 조회 결과(수동 업로드, 수집기는 [계획])를 준다. 조회 시점은 `observations`와 각 항목의 `observedAt`으로 보인다 |
+| 설명 | 마지막으로 조회한 워크로드와 그 이미지 digest, 같은 digest를 스캔한 결과와의 연결을 준다(L1). 클러스터를 직접 조회하지 않고, 저장된 조회 결과(수동 업로드 또는 클러스터 수집기)를 준다. 조회 시점은 `observations`와 각 항목의 `observedAt`으로 보인다 |
 | 관련 | FR-04 · SCR-04 |
 | 지금 같은 일 | 수동 `kubectl get pods -n reused -o json` 결과를 "L1 수집 결과 올리기"로 올린 것 |
 
@@ -1322,15 +1330,15 @@ Content-Type: application/json; charset=utf-8
 
 **오류**: `INVALID_INPUT`(enum·`digest` 형식·`size`·`cursor`·`include` 값), `UNAUTHENTICATED`, `FORBIDDEN`(`ADMIN` 아님), `RATE_LIMITED`
 
-#### L1 수집 결과 올리기 (수동 업로드)
+#### L1 수집 결과 올리기 (수동 업로드·수집기)
 
 | 항목 | 내용 |
 |---|---|
 | 메서드·경로 | `PUT /api/v1/reach/l1/workloads` |
-| 권한 | `ADMIN`(대시보드 세션). 쓰기라 `X-XSRF-TOKEN` 헤더가 필요하다(없으면 세션 확인보다 먼저 403) |
+| 권한 | `ADMIN`(대시보드 세션) 또는 L1 수집기 토큰(2-2). 세션 요청은 쓰기라 `X-XSRF-TOKEN` 헤더가 필요하다(없으면 세션 확인보다 먼저 403). 토큰 요청은 CSRF를 쓰지 않는다 |
 | 설명 | 한 (클러스터, 네임스페이스)의 조회 결과를 통째로 바꾸고 Finding `deployment`를 다시 계산한다(3-3). 그 네임스페이스의 예전 워크로드는 지우고 본문 것만 남긴다. 다른 네임스페이스는 그대로다 |
 | 관련 | FR-04 · 3-6 수집 규칙 |
-| 지금 같은 일 | 사람이 SSM으로 접속해 `kubectl get pods -o json`으로 조회한 결과. 수집기(ARD 7-3 선택지 A)는 같은 본문을 내부 경로로 보낸다 [계획] |
+| 지금 같은 일 | 사람이 SSM으로 접속해 `kubectl get pods -o json`으로 조회한 결과. 클러스터 수집기(ARD 7-3 선택지 A, dashboard-backend `deploy/reach/l1-collector`)는 같은 본문을 같은 경로로 보낸다 |
 
 ```json
 {
@@ -1368,7 +1376,7 @@ Content-Type: application/json; charset=utf-8
 - 응답 시각은 UTC로 준다(`+09:00`으로 보내도 UTC로 바꿔 저장한다).
 - 업로드와 다시 계산(3-3)은 한 번에 하나씩 처리한다. 동시에 올리면 차례로 처리된다.
 
-**오류**: `INVALID_INPUT`(400), `UNAUTHENTICATED`(401), `FORBIDDEN`(403, `ADMIN` 아님 또는 CSRF 토큰 없음), `CONFLICT`(409, 저장된 조회보다 오래된 `observedAt`)
+**오류**: `INVALID_INPUT`(400), `UNAUTHENTICATED`(401, 세션 없음 또는 토큰 검증 실패), `FORBIDDEN`(403, `ADMIN` 아님, CSRF 토큰 없음, 수집기 서비스 계정이 아닌 토큰, CI 토큰), `CONFLICT`(409, 저장된 조회보다 오래된 `observedAt`)
 
 ### API-08 대시보드 요약
 
