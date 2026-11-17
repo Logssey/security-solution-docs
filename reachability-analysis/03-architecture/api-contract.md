@@ -204,6 +204,7 @@
 | `IDEMPOTENCY_CONFLICT` | 409 | 같은 `Idempotency-Key`로 다른 본문을 보냄. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 `CONFLICT`로 준다 | `key` | API-01, API-12 | Reach 추가 |
 | `SCAN_NOT_READY` | 409 | 스캔이 아직 `SUCCEEDED`가 아님. [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현(API-04, API-08, API-11)은 `CONFLICT`로 준다 | `scanStatus` | API-04, API-08, API-11(`scanId`를 지정한 경우) | Reach 추가 |
 | `TARGET_UNRESOLVED` | 422 | 대상을 찾지 못함(없는 커밋·digest, 지원하지 않는 대상). [계획] 대시보드 공통 오류 코드에 아직 없어 지금 구현은 공통 `UNPROCESSABLE`(422)로 준다 | `field` | API-01, API-12 | Reach 추가 |
+| `RUNNER_NOT_INSTALLED` | 422 | 스캔을 요청한 대상의 레포에 Reach 실행기가 없음(GitHub App 미설치, 기본 브랜치에 `reach.yml` 없음)(API-01). [계획] 공통 오류 코드에 없어 지금 구현은 `UNPROCESSABLE`(422)이고 `message`가 `RUNNER_NOT_INSTALLED:`로 시작한다 |
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드한 결과 묶음이 한도를 넘음 | `limitBytes` | API-13 | Reach 추가(IaC와 같은 이름) |
 | `RATE_LIMITED` | 429 | 속도 제한을 넘음 | `retryAfterSeconds` | 전체 | 공통 |
 | `INTERNAL_ERROR` | 500 | 서버 오류 | - | 전체 | 공통 |
@@ -305,7 +306,7 @@ flowchart LR
 - 이미지는 digest로만 가리킨다. ECR 태그는 MUTABLE이라 태그로는 실행 중인 이미지를 확정하지 못한다.
 - `image.repository`에는 레지스트리 호스트를 넣지 않는다.
 - 요청(API-01, API-12)의 커밋은 40자, digest는 `sha256:`과 64자다. 대문자로 와도 소문자로 저장한다. 형식이 틀리거나 `image.repository`에 태그(`:`)·digest(`@`)를 붙이면 400 `INVALID_INPUT`이다.
-- 감시 대상 앱은 코드에 두지 않고 설치마다 설정으로 등록한다(PRD FR-15). 앱 하나는 앱 코드(`code`), 레포(`repo`), 레포 안 하위 경로(`path`, 없으면 레포 전체), 이미지 저장소(`image`)다. `repo`와 `image` 중 하나는 있어야 한다. 앱 코드는 대문자로 시작하고 대문자·숫자·`_`로 최대 10자다. 형식이 틀리거나 코드·레포(+경로)·이미지 저장소가 겹치면 서버가 뜨지 않는다. 설정이 없으면 서버는 뜨지만 어떤 대상도 정하지 못한다. 등록한 앱 목록은 API-14로 본다.
+- 감시 대상 앱은 코드에 두지 않고 설치마다 설정으로 등록한다(PRD FR-15). 앱 하나는 앱 코드(`code`), 레포(`repo`), 레포 안 하위 경로(`path`, 없으면 레포 전체), 이미지 저장소(`image`), 생태계(`ecosystem`, `maven` 또는 `npm`, 없으면 `maven`)다. `repo`와 `image` 중 하나는 있어야 한다. L2(호출 그래프)는 `maven`만 한다. `npm` 앱도 스캔은 하되 SBOM·CVE 대조·L1까지이고 Finding은 `NOT_ANALYZED`다(PRD 확장 단계). `ecosystem`은 화면 표시용이고, 스캔에서 L2를 할지는 러너가 앱 jar 유무로 정한다. 앱 코드는 대문자로 시작하고 대문자·숫자·`_`로 최대 10자다. 형식이 틀리거나 코드·레포(+경로)·이미지 저장소가 겹치거나 `ecosystem`이 두 값이 아니면 서버가 뜨지 않는다. 설정이 없으면 서버는 뜨지만 어떤 대상도 정하지 못한다. 등록한 앱 목록은 API-14로 본다.
 - `app`을 주면 설정에 있는 코드여야 한다. 없는 코드면 400 `INVALID_INPUT`이다.
 - `app`을 주지 않으면 설정으로 정한다. 레포는 소유자를 떼고 이름만 비교한다(`Logssey/service-backend`도 `service-backend`). 레포 이름과 하위 경로가 같은 등록을 먼저 찾고, 없으면 같은 레포를 경로 없이 등록한 앱을 쓴다. 이미지 저장소는 정확히 같은 이름만 찾는다. 찾지 못하면 422 `TARGET_UNRESOLVED`다. 이미 있는 대상(같은 digest, 또는 같은 레포·하위 경로·커밋)을 다른 `app`으로 요청해도 422다.
 
@@ -377,7 +378,7 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `UNANALYZED_COPY` | `com.fasterxml.jackson` 2.21.5 사본 7행. 제안(확정 대기): 89407·89425는 도달 불가, 나머지 5개는 발동 조건이 없어 도달 불가다(규칙명세서 9-1). 제안은 `review.proposal`에 있다 |
 | `OS_PACKAGE` | libpng, zlib 2행 |
 | `NO_VULN_FUNCTION_DATA` | 지금은 없음. 취약 함수 데이터를 더하기 전의 CVE가 여기에 든다 |
-| `UNSUPPORTED_ECOSYSTEM` | 지금은 없음. web·chat(npm)을 스캔하면 여기에 든다 |
+| `UNSUPPORTED_ECOSYSTEM` | maven이 아닌 언어 패키지(npm 등). chat 이미지(Node.js 런타임의 npm 패키지)를 스캔하면 여기에 든다 |
 
 ### 3-5. Evidence
 
@@ -447,7 +448,7 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `kind` | string | 예 | 예: `Deployment` |
 | `name` | string | 예 | 예: `reused-api` |
 | `container` | string | 예 | 컨테이너 이름. 예: `api` |
-| `app` | string | 아니요 | 앱 코드(3-2). 같은 digest나 같은 이미지 저장소의 이미지 대상이 없으면 `null`(API-07) |
+| `app` | string | 아니요 | 앱 코드(3-2). 같은 digest의 이미지 대상, 설치 설정의 이미지, 같은 이미지 저장소의 이미지 대상이 모두 없으면 `null`(API-07) |
 | `image` | object | 예 | `repository`, `digest`(파드 imageID에서 얻은 값), `revision`(이미지 태그. 태그가 없으면 주지 않는다) |
 | `replicas` | object | 예 | `ready`(준비된 파드 수), `desired`(디플로이먼트가 원하는 파드 수. 디플로이먼트를 조회했을 때만 준다 [계획]) |
 | `pods` | object 배열 | 아니요 | `include=pods`일 때. `name`, `imageId`, `ready` [계획] |
@@ -754,10 +755,12 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 - 워크플로를 띄우지 못하면(앱이 그 레포에 설치되지 않음, 워크플로나 `workflow_dispatch` 트리거가 없음, GitHub 오류·응답 없음) 503 `UNAVAILABLE`(`details.dependency = "github"`)이고 대상·스캔·검사를 남기지 않는다. 같은 `Idempotency-Key`로 다시 보내면 처음처럼 만들고 띄운다.
 - 같은 키로 다시 보낸 요청(`Idempotent-Replayed: true`)은 다시 띄우지 않는다.
 - 레포가 없는 이미지 앱(설정에 `image`만 있음)은 띄울 워크플로가 없어 422 `TARGET_UNRESOLVED`다.
+- 대상 레포에 Reach 실행기가 없으면(GitHub App이 설치되지 않았거나 기본 브랜치에 `reach.yml`이 없어 GitHub이 404) 422 `RUNNER_NOT_INSTALLED`이고 스캔·검사·대상을 남기지 않는다. 다시 해도 같아서 503이 아니다. [계획] 공통 오류 코드에 없어 지금 구현은 `UNPROCESSABLE`(422)에 `message`가 `RUNNER_NOT_INSTALLED:`로 시작한다.
+- 러너는 앱 jar가 없는 대상도 스캔한다. 레포 경로에 Gradle 빌드가 없으면 잠금 파일로, 이미지에 `/app/app.jar`가 없으면 이미지만으로 SBOM을 만들고 L2를 건너뛴다. 그 Finding은 `NOT_ANALYZED`(npm 등 `UNSUPPORTED_ECOSYSTEM`, OS 패키지 `OS_PACKAGE`, jar를 못 찾은 Java 패키지는 데이터가 없으면 `NO_VULN_FUNCTION_DATA`·있으면 `UNANALYZED_COPY`)다.
 - 띄우지 않는 경우: 설치에 앱 설정이 없으면, 또는 `rescanOf`(러너가 저장된 SBOM 재대조를 아직 못 한다)면 띄우지 않고 스캔은 `QUEUED`로 남는다.
 - 러너가 스캔 전 단계(빌드, 이미지 받기, 도구 설치)에서 실패하면 실패 묶음을 올려 스캔이 `FAILED`가 된다. `failure.code`는 레포 대상 `BUILD_FAILED`, 이미지 대상 `IMAGE_PULL_FAILED`이고 `stage`는 `SBOM`이다(2-6).
 
-**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RATE_LIMITED`, `UNAVAILABLE`
+**오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RUNNER_NOT_INSTALLED`, `RATE_LIMITED`, `UNAVAILABLE`
 
 ### API-02 스캔 이력 목록
 
@@ -1333,7 +1336,7 @@ Content-Type: application/json; charset=utf-8
 - `id`는 업로드할 때마다 새로 매겨진다. 업로드를 넘어 같은 항목을 가리키려면 (`cluster`, `namespace`, `kind`, `name`, `container`, `image.digest`)를 쓴다.
 - `image.repository`: 파드 spec의 이미지에서 레지스트리 주소(첫 `/` 앞이 `.`·`:`를 포함하거나 `localhost`인 경우)와 `:태그`·`@digest`를 뺀 값. 예: `794386801311.dkr.ecr.ap-northeast-1.amazonaws.com/logssey/reused-api:bb4639b…` → `logssey/reused-api`.
 - `image.revision`: 이미지의 태그. 태그가 없으면 주지 않는다. Re:Used 차트는 태그로 전체 커밋 SHA를 쓴다. 태그는 바뀔 수 있어 참고 값이고, 실행 이미지는 `image.digest`로 정한다.
-- `app`: 이 digest의 이미지 대상이 있으면 그 `app`, 없으면 `image.repository`가 같은 이미지 대상(API-01로 등록된 대상)의 `app`이다. 여럿이면 가장 최근에 등록된 대상을 따른다. 둘 다 없으면 `null`이다.
+- `app`: 다음 순서로 처음 찾은 것이다. ① 이 digest의 이미지 대상의 `app` ② 설치 설정(`logssey.reach.apps[*].image`, PRD FR-15)에서 이미지 저장소가 `image.repository`와 같은 앱 ③ `image.repository`가 같은 이미지 대상(API-01로 등록된 대상)의 `app`. ①·③에서 대상이 여럿이면 가장 최근에 등록된 것을 따른다. 셋 다 없으면 `null`이다. ②가 있어 한 번도 스캔하지 않은 이미지도 앱이 보인다(`scanMatch.status`는 `NO_SCAN`). `app` 필터와 `totalCount`도 같은 기준이다.
 - `deployment`: 그 항목의 조회가 신선하면(`fresh`) `RUNNING`, 아니면 `UNKNOWN`이다. 실행 중인 파드에서 본 항목이라 `NOT_RUNNING`은 없다. 준비 수가 0인 항목도 `RUNNING`이다(3-6, 팀 결정 대기).
 - `scanMatch`:
   - `MATCH`: 이 digest의 이미지 대상에 PR이 아닌 `SUCCEEDED` 스캔이 있다. `scanId`는 그중 최신, `matchedBy`는 `DIGEST`.
@@ -1859,9 +1862,9 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 ```json
 {
   "items": [
-    { "code": "API", "repo": "service-backend", "path": null, "image": "logssey/reused-api" },
-    { "code": "WEB", "repo": "service-frontend", "path": null, "image": "logssey/reused-web" },
-    { "code": "CHAT", "repo": "service-backend", "path": "chat-server", "image": "logssey/reused-chat" }
+    { "code": "API", "repo": "service-backend", "path": null, "image": "logssey/reused-api", "ecosystem": "maven" },
+    { "code": "WEB", "repo": "service-frontend", "path": null, "image": "logssey/reused-web", "ecosystem": "npm" },
+    { "code": "CHAT", "repo": "service-backend", "path": "chat-server", "image": "logssey/reused-chat", "ecosystem": "npm" }
   ]
 }
 ```
@@ -1872,6 +1875,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | `repo` | string | 예(값은 `null` 가능) | 설정에 적은 레포 이름 그대로 |
 | `path` | string | 예(값은 `null` 가능) | 레포 안 하위 경로. `null`이면 레포 전체 |
 | `image` | string | 예(값은 `null` 가능) | 이미지 저장소 |
+| `ecosystem` | string | 예 | `maven` 또는 `npm`(설정에 없으면 `maven`). `npm` 앱은 L2(호출 경로) 판정이 없다 |
 
 - 설정이 없으면 `items`가 빈 배열이다(200).
 
