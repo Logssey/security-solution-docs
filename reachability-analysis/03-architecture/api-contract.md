@@ -904,8 +904,9 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 `app`·대상 종류(`REPO`/`IMAGE`)마다 최신 `SUCCEEDED` 스캔 하나를 쓴다. 이미지를 다시 빌드하면 digest마다 대상이 생기는데, 대상마다로 두면 옛 이미지의 Finding이 계속 쌓이기 때문이다. 옛 대상은 `target`으로 본다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). 목록 항목의 `verdict`·`review`는 지금 판정·검토다(API-05와 같음). 그래서 이미 스캔한 레포 커밋을 PR로 다시 스캔한 결과를 `scanId`로 보면, 기준 범위에도 있는 Finding은 기준 스캔의 판정으로 보인다(API-13 PR 규칙). 그 스캔이 낸 판정 그대로의 개수는 API-03 `counts`로 본다 |
+| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 기본 범위(`basis`)다. 이미지를 다시 빌드하면 digest마다 대상이 생기는데, 대상마다로 두면 옛 이미지의 Finding이 계속 쌓이기 때문에 앱·대상 종류마다 고른다. 옛 대상은 `target`으로 본다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). 목록 항목의 `verdict`·`review`는 지금 판정·검토다(API-05와 같음). 그래서 이미 스캔한 레포 커밋을 PR로 다시 스캔한 결과를 `scanId`로 보면, 기준 범위에도 있는 Finding은 기준 스캔의 판정으로 보인다(API-13 PR 규칙). 그 스캔이 낸 판정 그대로의 개수는 API-03 `counts`로 본다 |
 | `target` | integer | 아니요 | Target ID. 기준 범위를 이 대상의 PR이 아닌 최신 `SUCCEEDED` 스캔으로 바꾼다(그 `app`의 최신 대상이 아니어도 된다). 없는 대상이면 404, 성공한 스캔이 없는 대상이면 빈 목록이다. `scanId`와 함께 주면 그 스캔이 이 대상의 것이어야 한다(아니면 400 `INVALID_INPUT`). 커서는 `scanId`·`target`과도 묶인다(2-4) |
+| `basis` | enum | 아니요 | `scanId`·`target`이 없을 때의 기본 범위 기준. `RUNNING`(기본): 앱마다 운영에서 실행 중인 이미지(L1 신선한 조회, API-07과 같은 48시간)의 PR이 아닌 최신 `SUCCEEDED` 스캔을 쓴다. 같은 앱이 두 digest로 돌면 둘 다다. 실행 중 이미지의 스캔이 없는 앱의 이미지와 레포 대상은 `LATEST`와 같다. L1이 꺼졌거나 신선한 조회가 없으면 전체가 `LATEST`와 같다. `LATEST`: `app`·대상 종류(`REPO`/`IMAGE`)마다 PR이 아닌 최신 `SUCCEEDED` 스캔 하나. 다른 값이면 400 `INVALID_INPUT`. `scanId`·`target`이 있으면 쓰지 않는다. 커서는 `basis`와도 묶인다(2-4). PRD 목표 3(실제 배포물 기준) |
 | `status` | enum 목록 | 아니요 | 판정 상태 |
 | `severity` | enum 목록 | 아니요 | 심각도 |
 | `deployment` | enum 목록 | 아니요 | 배포 상태 |
@@ -1410,9 +1411,10 @@ Content-Type: application/json; charset=utf-8
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `target` | integer | 아니요 | Target ID. 없으면 모든 대상을 합친다. 없는 대상이면 404, 성공한 스캔이 없는 대상이면 모두 0이다 |
-| `scanId` | integer | 아니요 | 기준 스캔. 없으면 `app`·대상 종류(`REPO`/`IMAGE`)마다 최신 `SUCCEEDED` 스캔 하나(PR 검사의 스캔은 넣지 않는다, ARD SR-09). 규칙은 API-04 `scanId`·`target`과 같다(404, 409 `SCAN_NOT_READY`, 다른 대상이면 400). `scope`는 3-9 |
+| `scanId` | integer | 아니요 | 기준 스캔. 없으면 기본 범위(`basis`, API-04와 같음. PR 검사의 스캔은 넣지 않는다, ARD SR-09). 규칙은 API-04 `scanId`·`target`과 같다(404, 409 `SCAN_NOT_READY`, 다른 대상이면 400). `scope`는 3-9 |
 | `deployment` | enum 목록 | 아니요 | 예: `RUNNING`만 집계 |
 | `include` | string 목록 | 아니요 | `matrix`(심각도 × 상태) |
+| `basis` | enum | 아니요 | 기본 범위 기준 `RUNNING`(기본) / `LATEST`. 규칙은 API-04 `basis`와 같다 |
 
 노이즈 감소율과 판정 범위
 
@@ -1421,6 +1423,15 @@ Content-Type: application/json; charset=utf-8
 - `NOT_ANALYZED`는 노이즈 감소율의 분모에서 빼고 판정 범위로 따로 본다. 판정하지 않은 것을 줄었다고 세지 않는다.
 - `ratio`는 소수 셋째 자리까지 반올림한다. 분모가 0이면 `ratio`를 주지 않는다. 분자와 분모를 함께 주므로 화면은 분수(예: 14/14, 14/23)로 보인다.
 
+기본 범위의 기준 `basis` (응답, `target`·`scanId`가 없을 때만. 있으면 `null`)
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `requested` | enum | 요청한 기준(`RUNNING`/`LATEST`) |
+| `applied` | enum | 실제로 쓴 기준. `RUNNING`을 요청해도 L1이 꺼졌거나 신선한 조회가 없으면 `LATEST` |
+| `scans` | object 목록 | 집계에 쓴 스캔: `app`, `targetType`, `targetId`, `scanId`, `imageDigest`(레포 대상은 `null`), `running`(실행 중 이미지의 스캔이면 `true`) |
+| `unscannedRunning` | object 목록 | 실행 중인데 PR이 아닌 `SUCCEEDED` 스캔이 없는 워크로드: `app`(설치 설정의 이미지로 찾음, 없으면 `null`), `namespace`, `name`, `container`, `imageRepository`, `imageDigest`. 그 앱은 `LATEST`로 대신 집계됐다. `applied`가 `LATEST`면 빈 목록 |
+
 요청 예시: `GET /api/v1/reach/summary?target=1&include=matrix`
 
 응답 예시(200). 배포 이미지 23행의 실제 값이다.
@@ -1428,6 +1439,7 @@ Content-Type: application/json; charset=utf-8
 ```json
 {
   "scope": { "targetId": 1, "scanId": 1 },
+  "basis": null,
   "totals": { "findings": 23 },
   "byStatus": { "REACHABLE": 0, "UNREACHABLE": 14, "UNKNOWN": 0, "NOT_ANALYZED": 9 },
   "byNotAnalyzedReason": { "NO_VULN_FUNCTION_DATA": 0, "OS_PACKAGE": 2, "UNANALYZED_COPY": 7, "UNSUPPORTED_ECOSYSTEM": 0 },
