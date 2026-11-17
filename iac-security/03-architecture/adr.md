@@ -8,14 +8,15 @@
 | [ADR-02](#adr-02) | ②를 언제, 무엇으로 검사하나 | plan 전에 `.tf`·lock 텍스트를 Conftest(직접 쓴 Rego)로 검사 | 결정 |
 | [ADR-03](#adr-03) | 자산 그래프를 어떻게 만드나 | Cartography(AWS + Kubernetes 모듈) + Neo4j. 기본 모델에 없는 관계만 워커의 보강 단계에서 추가 | 결정 |
 | [ADR-04](#adr-04) | 실효 권한을 어떻게 계산하나 | Cartography 권한 매핑(사용자 정의 매핑 파일)으로 1차 계산, 1등급은 IAM 시뮬레이터로 확정 | 결정 |
-| [ADR-05](#adr-05) | 분석을 어디서 돌리나 | ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 | 결정 |
+| [ADR-05](#adr-05) | 분석을 어디서 돌리나 | ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 | 결정 (분석 위치는 ADR-13이 대체) |
 | [ADR-06](#adr-06) | plan JSON의 민감값 처리 | 러너에서 민감 표시(`*_sensitive`)된 값을 지운 뒤 전송, 분석 후 삭제 | 결정 |
-| [ADR-07](#adr-07) | 매일 작업의 AWS 자격 증명 | 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음 | 결정 (10/14 시범 검증 완료) |
+| [ADR-07](#adr-07) | 매일 작업의 AWS 자격 증명 | 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음 | 결정 (10/14 시범 검증 완료, 받는 방식은 ADR-13이 대체) |
 | [ADR-08](#adr-08) | PR 봇의 신원 | GitHub App (이름, 최소 권한, 검사 결과 API) | 결정 |
 | [ADR-09](#adr-09) | 규칙 도구 선택 | KICS 주력 + Conftest 보완 규칙. Checkov·Trivy는 선택. MVP는 Conftest만, KICS 연동은 다음 단계 | 결정 |
 | [ADR-10](#adr-10) | 그래프·결과 저장소 | 그래프는 전용 Neo4j, 결과는 대시보드 PostgreSQL의 `iac_` 테이블 | 결정 |
 | [ADR-11](#adr-11) | 어디에, 무슨 언어로 구현하나 | dashboard-backend(Spring Boot)에 `iac` 모듈로 통합, 분석은 별도 Java 워커 | 결정 |
 | [ADR-12](#adr-12) | 사람의 AWS·State 권한 | 사람은 읽기 전용(plan-ro와 같은 정책), 로컬 plan은 래퍼로 허용, apply는 CI apply 역할만, 비상시 break-glass | 결정 (적용은 팀 일정, 로컬 래퍼는 10/15 적용) |
+| [ADR-13](#adr-13) | 배포 뒤 IaC 구성 요소를 어디에 두고 어떻게 연결하나 | 분석 워커·Neo4j·Cartography를 대시보드 호스트(ADR-D010)에 별도 컨테이너로. 밖에서는 API로만 들어옴 (CI는 `iac-report`가 GitHub OIDC로, 쿠버네티스 노드 정보는 클러스터 CronJob이 서비스 계정 토큰으로) | 결정 (11/17) |
 
 **상태 값**
 
@@ -183,8 +184,44 @@
 - **한계**: 조직 오너·AWS 관리자는 보호 설정을 바꿀 수 있어 막지 못함. 인원 최소화·MFA·감사 로그로 줄이고, 이 솔루션은 드리프트·State 읽기 주체 증가로 탐지만 함
 - **적용 순서와 체크리스트**: [위협 모델·범위](../01-requirements/threat-model.md)의 범위 밖 전제 조건 (apply CI 전환 → 사람 권한 전환 → tfstate 버킷 정책)
 
+### ADR-13
+
+**배포 뒤 IaC 구성 요소를 어디에 두고 어떻게 연결하나** · 상태: 결정 (11/17)
+
+- **맥락**
+    - 대시보드는 11/15 전용 EC2 한 대에 배포됨 (ADR-D010). 호스트는 들어오는 연결이 없고 나가는 연결은 80·443뿐이며, 밖에서는 ALB(443)를 거쳐 API로만 들어옴
+    - 자산 그래프(Neo4j·Cartography)는 클러스터 `iac` 네임스페이스에 있어 대시보드 호스트에서 닿지 않음
+    - 클러스터 워커 3대의 남은 CPU는 약 630m (11/12, ADR-D010)
+- **결정**
+    - 분석 워커(`iac-worker`), Neo4j, Cartography를 대시보드 호스트의 Docker Compose에 서비스로 붙임. 서로 다른 컨테이너로 두고 API에는 Neo4j 접근·AWS 권한을 주지 않음
+    - Neo4j는 Compose 내부 네트워크에만 두고 포트를 밖에 열지 않음. 데이터는 호스트의 데이터 EBS(암호화, 매일 스냅샷)에 둠
+    - Cartography는 매일 03:00 KST에 한 번 실행되는 작업 컨테이너. AWS 모듈만 쓰고, 끝나면 수집 완료를 기록해 보강·State·드리프트 작업을 등록
+    - AWS 자격 증명: 호스트 역할이 IaC 전용 역할(수집용, 워커용)을 받아 컨테이너별 단기 자격 증명 파일로 넘김 (Secret 워커와 같은 방식). 수집용은 scanner-ro와 같은 정책(SecurityAudit + 데이터·시크릿 값 읽기 거부), 워커용은 CloudFront 목록·IAM 시뮬레이터만
+    - 쿠버네티스 정보: 클러스터 안 작은 CronJob이 노드 이름·내부 IP·providerID만 API로 보냄. 서비스 계정 토큰(발급자 `k8s-oidc.re-used.store`, 그 서비스 계정만)으로 인증 (Reach L1 수집기와 같은 방식)
+    - CI 결과: main 코드로 도는 `iac-report`가 GitHub OIDC 토큰(aud `logssey-iac`, infrastructure 레포만)으로 실행 등록·plan 업로드를 하고, 분석이 끝나면 "경로 분석" 검사와 코멘트를 등록. PR 코드로 도는 `iac-gate`는 API를 부르지 않음
+    - "경로 분석" 검사는 처음부터 실제 판정(차단이면 실패)으로 등록하고, 필수 검사 지정은 끝에서 끝 검증 뒤에 함
+    - 호스트 크기는 메모리를 측정한 뒤 정함 (Neo4j 약 1.2GB, Cartography 실행 중 약 1GB 추가. t3.large 검토)
+- **근거**
+    - 감시 대상과 수명주기·장애를 나눔 (ADR-D009·D010). 클러스터에서 Neo4j·Cartography가 빠져 CPU 여유가 생김
+    - Neo4j는 Cartography가 쓰는 유일한 저장소라 유지함. 경로 계산은 이미 워커 메모리에서 하므로 Neo4j는 수집 결과를 담는 역할만 함
+    - 밖에서 오는 것은 모두 API 한 곳으로 모이고 기계 인증을 거침. 호스트에 들어오는 연결이 생기지 않음
+    - 쿠버네티스 쪽은 노드 ↔ EC2 연결(IS_INSTANCE)에 필요한 정보만 받으면 되므로, 호스트에서 쿠버네티스 API(6443)로 가는 길과 쿠버네티스 자격 증명이 필요 없음
+    - `iac-gate`는 PR이 바꾼 워크플로로 돌 수 있어 결과를 꾸밀 수 있음. `iac-report`는 main 코드로 돌고 아티팩트 형식을 이미 검사하며, GitHub App 키도 GitHub 안에만 남음
+    - 대시보드가 멈춘 동안 필수 검사가 걸려 있으면 인프라 PR이 모두 멈추므로, 실제 PR에서 오판이 없는지 먼저 확인
+- **버린 대안**
+    - 그래프는 클러스터에 두고 호스트에서 7687로 연결: 감시 대상 클러스터와 대시보드 사이에 새 통로가 생김
+    - 워커를 클러스터에 두기: 대시보드 PostgreSQL을 클러스터에 열어야 함
+    - Neo4j 없이 PostgreSQL만: Cartography를 대신할 수집기를 새로 만들어야 함
+    - 호스트에서 Cartography 쿠버네티스 모듈로 직접 수집: 6443 통로와 쿠버네티스 자격 증명을 호스트에 둬야 함
+    - `iac-gate`가 직접 전송: PR 코드가 가짜 결과를 보낼 수 있음
+- **대체·영향**
+    - ADR-05의 "①③ 분석은 클러스터 안 Java 워커" → 대시보드 호스트의 워커
+    - ADR-07의 "IRSA로 받음" → 호스트 역할이 받는 IaC 전용 역할. 클러스터의 Cartography CronJob·Neo4j·scanner-ro IRSA 역할은 새 구조가 돈 뒤 정리
+    - ADR-11의 "CI용 경로만 CloudFront → 공개 NLB" → 대시보드 ALB(`logssey.re-used.store`)
+    - 작업 순서는 IaC 보안 설계문서 "배포 후 작업 계획" 탭
+
 | 항목 | 내용 |
 |---|---|
 | 작성자 | Jay(김종민) |
 | 작성일 | 2026-10-12 |
-| 수정일 | 2026-10-21 |
+| 수정일 | 2026-11-17 |
