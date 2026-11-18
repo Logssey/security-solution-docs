@@ -277,6 +277,7 @@ flowchart LR
 | `analysis` | object | 아니요 | L2 분석 규모. `appClasses`, `libraryJars`, `reachedMethods`, `jarSha256`(판정한 jar. 판정 대상을 결과에 남긴다) |
 | `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState`. 그 스캔이 낸 도구 판정을 센다. Finding의 마지막 스캔이 아니라 판정의 스캔으로 세서, 같은 Finding이 다음 스캔에 다시 나와도 이 스캔의 개수는 그대로다. 사람 판정(`MANUAL`)은 세지 않는다. 스캔 결과는 스캔이 낸 값으로 두고, 사람 판정은 요약(API-08)에만 반영된다. 값은 0까지 채운다. `byReviewState`는 지금의 검토 상태다(검토는 Finding마다 한 행뿐) |
 | `failure` | object | 아니요 | `FAILED`일 때만. `code`(E-코드), `stage`, `message` |
+| `l3` | object | 아니요 | 이 스캔이 L3 능동 관측을 했을 때만(3-12 "스캔의 L3"). `runStatus`, `error`, `scenario`, `observedAt`, `counts`. `runStatus`가 `FAILED`여도 스캔은 실패가 아니다 |
 | `requestedBy` | object | 예 | 요청한 주체. `kind`(`USER` 대시보드 / `CI` / `SYSTEM` 하루 1번 재대조 등)를 함께 준다. `USER`면 `userId`(`dashboard_users` 번호), `CI`면 `repository`와 `subject`(OIDC `sub`), `SYSTEM`은 `kind`만 있다 |
 | `createdAt` | date-time | 예 | 요청을 받은 시각 |
 | `startedAt`, `finishedAt` | date-time | 아니요 | 시작·끝 시각 |
@@ -288,6 +289,8 @@ flowchart LR
 | `L1` | 실행 중 파드의 imageID와 스캔 digest를 조인한다. revision 라벨로 커밋을 확인한다 | FR-04 |
 | `L2` | bootJar 바이트코드로 호출 그래프(RTA, 진입점 2단계, 약한 경로 분리)를 만들고, CVE별 규칙으로 판정한다 | FR-05, FR-06 |
 | `REPORT` | 판정과 근거를 결과로 저장하고 보고서(기계용 JSON, 사람용 Markdown)를 만든다. API-04·API-05는 이 결과를 읽는다. 지금은 `verdict.py`가 `verdicts.json`, `verdicts.md`를 쓴다 | FR-07 |
+
+- L3 능동 관측(FR-14)은 단계(`stages`)가 아니다. 러너가 앱을 띄워 본 스캔은 결과를 `l3`로 준다(3-12). L3가 실패해도 스캔과 다른 단계는 그대로다.
 
 ### 3-2. Target
 
@@ -330,6 +333,7 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
 | `component` | object | 예 | `purl`(키), `name`, `version`, `ecosystem`(purl 타입 그대로: `maven` / `npm` / `apk` 등), `path`(이미지 안 위치) |
 | `vulnerability` | object | 예 | `id`(CVE), `severity`, `severityNote`(출처마다 심각도가 다를 때 남긴 메모, FR-03), `title`(스캐너 값), `description`(스캐너 설명 원문), `affectedFeature`(취약 기능 설명), `fixedVersions`(스캐너 값), `cwe`, `references` |
 | `deployment` | enum | 예 | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
+| `l3` | L3 | 아니요 | L3 능동 관측이 닿은 곳(3-12). 판정 옆에 놓는 근거이고 판정(`verdict`)·사람 검토·게이트를 바꾸지 않는다. 이 대상(이미지)을 띄워 본 결과가 없으면 null이다 |
 | `verdict` | Verdict | 예 | Reach 판정(3-4) |
 | `review` | Review | 예 | 사람 검토(3-10) |
 | `sameCveFindings` | integer 배열 | 아니요 | 같은 CVE의 다른 패키지 사본 Finding ID |
@@ -408,6 +412,8 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `observationMethod` | enum | `kind=RUNTIME`일 때 | 확인 방법: `COVERAGE`(Java 커버리지 에이전트, 메서드 실행) / `MAPS`(네이티브 라이브러리 로드, `/proc/<pid>/maps`) / `UPROBE`(네이티브 공개 함수 호출) |
 | `observedAt` | date-time | `kind=RUNTIME`일 때 | 관측 시각 |
 | `executed` | boolean | `kind=RUNTIME`일 때 | 실행(로드·호출)이 관측됐나. true만 판정 근거(`REACHABLE`)로 쓴다. false는 `UNREACHABLE` 근거로 쓰지 않는다 |
+
+- [구현] L3 능동 관측 결과는 `kind=RUNTIME` 근거에 넣지 않고 Finding의 `l3`(3-12)로 준다. 근거에 넣으면 근거 해시가 달라지는데, 앱을 띄우지 않는 재대조(`SCHEDULE`)에는 이 근거가 없어 매일 사람 검토가 `EVIDENCE_CHANGED`로 되돌아가기 때문이다. `RUNTIME`의 `build`, `configKeys`, `invocations`, `observationMethod`, `observedAt`은 `l3.run`에 같은 이름으로 있다. `kind=RUNTIME`은 값만 남겨 둔다.
 
 예: CVE-2026-89407(jackson-core 3.1.5)의 사실 근거. 원자료에 줄 번호가 없어 `symbol`만 적었다.
 
@@ -581,6 +587,9 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | Evidence `pathTarget` | `VULN_FUNCTION` / `PACKAGE` |
 | Evidence `matchedCondition` | `REACHABLE` / `UNREACHABLE` / `UNKNOWN` / `DEFAULT` |
 | Evidence `observationMethod` | `COVERAGE` / `MAPS` / `UPROBE` |
+| L3 `reached` | `REGION` / `FUNCTION` / `NONE` / `NOT_RECORDED` (3-12) |
+| L3 `runStatus` | `SUCCEEDED` / `FAILED` |
+| L3 구간의 `unchecked` | `OTHER_VERSION` / `OUT_OF_SCOPE` / `NO_CLASS_FILE` / `NO_METHOD` / `NO_LINE_NUMBERS` |
 | Workload `source` | `MANUAL` / `CLUSTER_READER` |
 | Workload `scanMatch.status` | `MATCH` / `MISMATCH` / `NO_SCAN` |
 | Workload `scanMatch.matchedBy` | `DIGEST` / `SOURCE_TREE` |
@@ -590,6 +599,39 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | CI 검사 `policy` | `REPORT_ONLY` / `GATE` |
 | CI 검사 `gate.result` | `PASS` / `WARN` / `FAIL` |
 | CI 검사 `gate.reasons[].condition` | `REACHABLE_CRITICAL_HIGH` / `REACHABLE_OTHER` / `UNKNOWN_ANY` / `NOT_ANALYZED_CRITICAL_HIGH` (6-2) |
+
+### 3-12. L3 (능동 관측 결과)
+
+러너가 스캔한 이미지를 실제로 띄워 요청 시나리오를 보냈을 때, 취약 코드 쪽으로 **어디까지 실행됐는지**다(PRD FR-14). L2 판정(`verdict`) 옆에 놓는 근거이고 판정·사람 검토·게이트·요약 숫자를 바꾸지 않는다(US-12 "L2 판정과 나란히 본다"). L2가 무엇이라고 했든 취약 함수 데이터가 있는 모든 CVE를 본다. 판정 근거(3-5)와 따로 저장한다.
+
+**Finding의 L3** (API-04는 앞의 세 필드만, API-05는 전부)
+
+| 이름 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `reached` | enum | 예 | 도달 수준. `REGION`: 취약 구간(취약한 줄)이 실행됨 / `FUNCTION`: 취약 함수는 실행됐지만 구간은 아님 / `NONE`: 모두 확인할 수 있었고 실행된 것이 없음 / `NOT_RECORDED`: 실행된 것이 없고 확인하지 못한 것이 있음(기록 범위 밖, 클래스 파일 없음) |
+| `regionsChecked` | boolean | 예 | 구간을 확인했나. `FUNCTION`일 때 true면 "구간을 봤고 실행되지 않음", false면 "구간을 확인하지 못함"(라이브러리 버전이 구간 데이터와 다름, 구간 데이터 없음, 줄 번호 없는 클래스) |
+| `startupOnly` | boolean | 예 | 앱이 뜨는 동안에만 실행됐나. 요청으로 실행된 것과 구분한다 |
+| `during` | string 배열 | 상세만 | 그 수준에 닿은 구간 id. `startup`(앱이 준비될 때까지, 준비 확인 요청 포함) 또는 시나리오 단계(`001`, `002`, …). `run.invocations[].segment`와 잇는다 |
+| `functions` | object 배열 | 상세만 | 실행된 취약 함수. `function`(`클래스#메서드(desc)`), `during` |
+| `regions` | object 배열 | 상세만 | 취약 구간마다 `class`, `method`, `lines`(줄 범위 배열, 없으면 `wholeMethod`), `executedLines`, `executed`, `during`. 확인하지 못했으면 `unchecked`(이유) |
+| `paths` | object 배열 | 상세만 | L2가 호출 그래프로 경로를 찾은 취약 함수마다 `target`, `reachedStep`, `of`, `steps`(`method`, `executed`). `reachedStep`은 진입점부터 **끊기지 않고** 실행된 단계 수다. 중간 메서드가 다른 길로 실행된 것은 세지 않는다. 진입점이 실행되지 않았으면 0이고 `steps`가 없다. `executed`가 null인 단계는 확인할 수 없는 것(JDK 콜백 등)이다 |
+| `note` | string | 아니요 | 취약 구간 데이터의 메모(예: 수정이 데이터만 바꿔 실행으로 구분할 수 없음) |
+| `run` | object | 상세만 | 그 관측의 근거 항목(FR-14 수용 기준 3). `scanId`, `scenario`(시나리오 버전), `observationMethod`(`COVERAGE`), `observedAt`, `build`(`imageDigest`), `configKeys`(`name`, `enabled`. 값은 없다), `invocations`(`segment`, `name`, `request`, `count`, `ok`, `failed`, `skipped`) |
+
+- `NONE`은 시나리오가 그 코드를 지나가지 않았다는 뜻일 뿐 `UNREACHABLE`의 근거가 아니다(FR-14 수용 기준 2).
+- 값은 그 대상(이미지 digest)을 띄워 본 **마지막 성공한 관측**이다. 앱을 띄우지 않는 스캔(재대조 `SCHEDULE`, `PR`)과 L3가 실패한 스캔은 이 값을 바꾸지 않는다. 같은 이미지를 다시 띄워 보면 새 결과가 대신한다.
+- CVE와 패키지 좌표(group:artifact)로 Finding에 잇는다. 취약 함수 데이터가 없는 CVE, 다른 좌표의 사본(`UNANALYZED_COPY`), OS 패키지는 `l3`가 null이다.
+- L2가 `UNREACHABLE`인데 `reached`가 `REGION`이면 L2가 놓친 경우다. 상태는 그대로 두고 화면이 표시한다(SCR-02, SCR-03). 사람이 검토로 정한다(API-06).
+
+**스캔의 L3** (API-02·API-03 `l3`)
+
+| 이름 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `runStatus` | enum | 예 | `SUCCEEDED` / `FAILED` |
+| `error` | string | `FAILED`일 때 | 러너가 남긴 사유(500자) |
+| `scenario`, `observedAt` | string, date-time | `SUCCEEDED`일 때 | 시나리오 버전과 관측 시각 |
+| `counts` | object | 예 | 도달 수준별 CVE 수(`REGION`, `FUNCTION`, `NONE`, `NOT_RECORDED`). `FAILED`면 빈 객체 |
+
 
 ## 4. 엔드포인트
 
@@ -918,11 +960,12 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `cve` | string 목록 | 아니요 | CVE ID 완전 일치 |
 | `cveContains` | string | 아니요 | CVE ID 부분 일치(대소문자 무시). 예: `89407` |
 | `disagreesWithTool` | boolean | 아니요 | true면 사람 판정이 도구 판정과 다른 Finding만 준다(FR-08) |
+| `l3` | enum 목록 | 아니요 | L3 도달 수준(3-12 `reached`). 주면 `l3`가 없는 Finding은 빠진다. 예: `status=UNREACHABLE&l3=REGION`은 L2가 놓친 것 |
 | `firstSeenAfter` | date-time | 아니요 | `firstSeenAt`이 이 시각보다 뒤인 Finding만 준다. 직전 성공 스캔의 `finishedAt`을 넣으면 그 뒤에 새로 생긴 Finding이다(US-10) |
 | `sort` | string | 아니요 | 기본 `-status,-severity,cve`(2-5의 Finding 기본 정렬). 허용: `status`, `severity`, `cve`, `package`, `firstSeenAt`, `lastSeenAt` |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
-목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`.
+목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`. `l3`는 `reached`·`regionsChecked`·`startupOnly`만 준다(없으면 null).
 
 요청 예시: `GET /api/v1/reach/findings?target=1&cve=CVE-2025-14813,CVE-2026-68525,CVE-2026-89407&sort=-severity,cve`
 
@@ -1053,6 +1096,8 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 |---|---|---|---|---|
 | `findingId` | 경로 | integer | 예 | Finding ID |
 | `include` | 쿼리 | string 목록 | 아니요 | `RULE`(적용 규칙 객체, `verdict.rule`), `vulnFunctions`(취약 함수 객체, `verdict.vulnFunctions`), `reviewHistory`(검토 이력, `review.history`), `verdictHistory`(판정 이력, `verdict.history`). 네 값 밖이면 400 `INVALID_INPUT`(대소문자를 구분한다). [계획] 지금 구현은 `reviewHistory`만 채우고 나머지 셋은 받기만 한다 |
+
+- `l3`(3-12)는 `include` 없이 늘 준다. 이 대상을 띄워 본 결과가 없으면 null이다.
 
 요청 예시: `GET /api/v1/reach/findings/2`
 
@@ -1819,6 +1864,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | `reachResult` | 본문 | object | `options.l2`가 true면 | `reach.jar` 결과(사실, 후보 경로, 호출 그래프 요약). [계획] 지금 구현은 보관하지 않는다 |
 | `tools`, `analysis` | 본문 | object | 예 | 3-1의 같은 이름 필드 |
 | `stages` | 본문 | object 배열 | 예 | 러너에서 돈 단계의 `name`, `status`, `durationSeconds`, `message`. 실패했으면 본문에 `failure`(`code`, `stage`, `message`, 3-1)도 준다. 이때는 `tools`·`stages`만 있으면 되고 스캔은 `FAILED`로 끝난다 |
+| `l3` | 본문 | object | 아니요 | L3 능동 관측 결과(아래 "L3 결과"). 러너가 앱을 띄워 봤을 때만 넣는다 |
 
 - 응답은 202와 `{ "id": 1, "scanId": 2, "scanStatus": "RUNNING" }`이다. 저장과 게이트 계산이 끝나면 API-12 결과 조회에 반영된다. [계획] 지금 구현은 요청 안에서 저장까지 끝내 `SUCCEEDED`(실패 묶음이면 `FAILED`)를 준다.
 - 같은 검사에 두 번 올리면 409 `CONFLICT`다. 다시 돌리려면 API-12로 새 검사를 등록한다.
@@ -1844,6 +1890,24 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - PR 검사의 결과가 이미 스캔한 레포 커밋(같은 대상)의 Finding을 만나면, 그 스캔의 도구 판정만 남긴다. Finding의 스캐너 값·`scanId`·`lastSeenAt`, 지금 판정(`verdict`), 사람 검토는 기준 스캔의 것을 그대로 둔다(ARD SR-09). PR 결과 개수와 게이트는 그 스캔의 판정으로 센다.
 - 사람 판정이 남아 있고 새 도구 판정이 다시 `NOT_ANALYZED`면 사람 판정(`MANUAL`)이 계속 `verdict`다(API-06 예외). 이어받은 Finding도 같다.
 - 저장 중 서버 오류가 나면 저장한 것을 되돌리고 스캔만 `FAILED`(`failure.code`는 `INTERNAL_ERROR`, `stage`는 `REPORT`)로 남긴다. 이 검사에 다시 올리면 409다.
+
+**L3 결과 (`l3`)**
+
+러너가 `image` 작업에서 앱을 띄워 봤으면(서비스 레포에 시나리오가 있을 때) 묶음에 `l3`를 넣는다. 모양은 러너 `verdict/l3.py` 출력에 그 실행의 근거 항목 `run`을 더한 것이다.
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `cves` | 예 | CVE마다 `cve`, `coordinates`(group:artifact), `reached`, `regionsChecked`, `startupOnly`, `during`, `functions`, `regions`, `paths`, `note`, `installedVersions`, `regionVersion`(3-12) |
+| `run` | 예 | `scenario`(64자), `observedAt`, `observationMethod`(없으면 `COVERAGE`), `build`, `configKeys`, `invocations`, `requests`, `scope`(에이전트 기록 범위) |
+| `counts`, `segments`, `tool`, `scope` | 아니요 | 도달 수준별 개수, 구간 id 목록, 도구 버전 |
+| `error` | - | L3 실행이나 대조가 실패했을 때는 `{ "error": "…" }`만 넣는다 |
+
+- **`l3`는 스캔을 실패시키지 않는다.** `error`가 있거나 모양이 틀리면(`reached`가 허용 밖, `run` 없음, 같은 CVE·좌표가 두 번) 400이 아니라 그 스캔의 L3를 `FAILED`로 남기고(3-12 "스캔의 L3") 나머지는 그대로 저장한다.
+- 판정·근거·사람 검토·게이트에는 쓰지 않는다. 근거 해시에도 들어가지 않아 검토를 되돌리지 않는다.
+- CVE와 `coordinates`가 같은 Finding에 붙인다(같은 좌표의 여러 버전은 같은 결과). 이번 묶음에 없는 CVE의 예전 결과는 지운다. `l3`가 없거나 `FAILED`면 그 대상의 예전 결과를 그대로 둔다.
+- `PR` 검사의 `l3`는 받지 않는다(ARD SR-09).
+- 서버가 아는 필드만 저장한다. Finding 하나의 근거가 256KB를 넘으면 `paths`를 빼고 저장한다.
+
 
 **결과 묶음 만들기 (`bundle.py`)**
 
@@ -1997,7 +2061,7 @@ CVE-2026-68525(tomcat-embed-core 11.0.24) 한 건이다.
 | 원하는 것 | GitHub Actions 트리거 | `mode` | 하는 일 |
 |---|---|---|---|
 | PR 검사 | `pull_request` | `PR` | 레포 SBOM(cdxgen)으로 대조하고 새 Finding을 판정(L2)한다. 게이트를 적용한다. L1·L3는 없다 |
-| 이미지 빌드(ECR push 전) | 배포 파이프라인의 이미지 빌드 단계 | `IMAGE_BUILD` | 이미지 SBOM(Trivy)을 digest와 함께 보관하고 대조·판정(L2)한다. 백엔드 테스트에 커버리지 에이전트를 붙여 L3 근거를 남긴다(PRD FR-14) |
+| 이미지 빌드(ECR push 전) | 배포 파이프라인의 이미지 빌드 단계 | `IMAGE_BUILD` | 이미지 SBOM(Trivy)을 digest와 함께 보관하고 대조·판정(L2)한다. 서비스 레포에 시나리오가 있으면 그 이미지를 띄워 시나리오를 보내고 L3 근거(`l3`)를 남긴다(PRD FR-14) |
 | 하루 1번 | 대시보드가 `workflow_dispatch` | `SCHEDULE` | 운영에서 실행 중인 이미지(L1)마다 그 이미지의 저장된 SBOM을 최신 DB로 재대조하고, 새 Finding을 판정(L2)한다. 새로 생긴 것은 Finding의 처음 본 시각으로 구분한다 |
 | 원할 때 | `workflow_dispatch` | `MANUAL` | 대시보드에서 스캔을 요청하면(API-01) 서버가 띄운다. 레포 대상은 그 커밋을 빌드한 bootJar, 이미지 대상은 그 digest 이미지로 대조·판정(L2)하고 그 검사에 올린다. L1은 서버가 채운다. L3(PRD FR-14)는 아직 없다 |
 
@@ -2005,7 +2069,7 @@ CVE-2026-68525(tomcat-embed-core 11.0.24) 한 건이다.
 - 이미지 스캔(`IMAGE_BUILD`)은 ECR push 전에 한다(PRD FR-11). 러너가 방금 빌드한 이미지로 SBOM을 만들고 결과만 올리므로(API-13), 서버가 레지스트리에서 이미지를 읽을 필요가 없다.
 - 하루 1번 재대조(`SCHEDULE`)는 GitHub `schedule`이 아니라 대시보드가 띄운다. 어떤 digest가 운영에서 도는지는 대시보드(L1)만 알기 때문이다. 기본 한국 04:30(L1 수집 03:17 뒤), 설치 설정 `logssey.reach.rescan.cron`(`-`이면 끔). 대상은 요약 기본 범위(API-08 `basis=RUNNING`)가 실행 중인 이미지로 쓰는 스캔이고, L1이 꺼졌거나 신선한 조회가 없으면 띄우지 않는다. 검사마다 `rescanOf` = 그 스캔, 요청 주체 `SYSTEM`, 멱등 키는 스캔·날짜라 하루에 한 번이다. 러너는 수동 실행과 같은 작업을 `rescan_of`와 함께 돌린다(API-01). 재빌드는 없고, L2용 jar는 같은 digest 이미지에서 꺼낸다
 - L2 분석은 앱 1개에 1분 이내가 기준이다(NFR-03, PoC 약 40초). PR마다 돌릴 수 있다.
-- L3 능동 관측은 앱을 띄우고 테스트를 돌려야 해서 PR마다 돌리지 않는다(PRD FR-14). 결과는 Evidence `kind=RUNTIME`으로 남는다. 러너의 관측 결과는 API-13 결과 묶음에 함께 올린다. 묶음 안 형식은 FR-14와 함께 정한다.
+- L3 능동 관측은 앱을 띄워 시나리오를 보내야 해서 PR마다 돌리지 않는다(PRD FR-14). 이미지 검사(`IMAGE_BUILD`)에서 서비스 레포에 시나리오(`.reach/l3-scenario.json`)가 있을 때만 돈다. 러너의 관측 결과는 API-13 결과 묶음의 `l3`로 올리고, Finding의 `l3`(3-12)로 남는다. 재대조와 대시보드 요청 스캔은 앱을 띄우지 않는다.
 
 ```mermaid
 sequenceDiagram
