@@ -182,6 +182,7 @@ API 명세서 3-11의 "이 문서에서만 쓰는 값" 가운데 화면에 보�
 | Scan `trigger` | `MANUAL` / `PR` / `IMAGE_BUILD` / `SCHEDULE` | 수동 / PR / 이미지 빌드 / 일정 | SCR-05 |
 | Scan `stages[].name` | `SBOM` / `MATCH` / `L1` / `L2` / `REPORT` | SBOM 생성 / CVE 대조 / L1 배포 확인 / L2 판정 / 보고서 | SCR-01-10, SCR-05-06 |
 | Evidence `matchedCondition` | `REACHABLE` / `UNREACHABLE` / `UNKNOWN` / `DEFAULT` | 도달 가능 조건 / 도달 불가 조건 / 미확인 조건 / 기본값 | SCR-03-09 |
+| L3 `reached` | `REGION` / `FUNCTION` / `NONE` / `NOT_RECORDED` | 실행 확인 / 함수까지 실행 / 실행 없음 / 기록 안 됨 | SCR-02-08, SCR-03-05, SCR-03-17, SCR-05-06. 결과가 없으면(null) "—". "실행 없음"은 도달 불가가 아니라 시나리오가 그 코드를 지나가지 않았다는 뜻이다 |
 | Workload `source` | `MANUAL` / `CLUSTER_READER` | 수동 / 자동 조회 | SCR-01-09, SCR-03-15, SCR-04 |
 | VulnFunction `provenance` | `VERSION_DIFF` / `FIX_COMMIT_DIFF` | 버전 diff / 수정 커밋 diff | SCR-03-10, SCR-06-11 |
 | VulnFunction `candidateSource` | `MANUAL` / `PROSPECTOR` / `AI` | 사람 / Prospector / AI | SCR-06-11 비고 |
@@ -344,6 +345,7 @@ SCR-01-06 상태 × 심각도 표:
 | 방식 | 104 | `verdict.method` | 방식 태그. 분석 대상 아님은 "—" |
 | 검토 | 88 | `review.reviewState`, `review.disagreesWithTool` | 검토 배지. 사람 판정이 도구 판정과 다르면 배지 아래에 "≠ 불일치" 태그. 이어받은 검토가 되돌려졌으면(`review.resetReason`) "재검토 필요" 태그(FR-08) |
 | 배포 | 104 | `deployment` | 배포 배지 |
+| 실행 | 112 | `l3`(`reached`, `regionsChecked`, `startupOnly`), `verdict.status` | L3 배지(테두리만 있는 네모, 판정 배지와 모양을 다르게). 결과가 없으면 "—". L2가 도달 불가인데 L3가 실행 확인이면 배지 아래에 "≠ 판정" 태그. 열 제목 툴팁: "이미지를 실제로 띄워 시나리오를 보냈을 때 취약 코드가 실행됐는지. 판정을 바꾸지 않는 근거" |
 | 근거 요약 | 244 | `verdict.summary`, `verdict.notAnalyzedReason`, `review.proposal`(`status`, `summary`) | 2줄까지, 넘치면 말줄임. 분석 대상 아님은 사유를 쓴다. 판정 제안(`review.proposal`)이 있으면 "제안(확정 대기)"와 제안 내용을 함께 쓴다(4-5) |
 
 - **가장 가까운 수정 버전**: `vulnerability.fixedVersions` 중 설치 버전보다 큰 값 가운데 가장 작은 값이다. 전체 목록은 SCR-03에서 보인다.
@@ -362,7 +364,7 @@ SCR-02 Finding 목록 · Logssey UI 템플릿 시안
 |---|---|---|---|---|---|
 | SCR-02-01 | 페이지 머리말 | 머리말 | API-04 `totalCount`(`include=total`), 상단에서 고른 대상의 `target.displayName` | - | 건수는 필터를 건 뒤의 수 |
 | SCR-02-02 | 상태 요약 칩 | 칩 4개 | API-08 `byStatus` | 클릭하면 그 상태만 걸러진다. 다시 누르면 풀린다 | 칩 안에 판정 상태 배지 모양을 그대로 쓴다. 칩 숫자는 대상 전체의 수이고 다른 필터를 따르지 않는다 |
-| SCR-02-03 | 필터 막대 | 드롭다운 5개(여러 값 선택), 토글 1개 | 요청 쿼리 `status`, `severity`, `reviewState`, `deployment`, `package`. 검토 상태의 "도구와 불일치"는 `disagreesWithTool=true`, "새 Finding만" 토글은 `firstSeenAfter`(직전 성공 스캔의 `finishedAt`). 검토 상태의 "재검토 필요"는 판정이나 근거가 바뀌어 검토 전으로 되돌려진 Finding(`review.resetReason` = `VERDICT_CHANGED`·`EVIDENCE_CHANGED`, FR-08)이다. API 추가 필요: 이 값으로 거르는 쿼리 | 고르면 바로 다시 부른다. 고른 값은 주소 쿼리에 남는다 | `target`은 상단 대상 선택이 정한다(API-04 `target` 쿼리) |
+| SCR-02-03 | 필터 막대 | 드롭다운 6개(여러 값 선택), 토글 1개 | 요청 쿼리 `status`, `severity`, `reviewState`, `deployment`, `l3`("실행(L3)": 도달 수준. 고르면 L3 결과가 없는 Finding은 빠진다), `package`. 검토 상태의 "도구와 불일치"는 `disagreesWithTool=true`, "새 Finding만" 토글은 `firstSeenAfter`(직전 성공 스캔의 `finishedAt`). 검토 상태의 "재검토 필요"는 판정이나 근거가 바뀌어 검토 전으로 되돌려진 Finding(`review.resetReason` = `VERDICT_CHANGED`·`EVIDENCE_CHANGED`, FR-08)이다. API 추가 필요: 이 값으로 거르는 쿼리 | 고르면 바로 다시 부른다. 고른 값은 주소 쿼리에 남는다 | `target`은 상단 대상 선택이 정한다(API-04 `target` 쿼리) |
 | SCR-02-04 | CVE 검색 | 입력 | 요청 쿼리 `cveContains` | 입력이 멈추고 0.3초 뒤 검색한다. "CVE-2026-89407"과 "89407" 모두 찾는다 | `cveContains`는 부분 일치이고 대소문자를 가리지 않는다. API-04 `cve`는 CVE ID 완전 일치라 검색에는 쓰지 않는다 |
 | SCR-02-05 | 필터 초기화 | 텍스트 버튼 | - | 모든 필터를 지운다 | 걸린 필터가 없으면 비활성 |
 | SCR-02-06 | CVE로 묶기 | 토글 | `items[].vulnerability.id` | 켜면 같은 CVE의 행을 묶음 머리(SCR-02-09) 아래로 모은다 | 기본은 꺼짐. 묶어도 사본은 각각 별도 행이다(FR-07). 묶기는 불러온 행 안에서 한다 |
@@ -482,7 +484,7 @@ SCR-03 Finding 상세 · Logssey UI 템플릿 시안
 | SCR-03-02 | 제목 줄 | 제목, 칩, 아이콘 버튼 | `vulnerability.id`, `vulnerability.severity`, `vulnerability.severityNote`, `component.name`, `component.version`, `component.purl` | 복사 아이콘 → purl을 복사하고 알림(COM-06) | 심각도는 스캐너 값 그대로. 출처마다 값이 다르면 칩 옆 "i" 툴팁에 `vulnerability.severityNote`를 쓴다(예: CVE-2025-14813은 Trivy CRITICAL, CNA CVSS 벡터 7.5 HIGH). AI로 식별한 구성요소면 패키지 이름 옆에 "구성요소 추정" 태그를 달고, 툴팁에 출처와 신뢰도를 쓴다. 사람이 확인하기 전에는 이 Finding을 도달 불가로 확정하지 않는다(FR-02). 이미지 SBOM과 레포 SBOM의 좌표가 다르면 "좌표 차이" 태그를 달고 두 좌표를 툴팁에 쓴다(레포 SBOM 우선). API 추가 필요: 구성요소 추정 여부·출처·신뢰도, 좌표 차이 |
 | SCR-03-03 | 이전·다음·목록 | 버튼 3개 | SCR-02의 현재 필터·정렬 순서 | [◀ 이전]·[다음 ▶] → 옆 Finding. [목록으로] → SCR-02 | 주소로 바로 들어오면 이전·다음은 비활성 |
 | SCR-03-04 | 부제(취약점 정보) | 텍스트 + 펼침 | `vulnerability.affectedFeature`, `vulnerability.cwe`, `vulnerability.title`, `vulnerability.description`, `vulnerability.references` | [설명 보기] → 스캐너 설명 원문과 참고 링크를 펼친다 | 설명은 스캐너 원문(`vulnerability.description`, 영어)을 그대로 쓰고 "스캐너 설명"이라고 밝힌다 |
-| SCR-03-05 | 판정 요약 띠 | 요약 띠(칸 4개 + 결론) | `verdict.status`, `verdict.method`, `verdict.notAnalyzedReason`, `review.reviewState`, `review.proposal`, `deployment`, `verdict.summary`, `verdict.analyzedAt`, `scanId` | 스캔 링크 → SCR-05(그 스캔 상세) | 판정 칸 제목 "판정(L2)", 배포 칸 제목 "배포(L1)". 도달 가능이면 띠 왼쪽에 4px 막대. 분석 대상 아님은 결론 자리에 사유(`verdict.notAnalyzedReason`)를 쓴다. 판정 제안(`review.proposal`)이 있으면 결론 아래에 "제안(확정 대기)"와 제안 내용을 쓴다(4-5) |
+| SCR-03-05 | 판정 요약 띠 | 요약 띠(칸 5개 + 결론) | `verdict.status`, `verdict.method`, `verdict.notAnalyzedReason`, `review.reviewState`, `review.proposal`, `deployment`, `l3`, `verdict.summary`, `verdict.analyzedAt`, `scanId` | 스캔 링크 → SCR-05(그 스캔 상세) | 판정 칸 제목 "판정(L2)", 배포 칸 제목 "배포(L1)", 실행 칸 제목 "실행(L3)"(L3 배지, 결과가 없으면 "—", L2 도달 불가 + L3 실행 확인이면 "≠ 판정" 태그). 세 층을 나란히 보이고 L3는 판정을 바꾸지 않는다. 도달 가능이면 띠 왼쪽에 4px 막대. 분석 대상 아님은 결론 자리에 사유(`verdict.notAnalyzedReason`)를 쓴다. 판정 제안(`review.proposal`)이 있으면 결론 아래에 "제안(확정 대기)"와 제안 내용을 쓴다(4-5) |
 | SCR-03-06 | 근거 ① 앱 코드 사실 | 표 | `verdict.evidence[]` 중 `kind=FACT`(`factId`, `value`, `summary`, `locations[]`(`file`, `line`), `informational`) | 파일:줄 클릭 → 저장소의 해당 줄([계획], 저장소 연결이 있을 때) | 판정에 쓴 사실을 먼저, 참고 사실(`informational`이 true)을 나중에 둔다. 참고 사실은 "참고" 태그. "판정에 씀" 칸은 `informational`의 반대다 |
 | SCR-03-07 | 근거 ② 확인 범위 | 목록 | `verdict.evidence[]`의 `checkedAbsent`, `checkedCount`, `summary` | - | 도달 불가의 근거는 "확인했지만 없던 것"이다. 확인한 개수(`checkedCount`)를 꼭 쓴다 |
 | SCR-03-08 | 근거 ③ 호출 경로 | 접힘 띠 + 단계 목록 | `verdict.callgraph`(`packageReached`, `vulnFunctionPresent`, `vulnFunctionReached`, `entryStage`, `weakOnly`), `verdict.evidence[]` 중 `kind=PATH`(`path`, `pathTarget`, `candidate`, `entryStage`, `weak`)와 `kind=NOTE`(`summary`) | [펼치기 ▾]·[접기 ▴]. 단계의 앱 코드 위치 클릭 → 저장소([계획]) | 띠 글자 "후보 경로, 실제와 다를 수 있음"은 항상 보인다. 가장 짧은 후보 경로 하나만 보인다. "판정과 달라 보이는 이유"는 `kind=NOTE` 근거다. API 추가 필요: 경로 단계별 위치(파일:줄, jar 이름)와 간선 단위 약한 경로 표시(지금은 경로 단위 `weak`) |
@@ -492,8 +494,9 @@ SCR-03 Finding 상세 · Logssey UI 템플릿 시안
 | SCR-03-12 | 사람 검토: 비교 줄 | 요약 줄 | `verdict.status`, `verdict.method`, `review.status`, `review.reviewState`, `review.disagreesWithTool`, `review.carriedFrom`, `review.resetReason` | - | 도구 판정과 사람 판정이 다르면(`disagreesWithTool`) "불일치" 태그와 "검증 세트 후보" 표시(FR-08). 이전 스캔에서 이어받은 검토면 "이전 스캔에서 이어받음(`carriedFrom.reviewedAt` 날짜)"을 회색 글자로 쓴다. 근거가 바뀌어 되돌려졌으면(`resetReason`) "재검토 필요: 판정 바뀜" 또는 "재검토 필요: 근거 바뀜" 태그를 달고, 이전 검토는 이력(SCR-03-14)에서 본다. 대표 상태 규칙은 미결 2 |
 | SCR-03-13 | 사람 검토: 입력 폼 | 세그먼트 버튼, 라디오, 입력, 버튼 | 현재 값: `review.status`, `review.reviewState`, `review.note`, `review.version`. 저장 요청(API-06 본문): `reviewState`(`PROVISIONAL` 또는 `CONFIRMED`), `status`, `note`, `version`(지금 `review.version`) | [저장] → API-06. 성공하면 알림과 이력 갱신 | 사람 판정(확정·잠정)을 저장하면 메모가 필수다(API-06). 도구 판정과 다르게 고르면 다르게 본 이유를 쓴다. "검토 전"으로 되돌리기는 API-06이 받지만 이 화면에서는 고를 수 없다. 저장은 reviewer 역할이 있어야 한다 |
 | SCR-03-14 | 검토·판정 이력 | 목록 | 사람 기록은 `review.history`(`include=reviewHistory`: `reviewedAt`, `reviewer`, `reviewState`, `status`, `note`, `proposal`). 도구 판정 기록은 `verdict.history`(`include=verdictHistory`: `analyzedAt`, `status`, `method`, `summary`) | [모두 보기] → 패널 안에서 전체 이력 펼침 | 두 이력을 시각순으로 합쳐 새것을 위에 둔다. 주체는 `review.history` 항목이 사람, `verdict.history` 항목이 도구다. 도구 판정이 바뀐 기록(규칙 개선 등)도 같은 목록에 쓴다 |
-| SCR-03-15 | 배포 상태(L1) | 카드 | `deployment`. 나머지는 API-07을 대상 digest로 불러 받는다(`name`, `namespace`, `replicas.ready`, `replicas.desired`, `image.digest`, `scanMatch`(`deployedRevision`, `analyzedCommit`, `sourceTreeEqual`), `observedAt`, `source`) | [워크로드 보기] → SCR-04(그 워크로드 선택) | 맨 아래 회색 한 줄: "L3 실제 호출(능동 관측: 스테이징·로컬·CI, 운영 제외): FR-14 [계획]". 파드 수는 SCR-01-09와 같이 쓴다 |
+| SCR-03-15 | 배포 상태(L1) | 카드 | `deployment`. 나머지는 API-07을 대상 digest로 불러 받는다(`name`, `namespace`, `replicas.ready`, `replicas.desired`, `image.digest`, `scanMatch`(`deployedRevision`, `analyzedCommit`, `sourceTreeEqual`), `observedAt`, `source`) | [워크로드 보기] → SCR-04(그 워크로드 선택) | L3는 SCR-03-17에서 따로 보인다. 파드 수는 SCR-01-09와 같이 쓴다 |
 | SCR-03-16 | 같은 CVE의 다른 패키지 사본 | 표 | `sameCveFindings`(Finding ID 목록). 각 사본의 `component`, `verdict.status`, `verdict.summary`, `review.reviewState`, `review.proposal`은 API-04를 `cve`로 불러 받는다 | 행 클릭 → 그 사본의 SCR-03 | 지금 보는 Finding도 첫 행에 굵게 넣고 "이 Finding" 태그를 단다. 판정 제안이 있는 사본은 "제안(확정 대기)"와 제안 내용을 함께 쓴다(4-5) |
+| SCR-03-17 | 실제 실행(L3) | 절(결론 줄 + 목록) | `l3`(API 명세 3-12): `reached`, `regionsChecked`, `startupOnly`, `during`, `functions`, `regions`, `paths`, `note`, `run`(`scanId`, `scenario`, `observedAt`, `build.imageDigest`, `configKeys`, `invocations`) | - | 근거(SCR-03-06~09) 아래에 둔다. ① 결론 줄: L3 배지 + 한 문장("취약 구간이 실제로 실행됐어요" / "취약 함수까지 실행됐고, 취약 구간은 실행되지 않았어요" / "…확인하지 못했어요" / "시나리오에서 실행되지 않았어요. … 도달 불가의 근거는 아니에요"), 기동 중에만 실행됐으면 그 사실. 그 아래 "판정(L2)과 따로 보는 근거예요. 판정과 검토는 이 결과로 바뀌지 않아요." ② 어느 요청에서: `during`을 `run.invocations`의 요청(메서드·경로·단계 이름)으로 풀어 쓴다. `startup`은 "앱 기동 중". ③ 어디까지 실행됐나: 실행된 취약 함수, 취약 구간(줄 범위, 실행된 줄, 확인 못 한 이유). ④ L2가 찾은 호출 경로를 실제로 탔나: `paths`를 많이 탄 것부터 5개, "N단계 중 M단계까지 실행"과 단계 목록(실행 ●, 미실행 ○, 확인 못 함). ⑤ 이 실행: 관측 시각·스캔·시나리오 버전·이미지 digest·보낸 단계 수·설정 키(이름과 켜짐 여부). `l3`가 null이면 "이 이미지를 띄워 시나리오를 보낸 결과가 없어요" |
 
 ### 예시 데이터 (PoC 값)
 
@@ -513,7 +516,7 @@ SCR-03 Finding 상세 · Logssey UI 템플릿 시안
 | SCR-03-11 수정·업그레이드 | 설치 3.1.5 · 수정 버전(스캐너) 3.1.7, 3.2.2 · 제안 3.1.7<br>변경: `ext['jackson-bom.version'] = '3.1.7'` (build.gradle)<br>같은 변경으로 수정 버전에 닿는 Finding 7건(jackson-core·jackson-databind 3.1.5 전부)<br>실험(실험용 clone, 전체 최소 업그레이드: Jackson 3·2, Tomcat 관리 버전, bcprov 1.85, Dockerfile `apk upgrade`): 이미지 취약점 0, 백엔드 테스트 945개 통과. 돌리지 않은 것: marketplaceE2E, 실제 기동 확인<br>결정: [결정 전] 적용 여부는 팀이 정한다 |
 | SCR-03-12 비교 줄 | 도구: 도달 불가 · 규칙 / 사람: 도달 불가 · 확정 / [일치] |
 | SCR-03-13 입력 폼(현재 값) | 사람 판정 = 도달 불가, 확신 = 확정<br>메모: "실수형 필드는 응답 record 2개(`SellerBriefResponse`, `SellerProfileResponse`의 `Double averageRating`)뿐이고, 둘 다 JDBC 행으로 만들어 반환만 한다. @RequestBody 타입 31개에는 실수형 필드가 없다. 외부 입력을 readTree하는 `CursorCodec`은 `numberValue()`만 써서 문자열→숫자 변환을 타지 않는다." |
-| SCR-03-15 배포 상태 | [실행 중] reused-api(네임스페이스 reused) 파드 2 · sha256:a6ffffef… · revision bb4639b ↔ 분석 커밋 6583020: 소스 트리 같음 · 2026-10-10 수동 확인 · L3 실제 호출(능동 관측: 스테이징·로컬·CI): FR-14 [계획] |
+| SCR-03-15 배포 상태 | [실행 중] reused-api(네임스페이스 reused) 파드 2 · sha256:a6ffffef… · revision bb4639b ↔ 분석 커밋 6583020: 소스 트리 같음 · 2026-10-10 수동 확인 |
 
 SCR-03-06 앱 코드 사실:
 
@@ -757,7 +760,7 @@ SCR-05 새 스캔 대화상자 · Logssey UI 템플릿 시안
 | SCR-05-03 | 필터 | 드롭다운 3개 + 기간 선택 | API-02 요청 쿼리 `target`, `scanStatus`, `trigger`, `from`, `to` | 고르면 다시 부른다 | 대상 기본값은 상단 대상 선택 |
 | SCR-05-04 | 스캔 이력 표 | 표 | API-02 `items[]`(`id`와 열 정의 표의 필드), `nextCursor` | 행 클릭 → 오른쪽 상세에 그 스캔 | 새것이 위(API-02 기본 정렬 `-createdAt`). 진행 중인 행은 10초마다 상태를 다시 받는다. 다음 행은 표 아래 [더 보기]로 붙인다(SCR-02-10과 같다) |
 | SCR-05-05 | 스캔 상세: 머리 | 머리 | API-03 `id`, `target`(`displayName`, `image.repository`, `image.digest`), `scanStatus`, `trigger`, `startedAt`, `finishedAt` | - | 스캔 ID(`scn_…`) 형식은 API 명세서를 따른다 |
-| SCR-05-06 | 스캔 상세: 단계 표시 | 세로 단계 표시 | API-03 `stages[]`(`name`, `status`, `message`, `durationSeconds`) | - | 단계: SBOM 생성 → CVE 대조 → L1 배포 확인 → L2 판정 → 보고서(API의 다섯 단계). L3는 FR-14 [계획]이라 넣지 않는다 |
+| SCR-05-06 | 스캔 상세: 단계 표시 | 세로 단계 표시 | API-03 `stages[]`(`name`, `status`, `message`, `durationSeconds`) | - | 단계: SBOM 생성 → CVE 대조 → L1 배포 확인 → L2 판정 → 보고서(API의 다섯 단계). L3는 단계가 아니라 그 아래 "실제 실행(L3)" 줄로 보인다: API-03 `l3`가 있으면 도달 수준별 개수(`counts`)·시나리오 버전·관측 시각, `runStatus`가 `FAILED`면 "앱을 띄워 보는 단계가 실패했어요. 스캔 결과에는 영향이 없어요"와 `error`. `l3`가 없으면(앱을 띄우지 않은 스캔) 줄을 그리지 않는다 |
 | SCR-05-07 | 스캔 상세: 도구·DB 버전 | 목록 | API-03 `tools`(`trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion`) | - | 스캐너와 DB 버전을 남겨 재현성을 확인한다(NFR-04, NFR-05). 값이 없는 도구는 줄을 뺀다 |
 | SCR-05-08 | 스캔 상세: 결과와 버튼 | 요약 + 버튼 2개 | API-03 `counts`(`total`, `byStatus`) | [결과 보기] → SCR-01(이 스캔의 대상). [다시 실행] → API-01(같은 대상) | [다시 실행]은 실패한 스캔에서만 보인다 |
 | SCR-05-09 | 새 스캔 대화상자 | 대화상자(라디오, 입력, 체크, 버튼) | API-01 본문: `target.type`, `target.image.repository`·`target.image.digest` 또는 `target.repo.name`·`target.repo.commit`, `options.l1`, `options.l2`. 헤더 `Idempotency-Key` | [스캔 요청] → API-01. 성공하면 닫고 표 맨 위에 "대기" 행을 넣는다. [취소] 또는 Esc → 닫기 | `Idempotency-Key`는 대화상자를 열 때 한 번 만든다. 같은 요청을 다시 보내도 스캔이 하나만 생긴다. 아래 "대화상자 배치" 참고 |
@@ -769,7 +772,7 @@ SCR-05 새 스캔 대화상자 · Logssey UI 템플릿 시안
 - "대상 유형" 라디오 2개: 이미지 digest / 레포 커밋.
 - 이미지를 고르면: 저장소 입력(예: `logssey/reused-api`), digest 입력(`sha256:`으로 시작하는 64자). 태그는 받지 않는다. 안내: "태그는 바뀔 수 있어 digest로 지정한다."
 - 레포를 고르면: 저장소 선택(예: service-backend), 커밋 SHA 입력(40자, API-01).
-- "단계" 체크 4개: SBOM 생성·CVE 대조(항상 켜짐, 끌 수 없음), L1 배포 확인(`options.l1`), L2 판정(`options.l2`), L3 실제 호출(비활성, FR-14 [계획]).
+- "단계" 체크 4개: SBOM 생성·CVE 대조(항상 켜짐, 끌 수 없음), L1 배포 확인(`options.l1`), L2 판정(`options.l2`), L3 실제 호출(비활성: 대시보드 요청 스캔은 앱을 띄우지 않는다. L3는 이미지 검사에서 서비스 레포에 시나리오가 있을 때 돈다, FR-14).
 - 회색 안내: "L2 판정은 앱 1개에 약 40초 걸린다(bootJar 빌드 제외)." 기준은 NFR-03(1분 이내).
 - 오른쪽 아래 [취소] (보조), [스캔 요청] (주).
 
