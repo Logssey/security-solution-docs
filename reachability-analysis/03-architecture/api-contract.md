@@ -87,8 +87,8 @@
 | 감시 대상 레포 | 토큰 `repository`의 소유자가 설치 설정 `logssey.reach.ci.repository-owner`(예: `Logssey`)이고, 이름이 감시 대상 앱의 레포(FR-15, `logssey.reach.apps[*].repo`)다. 소유자 설정이 비어 있으면 모든 CI 토큰이 403이다 |
 | 본문·대상의 레포 | 본문 `repository`와 `target.repo.name`이 토큰 레포와 같다(소유자 없이 이름만 와도 된다, 대소문자 무시). 이미지 대상은 그 레포 앱의 이미지(`logssey.reach.apps[*].image`)여야 하고, `target.app`을 주면 그 레포의 앱이어야 한다 |
 | 이벤트 | `mode = PR`은 `event_name = pull_request`이고, `pullRequest.number`를 주면 토큰 `ref`가 `refs/pull/<번호>/merge`다. 그 밖의 mode(`IMAGE_BUILD`, `SCHEDULE`, `MANUAL`)는 토큰 `ref`가 `refs/heads/<기본 브랜치>`다. 기본 브랜치는 설치 설정 `logssey.reach.ci.default-branch`(기본 `main`) |
-| 재검사 | `rescanOf`는 사람만 쓴다 |
-| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰만. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404. 예외: 대시보드에서 요청한 스캔(API-01, `mode = MANUAL`)은 서버가 띄운 실행의 토큰이 올린다. `event_name = workflow_dispatch`, `ref = refs/heads/<기본 브랜치>`이고 토큰 레포가 그 검사의 레포(레포 대상은 그 레포, 이미지 대상은 그 이미지 앱의 레포)여야 한다 |
+| 재검사 | CI 토큰은 `rescanOf`를 쓰지 못한다(403). 사람(API-01·12)과 대시보드의 하루 1번 재대조(6-1)만 쓴다 |
+| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰만. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404. 예외: 대시보드에서 요청한 스캔(API-01, `mode = MANUAL`)과 대시보드의 하루 1번 재대조(`mode = SCHEDULE`, 요청 주체 `SYSTEM`)는 서버가 띄운 실행의 토큰이 올린다. `event_name = workflow_dispatch`, `ref = refs/heads/<기본 브랜치>`이고 토큰 레포가 그 검사의 레포(레포 대상은 그 레포, 이미지 대상은 그 이미지 앱의 레포)여야 한다 |
 | 경로 | CI 토큰으로 `/api/v1/reach/ci/**` 밖의 Reach API를 부르면 403 |
 
 - 순서는 본문 형식(400) → 권한(403) → 멱등 충돌(409)이다.
@@ -751,13 +751,15 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `commit` | 레포 대상의 커밋(40자, 소문자) |
 | `path` | 레포 대상이면 `target.repo.path`, 이미지 대상이면 그 앱의 `path`. 없으면 빈 문자열 |
 | `image_repository`, `image_digest` | 이미지 대상의 저장소와 digest |
+| `rescan_of` | 재대조(`rescanOf`)일 때만 보낸다. 원래 스캔 ID. 러너는 그 스캔의 보관한 SBOM을 받아(API-13 "재대조 입력 SBOM") 대조부터 다시 한다 |
 
 - 워크플로를 띄우지 못하면(앱이 그 레포에 설치되지 않음, 워크플로나 `workflow_dispatch` 트리거가 없음, GitHub 오류·응답 없음) 503 `UNAVAILABLE`(`details.dependency = "github"`)이고 대상·스캔·검사를 남기지 않는다. 같은 `Idempotency-Key`로 다시 보내면 처음처럼 만들고 띄운다.
 - 같은 키로 다시 보낸 요청(`Idempotent-Replayed: true`)은 다시 띄우지 않는다.
 - 레포가 없는 이미지 앱(설정에 `image`만 있음)은 띄울 워크플로가 없어 422 `TARGET_UNRESOLVED`다.
 - 대상 레포에 Reach 실행기가 없으면(GitHub App이 설치되지 않았거나 기본 브랜치에 `reach.yml`이 없어 GitHub이 404) 422 `RUNNER_NOT_INSTALLED`이고 스캔·검사·대상을 남기지 않는다. 다시 해도 같아서 503이 아니다. [계획] 공통 오류 코드에 없어 지금 구현은 `UNPROCESSABLE`(422)에 `message`가 `RUNNER_NOT_INSTALLED:`로 시작한다.
 - 러너는 앱 jar가 없는 대상도 스캔한다. 레포 경로에 Gradle 빌드가 없으면 잠금 파일로, 이미지에 `/app/app.jar`가 없으면 이미지만으로 SBOM을 만들고 L2를 건너뛴다. 그 Finding은 `NOT_ANALYZED`(npm 등 `UNSUPPORTED_ECOSYSTEM`, OS 패키지 `OS_PACKAGE`, jar를 못 찾은 Java 패키지는 데이터가 없으면 `NO_VULN_FUNCTION_DATA`·있으면 `UNANALYZED_COPY`)다.
-- 띄우지 않는 경우: 설치에 앱 설정이 없으면, 또는 `rescanOf`(러너가 저장된 SBOM 재대조를 아직 못 한다)면 띄우지 않고 스캔은 `QUEUED`로 남는다.
+- `rescanOf`는 원래 스캔의 대상(레포 대상은 그 레포·커밋·경로, 이미지 대상은 그 이미지 앱의 레포)으로 띄우고 `rescan_of`를 더한다. L2용 jar는 레포 대상이면 그 커밋을 빌드해, 이미지 대상이면 같은 digest 이미지에서 꺼낸다. 원래 스캔에 보관한 SBOM이 없으면(SBOM 보관 전 스캔) 러너가 SBOM을 새로 만든다.
+- 띄우지 않는 경우: 설치에 앱 설정이 없으면 띄우지 않고 스캔은 `QUEUED`로 남는다.
 - 러너가 스캔 전 단계(빌드, 이미지 받기, 도구 설치)에서 실패하면 실패 묶음을 올려 스캔이 `FAILED`가 된다. `failure.code`는 레포 대상 `BUILD_FAILED`, 이미지 대상 `IMAGE_PULL_FAILED`이고 `stage`는 `SBOM`이다(2-6).
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `IDEMPOTENCY_CONFLICT`, `TARGET_UNRESOLVED`, `RUNNER_NOT_INSTALLED`, `RATE_LIMITED`, `UNAVAILABLE`
@@ -1811,7 +1813,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | `checkId` | 경로 | integer | 예 | API-12가 준 CI 검사 ID |
 | `Content-Type` | 헤더 | string | 예 | `application/json`(압축을 푼 본문의 형식). [계획] 지금 구현은 없으면 본문을 폼으로 읽으려다 500을 준다 |
 | `Content-Encoding` | 헤더 | string | 예 | `gzip`. 압축한 본문은 20MB 이하(초안 값, IaC와 같음). 없거나 `gzip`이 아니면 400, 넘으면 413 `PAYLOAD_TOO_LARGE`. 지금 구현은 푼 본문도 100MB(초안 값)로 막는다 |
-| `sbom` | 본문 | object | 예 | CycloneDX JSON. digest당 한 번 만들고 서버가 보관해 재대조(`rescanOf`)에 쓴다. [계획] 지금 구현은 객체인지만 보고 보관하지 않는다(보관 방식 ARD Q-06) |
+| `sbom` | 본문 | object | 예 | CycloneDX JSON. 서버가 스캔마다 보관해(gzip, ARD C-13) 재대조(`rescanOf`)의 입력으로 쓴다. 재대조 결과의 SBOM도 보관해 다음 재대조의 입력이 된다. 실패 묶음은 보관하지 않는다. 보관 기간은 아직 없다 |
 | `matches` | 본문 | object | 예 | 스캐너 원본 결과. `trivy`, `grype`(교차 확인을 했으면). [계획] 지금 구현은 보관하지 않는다 |
 | `verdicts` | 본문 | object 배열 | `options.l2`가 true면 | `verdict.py`가 만든 판정. CLI 출력의 소문자 값은 서버가 저장할 때 대문자로 바꾼다(PRD 1절). 한 항목이 Finding 하나다(아래 "결과 묶음 형식"). [계획] 지금 구현은 늘 필요하다(대조만 한 묶음은 아직 받지 않는다) |
 | `reachResult` | 본문 | object | `options.l2`가 true면 | `reach.jar` 결과(사실, 후보 경로, 호출 그래프 요약). [계획] 지금 구현은 보관하지 않는다 |
@@ -1856,6 +1858,17 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - 단계(`stages`)는 러너가 잰 값을 넘긴다. 넘기지 않으면 `SBOM`·`MATCH`·`L2`·`REPORT`(L2를 안 돌렸으면 `L2` 빼고)를 `SUCCEEDED`로 둔다. 분석 전에 실패했으면 `tools`·`stages`·`failure`만 있는 실패 묶음을 만든다.
 
 **오류**: `INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`(다른 레포의 검사), `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`
+
+**재대조 입력 SBOM**
+
+| 항목 | 내용 |
+|---|---|
+| 메서드·경로 | `GET /api/v1/reach/ci/checks/{checkId}/sbom` |
+| 권한 | 결과 업로드와 같다(그 검사에 올릴 수 있는 CI 토큰, 대시보드 세션 `ADMIN`) |
+| 설명 | 검사가 재대조(`rescanOf`)면 원래 스캔에 보관한 SBOM을 준다. 러너가 SBOM을 새로 만들지 않고 이것을 최신 취약점 DB로 다시 대조한다 |
+
+- 200, `Content-Type: application/gzip`. 본문은 gzip한 CycloneDX JSON이다(`Content-Encoding`이 아니라 파일 그대로라 받는 쪽이 푼다).
+- 404 `NOT_FOUND`: 검사가 없음, 재대조가 아닌 검사, 원래 스캔에 보관한 SBOM이 없음(SBOM 보관 전 스캔). 러너는 404면 SBOM을 새로 만든다.
 
 ### API-14 감시 대상 앱
 
@@ -1985,11 +1998,12 @@ CVE-2026-68525(tomcat-embed-core 11.0.24) 한 건이다.
 |---|---|---|---|
 | PR 검사 | `pull_request` | `PR` | 레포 SBOM(cdxgen)으로 대조하고 새 Finding을 판정(L2)한다. 게이트를 적용한다. L1·L3는 없다 |
 | 이미지 빌드(ECR push 전) | 배포 파이프라인의 이미지 빌드 단계 | `IMAGE_BUILD` | 이미지 SBOM(Trivy)을 digest와 함께 보관하고 대조·판정(L2)한다. 백엔드 테스트에 커버리지 에이전트를 붙여 L3 근거를 남긴다(PRD FR-14) |
-| 하루 1번 | `schedule` | `SCHEDULE` | 등록된 서비스(PRD FR-15)의 저장된 SBOM을 최신 DB로 재대조하고, 실행 중 digest를 조회하고(L1), 새 Finding을 판정(L2)한다. 새로 생긴 것만 알린다 |
+| 하루 1번 | 대시보드가 `workflow_dispatch` | `SCHEDULE` | 운영에서 실행 중인 이미지(L1)마다 그 이미지의 저장된 SBOM을 최신 DB로 재대조하고, 새 Finding을 판정(L2)한다. 새로 생긴 것은 Finding의 처음 본 시각으로 구분한다 |
 | 원할 때 | `workflow_dispatch` | `MANUAL` | 대시보드에서 스캔을 요청하면(API-01) 서버가 띄운다. 레포 대상은 그 커밋을 빌드한 bootJar, 이미지 대상은 그 digest 이미지로 대조·판정(L2)하고 그 검사에 올린다. L1은 서버가 채운다. L3(PRD FR-14)는 아직 없다 |
 
 - PR 검사(`PR`)는 레포 대상(`type=REPO`, `headCommit`)이다. cdxgen으로 레포 SBOM을 만들고 새 Finding만 L2로 판정한다. 배포 전이라 L1은 없다(PRD FR-11).
 - 이미지 스캔(`IMAGE_BUILD`)은 ECR push 전에 한다(PRD FR-11). 러너가 방금 빌드한 이미지로 SBOM을 만들고 결과만 올리므로(API-13), 서버가 레지스트리에서 이미지를 읽을 필요가 없다.
+- 하루 1번 재대조(`SCHEDULE`)는 GitHub `schedule`이 아니라 대시보드가 띄운다. 어떤 digest가 운영에서 도는지는 대시보드(L1)만 알기 때문이다. 기본 한국 04:30(L1 수집 03:17 뒤), 설치 설정 `logssey.reach.rescan.cron`(`-`이면 끔). 대상은 요약 기본 범위(API-08 `basis=RUNNING`)가 실행 중인 이미지로 쓰는 스캔이고, L1이 꺼졌거나 신선한 조회가 없으면 띄우지 않는다. 검사마다 `rescanOf` = 그 스캔, 요청 주체 `SYSTEM`, 멱등 키는 스캔·날짜라 하루에 한 번이다. 러너는 수동 실행과 같은 작업을 `rescan_of`와 함께 돌린다(API-01). 재빌드는 없고, L2용 jar는 같은 digest 이미지에서 꺼낸다
 - L2 분석은 앱 1개에 1분 이내가 기준이다(NFR-03, PoC 약 40초). PR마다 돌릴 수 있다.
 - L3 능동 관측은 앱을 띄우고 테스트를 돌려야 해서 PR마다 돌리지 않는다(PRD FR-14). 결과는 Evidence `kind=RUNTIME`으로 남는다. 러너의 관측 결과는 API-13 결과 묶음에 함께 올린다. 묶음 안 형식은 FR-14와 함께 정한다.
 
