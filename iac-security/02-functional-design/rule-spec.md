@@ -32,11 +32,11 @@
 
 | 등급 | 대상 (현재 환경) |
 |---|---|
-| 1등급 | RDS PostgreSQL, Secrets Manager 시크릿 7개(DB 마스터 비밀번호 포함), tfstate 버킷 |
+| 1등급 | RDS PostgreSQL, Secrets Manager 시크릿 9개(DB 마스터 비밀번호, 대시보드 AI 키·소스 자격 증명 포함), tfstate 버킷 |
 | 2등급 | 이미지 버킷, Loki 버킷(chunks·ruler) |
 | 3등급 | 공개 정적 리소스 |
 
-등급표는 대시보드 PostgreSQL의 `iac_data_assets` 테이블에서 관리 (ERD). 환경마다 ARN이 달라 마이그레이션에 넣지 않고 SQL로 등록함. 로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`(1등급 9개, 2등급 3개). 등록 화면은 MVP에 없음.
+등급표는 대시보드 PostgreSQL의 `iac_data_assets` 테이블에서 관리 (ERD). 환경마다 ARN이 달라 마이그레이션에 넣지 않고 SQL로 등록함. 운영은 infrastructure `deploy/logssey-dashboard/iac-data-assets.sql`(1등급 11개, 2등급 3개, 11/18 계정 대조), 로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`. 공개 OIDC 문서 버킷과 Logssey 밖 버킷은 넣지 않음. 등록 화면은 MVP에 없음.
 
 ## ② plan 전 검사 규칙
 
