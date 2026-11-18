@@ -46,7 +46,7 @@
 |---|---|---|
 | `iac_repos` | `repo_id BIGINT PK`, `full_name VARCHAR(200) NOT NULL UQ`, `default_branch VARCHAR(100) NOT NULL`, `environment VARCHAR(10) NOT NULL`, `enabled BOOLEAN NOT NULL`, `created_at TIMESTAMPTZ NOT NULL` | 검사 대상 레포 허용 목록. `environment`는 `PROD`, `DEV`. CI OIDC의 `repository` 클레임을 여기서 대조 |
 | `iac_rules` | `rule_id VARCHAR(80) PK`, `engine VARCHAR(20) NOT NULL`, `default_enforcement VARCHAR(10) NOT NULL`, `default_severity VARCHAR(10)`, `template_key VARCHAR(80) NOT NULL`, `version VARCHAR(40) NOT NULL`, `enabled BOOLEAN NOT NULL`, `updated_at TIMESTAMPTZ NOT NULL` | 규칙 등록부. 원본은 레포의 `policy/`이고 배포 때 이 표로 동기화. `rule_id`는 `gate.exec_data_source` 같은 식별자. `engine`은 `CONFTEST`, `GIT`, `TERRAFORM`, `HASH`, `KICS`, `PATH`, `STATE`, `DRIFT` |
-| `iac_data_assets` | `data_asset_id BIGINT PK`, `arn VARCHAR(300) NOT NULL UQ`, `kind VARCHAR(20) NOT NULL`, `tier SMALLINT NOT NULL`, `asset_id BIGINT FK`, `owner_team VARCHAR(50)`, `updated_at TIMESTAMPTZ NOT NULL` | 데이터 등급표. `kind`는 `RDS`, `SECRET`, `S3`, `TFSTATE`. `CHECK(tier BETWEEN 1 AND 3)`. `asset_id`는 기존 `assets`와 대응할 때만. 환경마다 값이 달라 마이그레이션에 넣지 않고 SQL로 등록 (로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`, 12개). 등록 API·화면은 MVP에 없음 |
+| `iac_data_assets` | `data_asset_id BIGINT PK`, `arn VARCHAR(300) NOT NULL UQ`, `kind VARCHAR(20) NOT NULL`, `tier SMALLINT NOT NULL`, `asset_id BIGINT FK`, `owner_team VARCHAR(50)`, `updated_at TIMESTAMPTZ NOT NULL` | 데이터 등급표. `kind`는 `RDS`, `SECRET`, `S3`, `TFSTATE`. `CHECK(tier BETWEEN 1 AND 3)`. `asset_id`는 기존 `assets`와 대응할 때만. 환경마다 값이 달라 마이그레이션에 넣지 않고 SQL로 등록 (운영은 infrastructure `deploy/logssey-dashboard/iac-data-assets.sql`, 14개. 로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`). 등록 API·화면은 MVP에 없음 |
 
 ### 실행
 
