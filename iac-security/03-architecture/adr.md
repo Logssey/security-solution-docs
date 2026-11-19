@@ -216,7 +216,7 @@
     - `iac-gate`가 직접 전송: PR 코드가 가짜 결과를 보낼 수 있음
 - **대체·영향**
     - ADR-05의 "경로 분석·State 분석은 클러스터 안 Java 워커" → 대시보드 호스트의 워커
-    - ADR-07의 "IRSA로 받음" → 호스트 역할이 받는 IaC 전용 역할. 클러스터의 Cartography CronJob·Neo4j·scanner-ro IRSA 역할은 새 구조가 돈 뒤 정리
+    - ADR-07의 "IRSA로 받음" → 호스트 역할이 받는 IaC 전용 역할. 클러스터의 Cartography CronJob·Neo4j(gitops `iac/graph`, Argo CD `iac-graph`)·scanner-ro IRSA 역할은 11/19 정리 (새 구조 운영 확인 후)
     - ADR-11의 "CI용 경로만 CloudFront → 공개 NLB" → 대시보드 ALB(`logssey.re-used.store`)
     - 작업 순서는 IaC 보안 설계문서 "배포 후 작업 계획" 탭
 

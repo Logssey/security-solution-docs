@@ -117,7 +117,7 @@
 | SR-3 | 충족 | `pull_request_target` 없음, 포크 PR은 plan 안 함, Action 8곳 모두 커밋 SHA 고정 | |
 | SR-4 | 충족 | API·화면·PR 코멘트에 주소·속성 이름·개수만. plan은 2단계 지우기(ADR-06) 후 전송 | |
 | SR-5 | 충족 | `scrub-plan.sh` 2단계, 분석이 끝나면 `iac_plan_payloads` 삭제 (워커 테스트로 확인) | |
-| SR-6 | 충족 | 수집은 전용 `scanner-ro`(IRSA), 시크릿 값·객체 읽기 거부. State 내용은 읽지 않음 | |
+| SR-6 | 충족 | 수집은 전용 수집 역할(`logssey-dashboard-role-iac-collector`, 대시보드 호스트 1시간 세션), 시크릿 값·객체 읽기 거부. State 내용은 읽지 않음. 예전 `scanner-ro`(IRSA)는 11/19 삭제 | |
 | SR-7 | 충족 | conftest·terraform 버전 + 체크섬, 컨테이너 이미지 digest, Action SHA | |
 | SR-8 | 일부 | App 권한 checks·pull requests 쓰기, contents 읽기. actions 쓰기 없음 | 개인 키는 Secrets Manager가 아니라 main 전용 environment(`iac-app`)의 GitHub secret |
 | SR-9 | 일부 | 대시보드 API는 로그인한 관리자만, Neo4j는 NetworkPolicy로 클러스터 안만 | CI OIDC 검증, 요청 횟수 제한, 결과 DB 위치는 배포 때 |

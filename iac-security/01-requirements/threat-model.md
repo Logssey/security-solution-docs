@@ -114,7 +114,7 @@
 |---|---|---|---|---|
 | 1 | apply를 CI로 | apply 역할 신뢰 조건을 GitHub OIDC + main + environment `prod`(승인자 지정)로 제한. apply 워크플로 구축 | TM-5 | 예정 |
 | 2 | 사람 권한 전환 | IAM 사용자 장기 키 폐기, IAM Identity Center 읽기 전용 권한(plan-ro와 같은 정책, 세션 1시간) | TM-5, TM-7 | 예정 |
-| 3 | tfstate 버킷 정책 | 쓰기는 apply 역할만, 읽기는 apply·plan-ro·scanner-ro·사람 읽기 권한만 | TM-6 | 예정 |
+| 3 | tfstate 버킷 정책 | 쓰기는 apply 역할만, 읽기는 apply·plan-ro·수집 역할(iac-collector)·사람 읽기 권한만 | TM-6 | 예정 |
 | 4 | break-glass 역할 | 장애 때만 쓰는 쓰기 역할. MFA 필수, 짧은 세션, 사용 즉시 알림 | TM-5, TM-8 | 예정 |
 | 5 | CloudTrail | 관리 이벤트 첫 복사본(무료) 켜고 일정 기간 보관. 드리프트의 행위자 추적 | TM-5, TM-8 | 예정 |
 | 6 | GitHub 조직 | 오너 최소 인원, 2FA 필수, 브랜치 보호·룰셋에 관리자도 포함, 감사 로그 확인 | TM-2, TM-8 | 예정 |
