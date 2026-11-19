@@ -14,12 +14,12 @@
 | 구성 요소 | 위치 | 역할 |
 |---|---|---|
 | 인프라 레포 | GitHub | Terraform 코드, CODEOWNERS, 브랜치 보호(필수 검사) |
-| PR 워크플로 | GitHub 호스티드 러너 | ② 관문(Conftest, 변경 감지, init 검증) → plan(plan-ro 역할) → 민감값을 지운 plan JSON 업로드 |
-| 로컬 plan 래퍼 | 개발자 PC, 컨테이너 | `make plan`: CI와 같은 ② 검사(2b 포함) → 홈 디렉터리 없는 컨테이너에서 읽기 전용 임시 키로 plan. 강제가 아니라 기본 경로 (ADR-12, [위협 모델·범위](../01-requirements/threat-model.md)) |
+| PR 워크플로 | GitHub 호스티드 러너 | plan 전 검사 관문(Conftest, 변경 감지, init 검증) → plan(plan-ro 역할) → 민감값을 지운 plan JSON 업로드 |
+| 로컬 plan 래퍼 | 개발자 PC, 컨테이너 | `make plan`: CI와 같은 plan 전 검사(2b 포함) → 홈 디렉터리 없는 컨테이너에서 읽기 전용 임시 키로 plan. 강제가 아니라 기본 경로 (ADR-12, [위협 모델·범위](../01-requirements/threat-model.md)) |
 | logssey GitHub App | GitHub | 검사 결과, 요약 코멘트 등록. 개인 키는 main 전용 environment(`iac-app`)의 secret. `iac-report`(main 코드)만 사용 |
 | 결과 전송 (`iac-report`) | GitHub 호스티드 러너, main 코드 | iac-gate가 끝나면 아티팩트를 검사하고, GitHub OIDC 토큰(aud `logssey-iac`)으로 API에 실행 등록·plan 업로드. 분석이 끝나면 "경로 분석" 검사·코멘트 등록 (ADR-13) |
 | dashboard-backend `iac` 모듈 | 대시보드 호스트, 기존 API 컨테이너 | `/api/v1/iac`. CI 요청(GitHub OIDC 토큰 검증), 쿠버네티스 노드 정보(서비스 계정 토큰 검증), 대시보드 API(로그인 세션), `iac_jobs`에 작업 등록. 밖에서는 대시보드 ALB(`logssey.re-used.store`)로만 들어옴. Neo4j·AWS 권한 없음 |
-| 분석 워커 (Java) | 대시보드 호스트, 별도 컨테이너 | `iac_jobs`에서 작업을 가져가 ① 경로 비교, ③ State 영향, 그래프 보강, IAM 시뮬레이터 호출. 결과는 DB에만 씀 |
+| 분석 워커 (Java) | 대시보드 호스트, 별도 컨테이너 | `iac_jobs`에서 작업을 가져가 경로 비교, State 영향, 그래프 보강, IAM 시뮬레이터 호출. 결과는 DB에만 씀 |
 | Cartography | 대시보드 호스트, 매일 03:00 작업 컨테이너 | AWS 수집(외부 도구, AWS 모듈만). 끝나면 보강·드리프트·State 점검 작업을 등록 |
 | 노드 정보 CronJob | k8s, 작은 CronJob | 노드 이름·내부 IP·providerID만 API로 보냄 (노드 ↔ EC2 연결용) |
 | Neo4j | 대시보드 호스트, 내부 네트워크만 | 자산 그래프 (Cartography에 맞춰 5.x). 포트를 밖에 열지 않음 |
