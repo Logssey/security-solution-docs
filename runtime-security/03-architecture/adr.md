@@ -363,7 +363,7 @@ ruleKey
 
 ---
 
-## ADR-RT-011. Cluster 내부 Logssey Collector를 통해 Event 전달
+## ADR-RT-011. Falcosidekick Webhook으로 Falco Event 전달
 
 - 상태: 승인
 - 결정일: 2026.10.10
@@ -371,19 +371,19 @@ ruleKey
 
 ### 배경
 
-Falco는 HTTP·HTTPS JSON Output을 지원하고 Tetragon은 JSON Log와 gRPC Event를 제공한다. Sensor가 중앙 API의 인증·재시도·Cluster 식별을 각각 구현하게 하면 설정이 분산된다.
+Falco Chart에는 Falcosidekick 연동이 포함되어 있고 Webhook 주소와 고정 Header를 설정할 수 있다. Falco만 사용하는 첫 구현에서 별도 Collector를 새로 만들면 배포 단위와 장애 지점이 늘어난다.
 
 ### 결정
 
-> Cluster마다 Logssey Collector를 하나 배포한다. Falco는 JSON HTTP Output을 Collector로 전송하고, Collector는 Tetragon JSON Export도 수집해 공통 Envelope을 붙인 뒤 중앙 Runtime API로 전달한다.
+> Falco MVP는 Falcosidekick Webhook을 사용해 중앙 Runtime API의 Falco Raw Adapter로 전송한다. Tetragon은 Event 형식과 전송 방식이 확정될 때 별도 Adapter 또는 Cluster Collector 사용 여부를 결정한다.
 
 ### 결과
 
-- Collector가 `clusterId`, `sensorId`, 수신 시각과 Idempotency Key를 부여한다.
-- Collector는 민감 필드를 마스킹하고, 중앙 API는 Sensor 고유 구조를 유지한 Payload를 Raw Event로 먼저 저장한다.
-- MVP에서는 Falcosidekick을 필수 구성으로 두지 않는다.
-- 다중 목적지 전달이나 별도 Alert Integration이 필요해지면 Falcosidekick을 Collector 앞에 추가한다.
-- Collector 전송 실패는 제한된 Local Queue에 보관하고 지수 Backoff로 재시도한다.
+- Falcosidekick은 고정 Header로 `clusterId`, Schema Version, Collector Token을 전달한다.
+- 중앙 API가 민감 필드 마스킹, Source Event ID 보완, Idempotency Key 생성과 원본 저장을 담당한다.
+- `sensorId`가 없으면 Falco Event의 Node 이름으로 Sensor를 자동 등록한다.
+- Collector Token은 Git에 저장하지 않고 Kubernetes Secret으로 주입한다.
+- Tetragon 연동 시 재시도와 Local Queue가 필요하면 그 범위에서 Cluster Collector를 추가한다.
 
 ---
 
