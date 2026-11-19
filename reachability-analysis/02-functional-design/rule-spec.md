@@ -298,6 +298,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 
 - 사실은 `reach.jar`가 앱 클래스 바이트코드에서 뽑는다(`Facts.java`, GR-07).
 - 원자료 기준 사실은 **40개**다(처음 38개, 89407 규칙 개선 후 40개). 아래는 원자료에 나온 것만 적었다. 나머지와, CVE 4개를 더한 뒤(기록 14-4·15-1절)의 목록은 원본(`rules.json`) 확인 필요.
+- 11/19에 CVE 2개(65637, 5598)를 더하면서 사실 5개와 레포 사실 3개를 더했다. 지금 `rules.json`은 사실 51개, 레포 사실 7개다.
 - 이름이 원자료에 없는 사실은 "(이름 미정)"으로 두고 뜻만 적는다. 이름을 새로 짓지 않는다.
 
 ### 7-1. 이름이 확인된 사실
@@ -309,6 +310,11 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | `F-jackson.polymorphicSerializer` | `@class`로 타입을 지정할 수 있는 직렬화기(`GenericJackson(2)JsonRedisSerializer`)를 쓴다 | 앱 코드에서 사용 여부 | RULE-CVE-2026-89407 미확인 조건. default typing이 이 사실에 들어가는지, 다른 규칙에서도 쓰는지는 원본(`rules.json`) 확인 필요 |
 | `F-jar.springBoot4` | bootJar에 Spring Boot 4 jar(`spring-boot-4.x.y.jar`)가 있다 | 라이브러리 jar 파일 이름(정규식 `^spring-boot-4\.[0-9]+\.[0-9]+`) | RULE-CVE-2026-65182·65905·68525 미확인 조건(`!F-jar.springBoot4`, 8-1) |
 | `F-jsonIdentityInfo.any` | 앱 코드에 `@JsonIdentityInfo`가 있다(mix-in 클래스에 붙은 것 포함) | 앱 코드의 어노테이션. 범위가 앱 전체인지는 이름으로 본 추정이다. 원본(`Facts.java`) 확인 필요 | RULE-CVE-2026-91777 미확인 조건 |
+| `F-repo.spring.http2Enabled` | 레포의 설정이 내장 서버의 HTTP/2를 켠다(`server.http2.enabled=true`, 환경 변수 `SERVER_HTTP2_ENABLED=true`) | 레포의 `*.properties`·`*.yml`·`*.yaml`·`*.env`·`Dockerfile*`을 줄 단위 정규식으로 본다. 배포할 때만 넣는 환경 변수는 레포에 없으면 보이지 않는다 | RULE-CVE-2026-65637 도달 가능 조건(`F-repo.spring.serverSsl`과 함께), 미확인 조건 |
+| `F-repo.spring.http2Yaml` | `application*.yml`에 `http2:` 블록이 있다. 값이 다음 줄에 있어 켰는지는 알 수 없다 | 같은 방식 | RULE-CVE-2026-65637 미확인 조건 |
+| `F-repo.spring.serverSsl` | 내장 서버가 TLS를 직접 받는다(`server.ssl.key-store`·`certificate`·`bundle`, `server.ssl.enabled=true`) | 같은 방식 | RULE-CVE-2026-65637 도달 가능 조건 |
+| `F-tomcat.http2ProtocolNew`, `F-tomcat.addUpgradeProtocol`, `F-spring.http2SetEnabled` | 앱 코드가 HTTP/2를 켠다 | 앱 코드의 `new Http2Protocol`, `Connector.addUpgradeProtocol` 호출, `Http2.setEnabled`·`setHttp2` 호출 | RULE-CVE-2026-65637 미확인 조건 |
+| `F-bc.frodoString`, `F-bc.frodoJceSpec` | 앱 코드가 FrodoKEM을 JCE 이름으로 고른다 | 앱 코드의 문자열 상수(정규식 `(?i)^frodo`), `FrodoParameterSpec` 타입 참조 | RULE-CVE-2026-5598 미확인 조건 |
 
 "실수형"에 드는 타입 목록은 원본(`Facts.java`) 확인 필요. 원자료에 나온 것은 `double`, `Double`, `BigDecimal`이다. 공지는 89407의 대상 타입으로 `BigDecimal`, `BigInteger`, `Double`, `Float`를 적는다.
 
@@ -361,6 +367,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 - "공통"은 호출 그래프 기본 조건(약한 경로로만 닿음, 취약 메서드가 jar에 없음 → `UNKNOWN`, 4절)이다.
 - 수정 버전은 배포 digest 재스캔(Trivy, 10/10)의 값이다. 우리 앱의 업그레이드 대상은 Tomcat 11.0.25, bcprov 1.85, Jackson 3.1.7 이상이다(기록 3절). 적용 여부는 팀이 정한다.
 - "verify N절"은 노트북 확인 결과 `verify-report.txt`의 절 번호다.
+- 11/19에 판정 데이터가 없던 2개(CVE-2026-65637, CVE-2026-5598)의 규칙을 더했다. 이 둘의 취약 함수는 판정 데이터 도구(12절)의 초안을 jar와 대조해 넣었고, 사람 판정(정답지)은 아직 없다.
 
 ### 8-0. 요약
 
@@ -380,8 +387,10 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | RULE-CVE-2026-91777 | jackson-databind 3.1.5 | HIGH | `RULE` | `UNREACHABLE` | `UNREACHABLE` 확정 |
 | RULE-CVE-2026-19032 | jackson-databind 3.1.5 | MEDIUM | `RULE` | `UNREACHABLE` | `UNREACHABLE` 확정 |
 | RULE-CVE-2026-83557 | jackson-databind 3.1.5 | MEDIUM | `RULE` | `UNREACHABLE` | `UNREACHABLE` 확정 |
+| RULE-CVE-2026-65637 | tomcat-embed-core 11.0.24 | CRITICAL | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-5598 | bcprov-jdk18on 1.81 | HIGH | `CALLGRAPH` | `UNREACHABLE` | 아직 없음 |
 
-고유 CVE 기준 CRITICAL 5 · HIGH 6 · MEDIUM 3. 처음 10개는 정답지와 10/10 일치, 추가 4개 중 13506만 사람 판정이 잠정이다. jackson-core·databind는 `tools.jackson.core` 좌표(Jackson 3)다.
+고유 CVE 기준 CRITICAL 6 · HIGH 7 · MEDIUM 3(11/19에 더한 2개 포함). 처음 10개는 정답지와 10/10 일치, 추가 4개 중 13506만 사람 판정이 잠정이다. jackson-core·databind는 `tools.jackson.core` 좌표(Jackson 3)다.
 
 ### 8-1. Tomcat (`org.apache.tomcat.embed:tomcat-embed-core` 11.0.24)
 
@@ -438,6 +447,27 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 대조군 | app-positive(Tomcat FORM 인증), 실험 A → `REACHABLE`. app-boot2(Spring Boot 2) → `UNKNOWN` |
 
 실험 B에서 Tomcat 3개는 Authenticator 하위 클래스, `@ServletSecurity`, `HttpMethodConstraintElement`로 우회해 넣었고 모두 기대대로 나왔다. CVE별 대응은 원본(`rules.json`) 확인 필요.
+
+#### RULE-CVE-2026-65637
+
+11/19에 더했다. 앞의 세 규칙과 달리 인증 설정이 아니라 HTTP/2와 TLS 설정을 본다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.25 · CRITICAL |
+| 취약 기능 | HTTP/2 요청의 호스트 이름과 TLS SNI를 맞춰 보는 검사(strict SNI) 우회 |
+| 취약 함수 | `org.apache.coyote.http2.Stream.receivedEndOfHeaders` |
+| 발동 조건 | HTTP/2가 켜져 있고, Tomcat이 TLS를 직접 끝내고, `strictSni`(기본 켜짐)를 끄지 않았다. `:authority`와 `host`가 모두 없는 요청이 필수 헤더 검사를 통과한다. 호출 주체는 컨테이너 |
+| reachable 조건 | 레포 설정이 HTTP/2와 내장 서버 TLS를 함께 켠다(`F-repo.spring.http2Enabled` + `F-repo.spring.serverSsl`) |
+| unreachable 조건 | HTTP/2를 켜는 설정·코드가 없다. Spring Boot 내장 Tomcat은 `server.http2.enabled`가 true일 때만 `Http2Protocol`을 등록하고 기본값은 false다(Spring Boot 4.1.1의 `TomcatWebServerFactory`·`Http2` 바이트코드로 확인) |
+| unknown 조건 | HTTP/2를 켜는 설정이나 코드가 있지만 TLS를 Tomcat이 끝내는지 레포에서 알 수 없다(`F-repo.spring.http2Enabled` 단독, `F-repo.spring.http2Yaml`, `F-tomcat.http2ProtocolNew`, `F-tomcat.addUpgradeProtocol`, `F-spring.http2SetEnabled`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`). 공통 |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포와 배포 설정(gitops)에 없다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | app-positive(코드로 `Http2Protocol` 등록) → `UNKNOWN`. app-indirect(설정 파일로 HTTP/2 + TLS) → `REACHABLE`. app-boot2 → `UNKNOWN` |
+| L3 | 취약 구간 없음. 수정이 필수 헤더 조건식에 항 하나를 더한 것이라 그 줄은 정상 HTTP/2 요청에서도 실행된다. 실행 기록으로는 구분할 수 없어 함수 실행까지만 근거로 남긴다 |
+
+한계: 배포할 때만 넣는 환경 변수(`SERVER_HTTP2_ENABLED`)는 레포에 없으면 보이지 않는다(7-3과 같은 종류). SSLHostConfig가 하나뿐이면 검사를 건너뛰어도 결과가 같을 수 있는데 이 규칙은 그것을 보지 않는다.
 
 ### 8-2. BouncyCastle (`org.bouncycastle:bcprov-jdk18on` 1.81)
 
@@ -507,6 +537,27 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정 |
 | 대조군 | 샘플 앱과 실험 E → `REACHABLE`. JCE 이름만으로 LDAP 저장소를 고르는 경우 → `UNKNOWN`(`UNREACHABLE`이 아님) |
+
+#### RULE-CVE-2026-5598
+
+11/19에 더했다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | bcprov-jdk18on 1.81 → 1.81.1, 1.84, 1.80.2 · HIGH |
+| 취약 기능 | FrodoKEM 오차 표본 추출의 실행 시간이 비밀 값에 따라 달라짐(시간 부채널) |
+| 취약 함수 | `FrodoEngine.sample`, `FrodoEngine.sample_matrix` |
+| 발동 조건 | 앱이 FrodoKEM을 쓴다. 공지는 복호화(decapsulation)를 하는 쪽만 영향을 받는다고 하지만, 고쳐진 코드는 키 생성·캡슐화에서도 실행된다. 호출 주체는 앱 코드 |
+| reachable 조건 | 진입점에서 `sample`까지 강한 경로가 있다. 키 생성·캡슐화만 하는 앱도 여기에 든다(넓게 잡음) |
+| unreachable 조건 | 취약 메서드가 jar에 있고 닿지 않으며, JCE 이름으로 고르는 코드도 없다 |
+| unknown 조건 | JCE 이름 `"Frodo"`나 `FrodoParameterSpec`을 쓴다(`F-bc.frodoString`, `F-bc.frodoJceSpec`). provider가 이름으로 구현을 고르므로 호출 그래프로 확정할 수 없다. 공통 |
+| 방식 | `CALLGRAPH` |
+| 현재 판정(api) | `UNREACHABLE` |
+| 사람 판정 | 아직 없음 |
+| 대조군 | app-positive(`FrodoKeyPairGenerator`로 키 생성) → `REACHABLE`. app-indirect(`KeyPairGenerator.getInstance("Frodo", "BCPQC")`) → `UNKNOWN` |
+| L3 | bcprov jar에 줄 번호가 없어 구간은 `sample` 메서드 전체다 |
+
+수정 커밋 2개 중 하나(`kem_dec`의 비교·선택 코드를 고친 것)는 1.81.1에 없고 1.84에만 있다. 1.81 계열에서 고쳐진 것은 표본 추출뿐이라 그 메서드만 취약 함수로 두었다.
 
 ### 8-3. Jackson core (`tools.jackson.core:jackson-core` 3.1.5)
 
@@ -714,6 +765,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 ### 9-3. 취약 함수 데이터 없음
 
 - 지금 배포 이미지에는 0행이다. 10/10 오후에는 4개(0636, 13506, jackson-databind MEDIUM 2개)가 이 상태였고, 기록 14-4·15-1절에서 데이터를 만들어 판정했다.
+- 11/18 배포 이미지에는 2행(Tomcat CVE-2026-65637, bcprov CVE-2026-5598)이 이 상태였고, 11/19에 데이터와 규칙을 만들어 판정했다(8-1, 8-2).
 - 새 CVE가 들어오면 데이터를 만들 때까지 `NOT_ANALYZED`다. `UNREACHABLE`로 쓰지 않는다(GR-14).
 
 ## 10. L1 규칙 (배포 여부)
@@ -804,6 +856,8 @@ dashboard-backend가 계산하는 방법(구현, API 명세 3-3):
 
 새 CVE를 더하거나 규칙을 고칠 때의 순서다. 경로는 노트북의 `reach-poc/` 기준이다.
 
+11/19부터 1~4단계는 `dashboard-backend/reach-analyzer/vulndata/vulndata.py`로 한다(쓰는 법은 `reach-analyzer/README.md` "판정 데이터 만들기"). 도구가 공지·두 버전의 jar·수정 커밋을 모아 후보를 만들고(`prepare`), AI가 초안을 쓰고, 도구가 초안의 메서드·줄을 설치 버전 jar와 대조한 뒤(`check`) 사람이 확인한 것만 넣는다(`apply`, 확인한 사람이 `research/vulndata/`에 남는다). `make_spec.py`는 처음 14개를 만든 방법이고, 그 뒤로는 `vuln-functions.json`에 직접 더한다(4단계의 "생성 파일을 직접 고치지 않는다"는 처음 14개에만 해당). 5단계부터는 그대로다.
+
 | 단계 | 할 일 | 산출물 | 주의 |
 |---|---|---|---|
 | 1. 공지·수정 커밋 조사 | 공지가 참조하는 수정 커밋을 찾는다. 취약·수정 버전 소스를 diff한다. Tomcat은 보안 페이지 원본에서 수정 커밋을 찾고, 커밋 시점 파일과 태그 diff가 일치하는지 확인했다 | 조사 메모 | AI는 후보만 만든다. AI에는 공개 공지와 수정 커밋만 보내고, 앱 소스 코드는 보내지 않는다(GR-11, ARD SR-11) |
@@ -869,8 +923,10 @@ dashboard-backend가 계산하는 방법(구현, API 명세 3-3):
 
 기록 5절 기준 합계는 34개다. 그 뒤 13506(36/36)과 MEDIUM 3개를 더해 44/44가 됐다. 지금의 앱별 판정 수는 원본(`test/expected.json`) 확인 필요.
 
+11/19에 65637·5598을 더해 앱 6개, **55/55**가 됐다(app-like 16, app-positive 16, app-tokens 1, app-indirect 14, app-blindspots 3, app-boot2 5). app-boot2는 app-like를 Spring Boot 2로 바꾼 것이다.
+
 | 항목 | 내용 |
 |---|---|
 | 작성자 | 김진섭 |
 | 작성일 | 2026-10-11 |
-| 수정일 | 2026-10-18 |
+| 수정일 | 2026-11-19 |
