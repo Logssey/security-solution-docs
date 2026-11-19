@@ -125,12 +125,14 @@
 
 **NFR-1 속도**
 
+**운영 끝에서 끝 검증 (2026-11-19)**: #58 시나리오(노드 역할의 `deny_tfstate` 삭제)를 테스트 PR #75로 올려 머지하지 않고 닫음. plan 전 검사 통과 → plan(삭제 1) → 경로 분석 실패(`path.tier1.added` 6개: 인터넷 → CloudFront → NLB → EC2 → 노드 역할 → tfstate, IAM 시뮬레이터 explicitDeny → allowed) + State 읽기 주체 증가 경고 → 대시보드 PR 목록·상세에 차단·Critical·경로 +6. 오판 없음. main 매일 점검(iac-drift) 수동 실행: plan 전 검사 main 위반 0, 드리프트 5건 탐지
+
 | 구간 | 목표 | 측정 | 방법 |
 |---|---|---|---|
 | plan 전 검사(gate) | 1분 이내 | 1.1~2.6초 (3회, 도구 설치 제외) | 로컬 `GATE_BASE=origin/develop policy/gate.sh` |
 | 경로 분석 + State 영향 | | 1.2초 (단독), 10.4~10.7초 (그래프 보강과 겹쳐 대기한 경우, IAM 시뮬레이터 호출 포함) | 로컬 데모, `iac_jobs` 등록 → 완료 시각 |
 | 그래프 보강 / State 점검 | | 6.2초 / 11.3초 | 같은 데모 (열린 경로 60개 그래프) |
-| PR 검사 전체 (plan 전 검사 → plan → 경로 분석 → State) | 10분 이내 | 미측정 | CI plan과 CI → API 연결이 배포 뒤라 끝에서 끝까지는 아직 잴 수 없음 |
+| PR 검사 전체 (plan 전 검사 → plan → 경로 분석 → State) | 10분 이내 | **1분 41초** (PR 열림 → "경로 분석" 등록). gate·plan 54초, "plan 전 검사" 등록 1분 24초 | 2026-11-19 운영 끝에서 끝 검증 (infrastructure 테스트 PR #75, GitHub 검사 시각) |
 
 | 항목 | 내용 |
 |---|---|
