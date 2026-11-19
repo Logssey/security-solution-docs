@@ -59,7 +59,7 @@
 | FR-P4 | 1등급 데이터에 닿는 권한은 IAM 시뮬레이터로 확인 후 확정 | MVP |
 | FR-S1 | 매일 refresh-only로 드리프트 탐지, 노이즈 제거 후 높음·중간·낮음 분류 | MVP |
 | FR-S2 | State를 속성 단위로 점검, State 읽기 주체 수 변화 추적 | MVP |
-| FR-I1 | 검사 결과 3개(plan 전 검사·경로 분석·State)를 PR에 등록, 차단이면 병합 차단 | MVP |
+| FR-I1 | 검사 결과 2개(plan 전 검사·경로 분석, State는 경로 분석 절에 포함)와 요약 코멘트를 PR에 등록, 차단이면 병합 차단 | MVP |
 | FR-I2 | 요약 코멘트 하나를 커밋마다 갱신, 원인 코드 줄에 코멘트 | MVP |
 | FR-D1 | IaC 탭에 열린 경로, PR 판정, plan 전 검사 관문 상태, State·드리프트, 검사 주기 표시 | MVP |
 | FR-D2 | 정해진 조치(IMDSv2 강제, 시크릿 읽기 축소, tfstate 버킷 정책, CloudTrail)를 수정 PR로 생성 | 다음 |
