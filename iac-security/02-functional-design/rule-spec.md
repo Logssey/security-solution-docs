@@ -38,7 +38,7 @@
 
 등급표는 대시보드 PostgreSQL의 `iac_data_assets` 테이블에서 관리 (ERD). 환경마다 ARN이 달라 마이그레이션에 넣지 않고 SQL로 등록함. 운영은 infrastructure `deploy/logssey-dashboard/iac-data-assets.sql`(1등급 11개, 2등급 3개, 11/18 계정 대조), 로컬은 dashboard-backend `iac-worker/local/register-prod-assets.sql`. 공개 OIDC 문서 버킷과 Logssey 밖 버킷은 넣지 않음. 등록 화면은 MVP에 없음.
 
-## ② plan 전 검사 규칙
+## plan 전 검사 규칙
 
 | ID | 엔진 | 조건 | 강도 | 심각도 | 상태 |
 |---|---|---|---|---|---|
@@ -80,10 +80,10 @@
 | `rule.iam_full_access` | Conftest (plan JSON) | `*FullAccess` 관리형 정책 연결, `Action: "*"` | 경고 | HIGH | 설계 |
 | `rule.kics` | KICS | KICS 결과를 그대로 가져옴. KICS 쿼리 ID는 `iac_findings.params`에 | KICS CRITICAL·HIGH → 경고, 나머지 → 정보 | KICS 값 그대로 (INFO → LOW) | 다음 단계 (FR-R1, ADR-09) |
 
-- 설정 오류만으로는 차단하지 않음. 차단은 ①에서 경로가 생길 때.
+- 설정 오류만으로는 차단하지 않음. 차단은 경로 분석에서 경로가 생길 때.
 - MVP는 Conftest 보완 규칙 두 개(`rule.sg_open_world`, `rule.iam_full_access`)만 검사. KICS 연동과 설정 오류 목록 화면(FR-R1)은 다음 단계 (ADR-09, 10/13 결정)
 
-## ① 경로 규칙
+## 경로 분석 규칙
 
 | ID | 조건 | 강도 | 심각도 |
 |---|---|---|---|
@@ -102,7 +102,7 @@
 - `path.imds_v1_added`: plan에서 `http_tokens`를 `"optional"`로 적어 인스턴스를 만들거나 바꾸면 경로와 따로 발견 건 하나. 값을 적지 않은 경우(AMI·계정 기본값)와 원래 `optional`이던 인스턴스는 제외
 - 미구현: `path.tier1.reach_only`. 엔진이 plan에서 IAM 정책·IMDS만 그래프에 반영해 "네트워크로만 닿는 새 경로"가 plan으로 생길 수 없음. 보안 그룹 반영(백로그)과 함께 구현
 
-## ③ State·드리프트 규칙
+## State·드리프트 규칙
 
 | ID | 조건 | 강도 | 심각도 |
 |---|---|---|---|

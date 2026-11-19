@@ -5,10 +5,10 @@
 | ID | 이슈 | 결정 | 상태 |
 |---|---|---|---|
 | [ADR-01](#adr-01) | 판정과 문구를 무엇으로 만드나 | 규칙과 템플릿. AI 미사용 | 결정 |
-| [ADR-02](#adr-02) | ②를 언제, 무엇으로 검사하나 | plan 전에 `.tf`·lock 텍스트를 Conftest(직접 쓴 Rego)로 검사 | 결정 |
+| [ADR-02](#adr-02) | plan 전 검사를 언제, 무엇으로 하나 | plan 전에 `.tf`·lock 텍스트를 Conftest(직접 쓴 Rego)로 검사 | 결정 |
 | [ADR-03](#adr-03) | 자산 그래프를 어떻게 만드나 | Cartography(AWS + Kubernetes 모듈) + Neo4j. 기본 모델에 없는 관계만 워커의 보강 단계에서 추가 | 결정 |
 | [ADR-04](#adr-04) | 실효 권한을 어떻게 계산하나 | Cartography 권한 매핑(사용자 정의 매핑 파일)으로 1차 계산, 1등급은 IAM 시뮬레이터로 확정 | 결정 |
-| [ADR-05](#adr-05) | 분석을 어디서 돌리나 | ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 | 결정 (분석 위치는 ADR-13이 대체) |
+| [ADR-05](#adr-05) | 분석을 어디서 돌리나 | plan 전 검사·plan은 GitHub 호스티드 러너, 경로 분석·State 분석은 클러스터 안 Java 워커 | 결정 (분석 위치는 ADR-13이 대체) |
 | [ADR-06](#adr-06) | plan JSON의 민감값 처리 | 러너에서 민감 표시(`*_sensitive`)된 값을 지운 뒤 전송, 분석 후 삭제 | 결정 |
 | [ADR-07](#adr-07) | 매일 작업의 AWS 자격 증명 | 전용 읽기 역할 scanner-ro를 k8s 서비스 계정 OIDC(IRSA 방식)로 받음 | 결정 (10/14 시범 검증 완료, 받는 방식은 ADR-13이 대체) |
 | [ADR-08](#adr-08) | PR 봇의 신원 | GitHub App (이름, 최소 권한, 검사 결과 API) | 결정 |
@@ -39,7 +39,7 @@
 
 ### ADR-02
 
-**②를 언제, 무엇으로 검사하나** · 상태: 결정
+**plan 전 검사를 언제, 무엇으로 하나** · 상태: 결정
 
 - **결정**: plan 전에 `.tf`·lock 텍스트를 Conftest(직접 쓴 Rego)로 검사
 - **근거**: `init`·`plan`은 외부 코드를 내려받아 실행함 (Coder 2026.8). 10/8 검증: 위험 시나리오 6/6 탐지, 실제 레포 오탐 0/348
@@ -70,7 +70,7 @@
 
 **분석을 어디서 돌리나** · 상태: 결정
 
-- **결정**: ②·plan은 GitHub 호스티드 러너, ①③ 분석은 클러스터 안 Java 워커 (ADR-11)
+- **결정**: plan 전 검사·plan은 GitHub 호스티드 러너, 경로 분석·State 분석은 클러스터 안 Java 워커 (ADR-11)
 - **근거**: PR 코드는 매번 버려지는 VM에서만 돌고, Neo4j는 사설망에 둠
 - **버린 대안**: 클러스터 안 셀프 호스티드 러너 (악성 PR이 클러스터에서 실행됨)
 
@@ -121,7 +121,7 @@
 **규칙 도구 선택** · 상태: 결정 (10/13)
 
 - **결정**: KICS 주력 + Conftest 보완 규칙. Checkov·Trivy는 선택
-    - MVP는 Conftest만 씀(② 관문, 보완 규칙). KICS 연동은 설정 오류 목록(FR-R1)과 함께 다음 단계
+    - MVP는 Conftest만 씀(plan 전 검사 관문, 보완 규칙). KICS 연동은 설정 오류 목록(FR-R1)과 함께 다음 단계
     - IaC 기능 담당이 결정
 - **근거**: 10/7 비교: KICS 5/7, Checkov·Trivy 1/7. 놓친 항목은 Conftest 몇 줄로 보완 가능. Trivy는 2026.3 공급망 사고로 버전 고정 필수
 - **버린 대안**: 규칙 도구 3개 모두 사용 (중복 경고)
@@ -146,7 +146,7 @@
 
 - **결정**
     - API: dashboard-backend(Java 21, Spring Boot)에 `iac` 모듈로 통합. 경로는 `/api/v1/iac`
-    - 분석: API와 분리된 Java 워커가 `iac_jobs` 대기열에서 작업을 가져가 ①③을 계산. Neo4j Java 드라이버, AWS SDK for Java(IAM 시뮬레이터) 사용
+    - 분석: API와 분리된 Java 워커가 `iac_jobs` 대기열에서 작업을 가져가 경로 분석·State를 계산. Neo4j Java 드라이버, AWS SDK for Java(IAM 시뮬레이터) 사용
     - 외부 도구: Cartography·KICS·Conftest·Terraform은 실행 파일로 두고 다시 구현하지 않음
 - **근거**
     - 대시보드는 Spring Boot 앱 하나(dashboard-backend)이고, 로그인 세션·사용자·자산을 이미 가지고 있음
@@ -165,7 +165,7 @@
 
 - **결정**
     - 사람은 IAM Identity Center 읽기 전용 권한만 가짐(plan-ro와 같은 정책)
-    - 로컬 plan은 래퍼(`make plan`)로 허용: ② 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`
+    - 로컬 plan은 래퍼(`make plan`)로 허용: plan 전 검사·2b → 홈 디렉터리 없는 컨테이너, 읽기 전용 임시 키만, `-lock=false`
         - 10/15 적용: SSO 전환 전까지는 IAM 사용자가 plan-ro 역할을 assume (`iac_plan_local_users`, 세션 이름 = 사용자 이름)
     - 남의 PR은 로컬에서 plan하지 않고 CI plan 결과로 리뷰
     - apply는 CI apply 역할만(GitHub OIDC, main + environment `prod`)
@@ -173,7 +173,7 @@
     - IAM 사용자 장기 키 폐기, CloudTrail 켬
 - **근거**
     - 10/9·10/13 점검: tfstate 읽기 주체가 IAM 사용자 5명(팀원 전원, 장기 키), CloudTrail 꺼짐
-    - 사람에게 쓰기 권한이 있으면 로컬 apply로 ②①③을 건너뛸 수 있어, apply 경로가 CI 하나여야 검사가 의미가 있음
+    - 사람에게 쓰기 권한이 있으면 로컬 apply로 plan 전 검사·경로 분석·State·드리프트 점검을 건너뛸 수 있어, apply 경로가 CI 하나여야 검사가 의미가 있음
     - 로컬 plan을 막으면 확인할 때마다 CI를 거쳐야 해서 느림
     - State 속 실제 시크릿은 0건(10/9)이고 `state.secret_added`로 유지하므로 사람의 State 읽기는 허용
     - 읽기 전용 역할은 S3 `use_lockfile` 잠금을 못 쓰므로 로컬 plan은 `-lock=false`
@@ -215,7 +215,7 @@
     - 호스트에서 Cartography 쿠버네티스 모듈로 직접 수집: 6443 통로와 쿠버네티스 자격 증명을 호스트에 둬야 함
     - `iac-gate`가 직접 전송: PR 코드가 가짜 결과를 보낼 수 있음
 - **대체·영향**
-    - ADR-05의 "①③ 분석은 클러스터 안 Java 워커" → 대시보드 호스트의 워커
+    - ADR-05의 "경로 분석·State 분석은 클러스터 안 Java 워커" → 대시보드 호스트의 워커
     - ADR-07의 "IRSA로 받음" → 호스트 역할이 받는 IaC 전용 역할. 클러스터의 Cartography CronJob·Neo4j·scanner-ro IRSA 역할은 새 구조가 돈 뒤 정리
     - ADR-11의 "CI용 경로만 CloudFront → 공개 NLB" → 대시보드 ALB(`logssey.re-used.store`)
     - 작업 순서는 IaC 보안 설계문서 "배포 후 작업 계획" 탭
