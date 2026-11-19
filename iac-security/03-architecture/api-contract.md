@@ -40,7 +40,7 @@
 
 | 메서드 | 경로 | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
-| POST | `/runs` | 실행 등록 + plan 전 검사 결과 기록 | `repo`, `prNumber`, `headSha`, `gate: {status, findings[]}` | 201 `{runId}`. plan 전 검사 차단이면 여기서 검사 3개·코멘트까지 등록 |
+| POST | `/runs` | 실행 등록 + plan 전 검사 결과 기록 | `repo`, `prNumber`, `headSha`, `gate: {status, findings[]}`, `prTitle`(선택, 256자까지) | 201 `{runId}`. plan 전 검사 차단이면 여기서 검사 3개·코멘트까지 등록 |
 | PUT | `/runs/{runId}/plan` | plan JSON 업로드 (민감값 제거, gzip, 20MB 이하). `iac_plan_payloads`에 임시 저장하고 `iac_jobs`에 `ANALYZE_RUN` 등록 | plan JSON | 202 `{status: "ANALYZING"}` |
 | GET | `/runs/{runId}` | 실행 상태와 판정 | 없음 | `{status, verdict, highestSeverity, checks[]}` |
 
@@ -57,7 +57,7 @@
 | GET | `/summary` | 지표 4개, 열린 발견 건의 심각도별 건수(`severityCounts`), 마지막 전체 점검 시각, 그래프 기준 시각 | S-01 A·B, 통합 현황 | MVP |
 | GET | `/paths?status=OPEN&tier=1` | 열린 경로 목록 (경로별 `severity`) | S-01 C | MVP |
 | GET | `/paths/{pathId}` | 경로(`path`)와 끊을 지점(`cutPoints`: `fromHop`·`toHop`은 `hops` 순번, `action`, `templateKey`) | S-01 C | MVP |
-| GET | `/prs` | PR별 최신 run의 판정, `highestSeverity`, 경로 변화 수(`pathsAdded`, `removedRoutes`), State 읽기 주체 증가 여부, 대표 규칙(`reason`). 최근 50개 | S-01 D | MVP |
+| GET | `/prs` | PR별 최신 run의 판정, `highestSeverity`, 경로 변화 수(`pathsAdded`, `removedRoutes`), State 읽기 주체 증가 여부, 대표 규칙(`reason`), PR 제목(`title`). 최근 50개 | S-01 D | MVP |
 | GET | `/prs/{number}` | PR 상세 (plan 전 검사·경로 분석·State, 리소스, 다음 할 일, 항목별 `severity`) | S-02 | MVP |
 | GET | `/gates` | plan 전 검사 관문별 상태, 공급망 요약 | S-01 E | MVP |
 | GET | `/state/summary` | State 읽기 주체, 버킷 정책, 민감 후보·실제 수 | S-01 F | MVP |
@@ -126,7 +126,7 @@
 - `evidence.simulator` 값은 IAM 시뮬레이터 응답의 `EvalDecision` 값을 그대로 씀
 - `resourceFindings`는 경로 없이 리소스 하나에 걸리는 경로 분석 발견 건 (`path.imds_v1_added`). 항목은 `ruleId`, `enforcement`, `severity`, `address`, `action`(`cause.action`과 같은 값). 경로 발견 건은 `paths`에만 나옴 (11/04)
 - `resources`는 plan의 추가·변경·삭제 수만. plan 원문과 리소스 값은 내려주지 않음
-- `title`은 아직 받지 않아 `null` (CI 요청에 PR 제목이 없음). 화면은 제목 없이 번호·커밋만 표시
+- `title`은 `iac-report`가 실행을 등록할 때 GitHub에서 받아 보낸 PR 제목 (제어 문자는 공백으로, 256자까지). 없으면 `null`. PR 작성자가 쓴 글이라 화면은 텍스트로만 표시
 - plan 전 검사에서 막힌 run은 `gate.status`가 `BLOCK`이고 `paths`·`state`·`resources`가 비어 있음 (계산 안 함)
 
 | 항목 | 내용 |
