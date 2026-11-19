@@ -616,10 +616,11 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | `regions` | object 배열 | 상세만 | 취약 구간마다 `class`, `method`, `lines`(줄 범위 배열, 없으면 `wholeMethod`), `executedLines`, `executed`, `during`. 확인하지 못했으면 `unchecked`(이유) |
 | `paths` | object 배열 | 상세만 | L2가 호출 그래프로 경로를 찾은 취약 함수마다 `target`, `reachedStep`, `of`, `steps`(`method`, `executed`). `reachedStep`은 진입점부터 **끊기지 않고** 실행된 단계 수다. 중간 메서드가 다른 길로 실행된 것은 세지 않는다. 진입점이 실행되지 않았으면 0이고 `steps`가 없다. `executed`가 null인 단계는 확인할 수 없는 것(JDK 콜백 등)이다 |
 | `note` | string | 아니요 | 취약 구간 데이터의 메모(예: 수정이 데이터만 바꿔 실행으로 구분할 수 없음) |
-| `run` | object | 상세만 | 그 관측의 근거 항목(FR-14 수용 기준 3). `scanId`, `scenario`(시나리오 버전), `observationMethod`(`COVERAGE`), `observedAt`, `build`(`imageDigest`), `configKeys`(`name`, `enabled`. 값은 없다), `invocations`(`segment`, `name`, `request`, `count`, `ok`, `failed`, `skipped`) |
+| `run` | object | 상세만 | 그 관측의 근거 항목(FR-14 수용 기준 3). `scanId`, `scenario`(시나리오 버전), `observationMethod`(`COVERAGE`), `observedAt`, `build`(`imageDigest`), `configKeys`(`name`, `enabled`. 값은 없다), `invocations`(`segment`, `name`, `request`, `count`, `ok`, `failed`, `skipped`), `rematch`(true면 앱을 다시 띄운 것이 아니라 보관한 실행 기록을 `scanId` 스캔에서 다시 대조한 결과다. `observedAt`은 처음 관측한 때) |
 
 - `NONE`은 시나리오가 그 코드를 지나가지 않았다는 뜻일 뿐 `UNREACHABLE`의 근거가 아니다(FR-14 수용 기준 2).
-- 값은 그 대상(이미지 digest)을 띄워 본 **마지막 성공한 관측**이다. 앱을 띄우지 않는 스캔(재대조 `SCHEDULE`, `PR`)과 L3가 실패한 스캔은 이 값을 바꾸지 않는다. 같은 이미지를 다시 띄워 보면 새 결과가 대신한다.
+- 값은 그 대상(이미지 digest)의 **마지막 성공한 L3 결과**다. 같은 이미지를 다시 띄워 보거나, 재대조가 보관한 실행 기록을 다시 대조하면(`run.rematch`) 새 결과가 대신한다. `l3`가 없는 스캔(`PR`, 보관한 기록이 없는 재대조, 대시보드 요청 스캔)과 L3가 실패한 스캔은 이 값을 바꾸지 않는다.
+- **실행 기록 보관**: 앱을 띄운 관측의 실행 기록(구간별 실행 데이터와 `run`)을 이미지마다 보관한다(API-13 `l3Record`). 하루 1번 재대조는 앱을 다시 띄우지 않고 이 기록을 그날의 취약 함수 데이터·취약점 목록과 다시 대조한다. 그래서 이미지는 그대로인데 새 CVE가 나오거나 취약 함수 데이터가 늘어도 그 Finding에 `l3`가 붙는다. 앱마다 최근 이미지 5개와 실행 중인 이미지(L1)의 기록만 남긴다.
 - CVE와 패키지 좌표(group:artifact)로 Finding에 잇는다. 취약 함수 데이터가 없는 CVE, 다른 좌표의 사본(`UNANALYZED_COPY`), OS 패키지는 `l3`가 null이다.
 - L2가 `UNREACHABLE`인데 `reached`가 `REGION`이면 L2가 놓친 경우다. 상태는 그대로 두고 화면이 표시한다(SCR-02, SCR-03). 사람이 검토로 정한다(API-06).
 
@@ -1864,7 +1865,8 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | `reachResult` | 본문 | object | `options.l2`가 true면 | `reach.jar` 결과(사실, 후보 경로, 호출 그래프 요약). [계획] 지금 구현은 보관하지 않는다 |
 | `tools`, `analysis` | 본문 | object | 예 | 3-1의 같은 이름 필드 |
 | `stages` | 본문 | object 배열 | 예 | 러너에서 돈 단계의 `name`, `status`, `durationSeconds`, `message`. 실패했으면 본문에 `failure`(`code`, `stage`, `message`, 3-1)도 준다. 이때는 `tools`·`stages`만 있으면 되고 스캔은 `FAILED`로 끝난다 |
-| `l3` | 본문 | object | 아니요 | L3 능동 관측 결과(아래 "L3 결과"). 러너가 앱을 띄워 봤을 때만 넣는다 |
+| `l3` | 본문 | object | 아니요 | L3 능동 관측 결과(아래 "L3 결과"). 러너가 앱을 띄워 봤거나, 재대조에서 보관한 실행 기록을 다시 대조했을 때 넣는다 |
+| `l3Record` | 본문 | object | 아니요 | 그 관측의 실행 기록. `format`(`TAR_XZ`), `content`(base64). 방금 앱을 띄운 성공한 관측일 때만 넣는다(아래 "L3 결과") |
 
 - 응답은 202와 `{ "id": 1, "scanId": 2, "scanStatus": "RUNNING" }`이다. 저장과 게이트 계산이 끝나면 API-12 결과 조회에 반영된다. [계획] 지금 구현은 요청 안에서 저장까지 끝내 `SUCCEEDED`(실패 묶음이면 `FAILED`)를 준다.
 - 같은 검사에 두 번 올리면 409 `CONFLICT`다. 다시 돌리려면 API-12로 새 검사를 등록한다.
@@ -1907,6 +1909,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - CVE와 `coordinates`가 같은 Finding에 붙인다(같은 좌표의 여러 버전은 같은 결과). 이번 묶음에 없는 CVE의 예전 결과는 지운다. `l3`가 없거나 `FAILED`면 그 대상의 예전 결과를 그대로 둔다.
 - `PR` 검사의 `l3`는 받지 않는다(ARD SR-09).
 - 서버가 아는 필드만 저장한다. Finding 하나의 근거가 256KB를 넘으면 `paths`를 빼고 저장한다.
+- `l3Record`는 `l3`가 성공한 새 관측일 때만 보관한다(16MB 이하의 tar.xz. 안에는 `run.json`과 `segments/<구간 id>.exec`). `run.rematch`가 true인 결과(보관한 기록을 다시 대조한 것), `PR` 검사, 모양이 틀린 기록은 보관하지 않고 `l3` 결과는 그대로 저장한다. 보관한 뒤 그 앱의 기록을 정리한다: 이미지마다 가장 새 기록 하나, 그중 최근 5개와 실행 중인 이미지(L1 조회에 있는 digest)의 것만 남긴다.
 
 
 **결과 묶음 만들기 (`bundle.py`)**
@@ -1933,6 +1936,18 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 - 200, `Content-Type: application/gzip`. 본문은 gzip한 CycloneDX JSON이다(`Content-Encoding`이 아니라 파일 그대로라 받는 쪽이 푼다).
 - 404 `NOT_FOUND`: 검사가 없음, 재대조가 아닌 검사, 원래 스캔에 보관한 SBOM이 없음(SBOM 보관 전 스캔). 러너는 404면 SBOM을 새로 만든다.
+
+**재대조 입력 L3 실행 기록**
+
+| 항목 | 내용 |
+|---|---|
+| 메서드·경로 | `GET /api/v1/reach/ci/checks/{checkId}/l3-record` |
+| 권한 | 결과 업로드와 같다(그 검사에 올릴 수 있는 CI 토큰, 대시보드 세션 `ADMIN`) |
+| 설명 | 검사가 재대조(`rescanOf`)면 그 대상(이미지)에 보관한 가장 새 L3 실행 기록을 준다. 러너가 앱을 띄우지 않고 이것을 다시 대조해 `l3`(`run.rematch` = true)로 올린다 |
+
+- 200, `Content-Type: application/x-xz`. 본문은 tar.xz 그대로다.
+- 404 `NOT_FOUND`: 검사가 없음, 재대조가 아닌 검사, 그 이미지에 보관한 기록이 없음(앱을 띄워 본 적 없는 이미지, 정리된 기록, 레포 대상). 러너는 404면 `l3` 없이 올린다(그 대상의 예전 `l3`는 그대로 남는다).
+- 원래 스캔이 아니라 같은 대상의 다른 스캔에 보관돼 있어도 준다(재대조의 재대조도 같은 기록을 쓴다).
 
 ### API-14 감시 대상 앱
 
@@ -2069,7 +2084,7 @@ CVE-2026-68525(tomcat-embed-core 11.0.24) 한 건이다.
 - 이미지 스캔(`IMAGE_BUILD`)은 ECR push 전에 한다(PRD FR-11). 러너가 방금 빌드한 이미지로 SBOM을 만들고 결과만 올리므로(API-13), 서버가 레지스트리에서 이미지를 읽을 필요가 없다.
 - 하루 1번 재대조(`SCHEDULE`)는 GitHub `schedule`이 아니라 대시보드가 띄운다. 어떤 digest가 운영에서 도는지는 대시보드(L1)만 알기 때문이다. 기본 한국 04:30(L1 수집 03:17 뒤), 설치 설정 `logssey.reach.rescan.cron`(`-`이면 끔). 대상은 요약 기본 범위(API-08 `basis=RUNNING`)가 실행 중인 이미지로 쓰는 스캔이고, L1이 꺼졌거나 신선한 조회가 없으면 띄우지 않는다. 검사마다 `rescanOf` = 그 스캔, 요청 주체 `SYSTEM`, 멱등 키는 스캔·날짜라 하루에 한 번이다. 러너는 수동 실행과 같은 작업을 `rescan_of`와 함께 돌린다(API-01). 재빌드는 없고, L2용 jar는 같은 digest 이미지에서 꺼낸다
 - L2 분석은 앱 1개에 1분 이내가 기준이다(NFR-03, PoC 약 40초). PR마다 돌릴 수 있다.
-- L3 능동 관측은 앱을 띄워 시나리오를 보내야 해서 PR마다 돌리지 않는다(PRD FR-14). 이미지 검사(`IMAGE_BUILD`)에서 서비스 레포에 시나리오(`.reach/l3-scenario.json`)가 있을 때만 돈다. 러너의 관측 결과는 API-13 결과 묶음의 `l3`로 올리고, Finding의 `l3`(3-12)로 남는다. 재대조와 대시보드 요청 스캔은 앱을 띄우지 않는다.
+- L3 능동 관측은 앱을 띄워 시나리오를 보내야 해서 PR마다 돌리지 않는다(PRD FR-14). 이미지 검사(`IMAGE_BUILD`)에서 서비스 레포에 시나리오(`.reach/l3-scenario.json`)가 있을 때만 돈다. 러너의 관측 결과는 API-13 결과 묶음의 `l3`로 올리고, Finding의 `l3`(3-12)로 남는다. 재대조와 대시보드 요청 스캔은 앱을 띄우지 않는다. 재대조는 그 이미지에 보관한 실행 기록이 있으면 받아서 다시 대조한다(API-13 "재대조 입력 L3 실행 기록").
 
 ```mermaid
 sequenceDiagram
