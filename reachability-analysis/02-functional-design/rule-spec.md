@@ -284,7 +284,10 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 - 루트 타입에서 필드 타입을 따라간다. 컬렉션 원소 타입과 중첩 record도 따라간다(실험 B: `List<Line>` 안의 `BigDecimal`, 중첩 record의 `Duration`).
 - 근거는 따라간 길을 그대로 쓴다. 예(실험 B, 89407): `order(@body) → OrderRequest.lines → OrderLine.unitPrice`.
 - 어노테이션을 세는 자리(91777 수정 후): 타입 자체에 붙은 어노테이션은 91776 검사에서만 센다. 91777은 (1) 컬렉션·맵 필드의 원소 타입, (2) 루트 자체가 컬렉션·맵인 경우(`@RequestBody Map<String, Account>`, `TypeReference<List<Node>>`)의 원소 타입만 센다.
-- 제네릭, 상속, 맵 키 처리의 세부는 원본(`Facts.java`) 확인 필요.
+- **타입 변수로 받는 요청 본문**(11/19 수정): 공통 컨트롤러가 `create(@RequestBody T body)`처럼 본문을 타입 변수로 받으면, 하위 타입이 준 타입 인자를 루트로 삼는다. 예: `ItemController extends CrudController<ItemRequest>` → 루트 `ItemRequest`. 중간 제네릭 계층(`AuditedController<U> extends CrudController<U>`)과 제네릭 인터페이스의 default 메서드도 따라간다. 근거의 루트 이름은 `ItemController.create(@body param 0, T of CrudController)` 꼴이다.
+  - 고치기 전에는 본문 타입이 `Object`로만 보여 DTO 필드를 보지 못했고, L3 PoC에서 실제로 실행되는 89407을 `UNREACHABLE`로 판정했다(거짓 unreachable). 고치기 전 jar로는 `app-generic` 테스트 6개 중 3개가 실패한다.
+  - 풀지 못하는 경우: 타입 인자를 주지 않은 하위 타입(raw type), 메서드가 스스로 선언한 타입 변수(`<X> … (@RequestBody X body)`). 둘 다 Spring이 본문을 `Object`로 읽으므로 DTO가 없다. 핸들러 메서드가 앱 밖(라이브러리 jar)의 제네릭 클래스에 선언된 경우는 아직 보지 않는다(13절 한계).
+- 그 밖의 제네릭, 상속, 맵 키 처리의 세부는 원본(`Facts.java`) 확인 필요.
 
 ### 6-3. 응답 전용 타입을 세지 않는 이유
 
@@ -884,6 +887,7 @@ dashboard-backend가 계산하는 방법(구현, API 명세 3-3):
 | 런타임 설정(`java.security`, 환경 변수) | 도구가 보지 못한다 | 확인 스크립트로 따로 본다(7-3) | [부분] |
 | RTA 과대근사 | 판정이 맞아도 경로가 실제와 다를 수 있다. jackson-databind는 거의 모든 역직렬화기에 닿는다 | 사실 먼저, 경로는 후보로 표시. 타입 규칙으로 판정 | [완료] |
 | tokens를 넓게 잡음 | 실수형 필드가 있는 JPA 엔티티를 `em.find(Foo.class)`로 읽기만 해도 `UNKNOWN`이 된다 | 거짓 `UNREACHABLE`보다 낫다(GR-01). 한계로 둔다 | [완료] |
+| 앱 밖에 선언된 핸들러 메서드 | `@RequestBody` 메서드가 라이브러리 jar의 공통 클래스(사내 공용 모듈의 `CrudController<T>` 등)에 있으면 루트로 잡지 못해 거짓 `UNREACHABLE`이 나올 수 있다. 앱 안에 선언된 제네릭 컨트롤러는 푼다(6-2) | 앱 클래스가 상속하는 라이브러리 클래스의 메서드까지 루트 수집을 넓힌다 | [계획] |
 | 라이브러리 안의 다른 사본 | 규칙은 앱 클래스만 보아 Jackson 2.21.5 사본을 판정하지 못한다 | 별도 행으로 드러내고 사람이 판정한다(9-1) | [부분] |
 | 규칙은 CVE마다 사람이 쓴다 | CVE가 늘면 작업이 는다 | 데이터 파일로 더한다(NFR-07). AI는 후보만 만든다. 변경은 PR 검토와 검증 세트 통과 뒤 반영한다(12절, ARD SR-10) | [부분] |
 | 스캐너가 못 찾는 구성 요소 | relocation된 shading 코드(AWS SDK `third-party-jackson-core`), JRE에 정적으로 포함된 네이티브 라이브러리는 판정 대상에 오르지 않는다 | 잡히지 않는 범위를 결과에 명시한다. relocation된 shading 코드는 AI 후보로 보완하고 "구성요소 추정"으로 표시한다. 추정 구성요소의 Finding은 `UNREACHABLE`로 확정하지 않는다(FR-02) | [계획] |
@@ -924,6 +928,8 @@ dashboard-backend가 계산하는 방법(구현, API 명세 3-3):
 기록 5절 기준 합계는 34개다. 그 뒤 13506(36/36)과 MEDIUM 3개를 더해 44/44가 됐다. 지금의 앱별 판정 수는 원본(`test/expected.json`) 확인 필요.
 
 11/19에 65637·5598을 더해 앱 6개, **55/55**가 됐다(app-like 16, app-positive 16, app-tokens 1, app-indirect 14, app-blindspots 3, app-boot2 5). app-boot2는 app-like를 Spring Boot 2로 바꾼 것이다.
+
+같은 날 `app-generic`(타입 변수로 받는 요청 본문, 6-2)을 더해 앱 7개, **61/61**이 됐다. app-generic 6개: 89407(직접 상속)·19032(2단계 상속)·68497(제네릭 인터페이스)은 `REACHABLE`, 91776·91777·83557은 `UNREACHABLE`(묶인 타입이 없는 사실을 만들어내지 않는지 본다).
 
 | 항목 | 내용 |
 |---|---|
