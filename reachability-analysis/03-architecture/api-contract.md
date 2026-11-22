@@ -1761,7 +1761,7 @@ Content-Type: application/json; charset=utf-8
 | `target` | 본문 | object | `rescanOf`가 없으면 | API-01의 `target`과 같다. `mode=PR`이면 레포 대상(`type=REPO`, 커밋은 `headCommit`), `mode=IMAGE_BUILD`이면 빌드한 이미지의 digest다(6-1). 맞지 않으면 400 |
 | `rescanOf` | 본문 | integer | 아니요 | `mode=SCHEDULE`에서 저장된 SBOM으로 재대조·재판정할 스캔. `target`과 함께 쓰지 않는다(둘 다 있거나 없으면 400). 지금 구현은 `SCHEDULE`·`MANUAL`에서만 받고, 그 스캔이 `SUCCEEDED`가 아니면 422 |
 | `policy` | 본문 | enum | 아니요 | `REPORT_ONLY`(기본) / `GATE` |
-| `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. `SUCCEEDED`여야 한다(아니면 400). 없으면 `baseRef`의 최신 `SUCCEEDED` 스캔을 쓴다. [계획] 스캔에 브랜치 정보가 없어 지금 구현은 찾지 않고 기준 없이(모든 Finding을 새 것으로) 본다. OIDC 토큰의 `ref`를 남길 때 한다 |
+| `baselineScanId` | 본문 | integer | 아니요 | 비교 기준 스캔. `SUCCEEDED`여야 한다(아니면 400). `mode=PR`에서 없으면 그 앱이 운영에서 실행 중인 이미지의 스캔(기본 범위 `basis=RUNNING`이 쓰는 이미지 스캔, 둘 이상이면 가장 최근 것)을 쓴다. 운영 이미지는 머지된 코드라 "운영에 없던 것"이 그 PR로 새로 생긴 Finding이다. 이미지 빌드(`IMAGE_BUILD`) 검사의 스캔은 머지 전 PR 이미지일 수 있어 쓰지 않는다. 실행 중인 이미지를 모르면(L1이 꺼졌거나 신선한 조회가 없음, 그 앱의 실행 중 이미지에 성공한 스캔이 없음) 기준 없이 모든 Finding을 새 것으로 본다. 다른 `mode`는 주지 않으면 기준 없이 본다. 정한 기준은 결과 조회의 `baselineScanId`로 보인다 |
 | `checkId` | 경로 | integer | 예 | CI 검사 ID |
 | `repository` | 쿼리 | string | 아니요(목록) | 레포 이름. 대소문자를 가리지 않고, 소유자를 붙여도(`Logssey/service-backend`) 이름으로 맞춘다. 200자까지 |
 | `mode` | 쿼리 | enum[] | 아니요(목록) | 쉼표로 여러 개(`PR,IMAGE_BUILD`). 허용 밖이면 400 |
@@ -2120,7 +2120,7 @@ sequenceDiagram
 
 - 여러 조건이 맞으면 가장 나쁜 결과를 따른다: `FAIL > WARN > PASS`.
 - `exitCode`는 `FAIL`이면 1, 아니면 0이다.
-- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 다른 대상(예: main의 커밋)이어도 purl과 CVE로 비교한다. 사람 판정(`MANUAL`)은 세지 않는다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11).
+- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 다른 대상(예: 운영 이미지)이어도 purl과 CVE로 비교한다. purl은 한정자(`?…`)와 하위 경로(`#…`)를 떼고 비교한다. 레포 SBOM(cdxgen)은 같은 패키지를 `pkg:maven/g/a@v?type=jar`로, 이미지 스캔(Trivy)은 `pkg:maven/g/a@v`로 적기 때문이다. 사람 판정(`MANUAL`)은 세지 않는다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11). PR 검사의 기준은 API-12 `baselineScanId`를 따른다.
 - API-12 예시의 첫 실행 결과는 `WARN`이다. `REACHABLE`과 `UNKNOWN`은 0이고, `NOT_ANALYZED`인 HIGH 5건(Jackson 2 사본, 제안(확정 대기))이 경고 조건에 걸린다.
 - 예외: `FAIL`인 PR이라도 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 그 Finding의 검토 기록에 남고, 만료되면 다시 게이트 대상이 된다(PRD FR-11). 예외를 기록하는 API와 형식은 아직 정하지 않았다(1-5, ARD Q-07).
 - 되돌리기: 전환 뒤 오탐으로 머지가 막히면 그 조건만 `WARN`으로 내리고, 사례를 검증 세트(ARD C-14)에 추가한다(PRD FR-11).
