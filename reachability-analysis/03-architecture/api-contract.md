@@ -336,7 +336,7 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
 | `component` | object | 예 | `purl`(키), `name`, `version`, `ecosystem`(purl 타입 그대로: `maven` / `npm` / `apk` 등), `path`(이미지 안 위치) |
 | `vulnerability` | object | 예 | `id`(CVE), `severity`, `severityNote`(출처마다 심각도가 다를 때 남긴 메모, FR-03), `title`(스캐너 값), `description`(스캐너 설명 원문), `affectedFeature`(취약 기능 설명), `fixedVersions`(스캐너 값), `cwe`, `references` |
 | `deployment` | enum | 예 | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
-| `l3` | L3 | 아니요 | L3 능동 관측이 닿은 곳(3-12). 판정 옆에 놓는 근거이고 판정(`verdict`)·사람 검토·게이트를 바꾸지 않는다. 이 대상(이미지)을 띄워 본 결과가 없으면 null이다 |
+| `l3` | L3 | 아니요 | L3 능동 관측이 닿은 곳(3-12). 판정 옆에 놓는 근거다. 실제 실행을 확인했으면 서버가 판정(`verdict`)을 올린다(3-12 "판정 올리기"). 이 대상(이미지)을 띄워 본 결과가 없으면 null이다 |
 | `verdict` | Verdict | 예 | Reach 판정(3-4) |
 | `review` | Review | 예 | 사람 검토(3-10) |
 | `sameCveFindings` | integer 배열 | 아니요 | 같은 CVE의 다른 패키지 사본 Finding ID |
@@ -409,14 +409,11 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `candidate` | boolean | `kind=PATH`일 때 | 항상 true. 가장 짧은 후보 경로이며 실제 경로와 다를 수 있다 |
 | `entryStage` | integer | 아니요 | 경로가 시작한 진입점 단계. 1(Spring 진입점) / 2(모든 앱 메서드) |
 | `weak` | boolean | 아니요 | 경로에 약한 간선(Object 메서드 호출, JDK 콜백)이 있나 |
-| `build` | object | `kind=RUNTIME`일 때 | 관측한 빌드. `jarSha256` 또는 `imageDigest` 중 하나 |
-| `configKeys` | object 배열 | `kind=RUNTIME`일 때 | 환경 변수·프로필의 키. `name`(키 이름), `enabled`(켜짐 여부). 값은 담지 않는다 |
-| `invocations` | string 배열 | `kind=RUNTIME`일 때 | 호출한 API·테스트 목록 |
-| `observationMethod` | enum | `kind=RUNTIME`일 때 | 확인 방법: `COVERAGE`(Java 커버리지 에이전트, 메서드 실행) / `MAPS`(네이티브 라이브러리 로드, `/proc/<pid>/maps`) / `UPROBE`(네이티브 공개 함수 호출) |
-| `observedAt` | date-time | `kind=RUNTIME`일 때 | 관측 시각 |
-| `executed` | boolean | `kind=RUNTIME`일 때 | 실행(로드·호출)이 관측됐나. true만 판정 근거(`REACHABLE`)로 쓴다. false는 `UNREACHABLE` 근거로 쓰지 않는다 |
+| `executed` | boolean | `kind=RUNTIME`일 때 | 취약 구간 실행이 관측됐나. true면 `REACHABLE`로 올린 근거, false면 구간을 확인 못 한 함수 실행으로 `UNREACHABLE`을 `UNKNOWN`으로 올린 근거다. 실행되지 않았다는 것은 근거로 쓰지 않는다 |
+| `reached`, `regionsChecked`, `startupOnly` | enum, boolean, boolean | `kind=RUNTIME`일 때 | 올릴 때 본 L3 결과(3-12와 같은 뜻) |
+| `l2Status` | enum | `kind=RUNTIME`일 때 | 올리기 전 L2 판정: `UNREACHABLE` / `UNKNOWN` |
 
-- [구현] L3 능동 관측 결과는 `kind=RUNTIME` 근거에 넣지 않고 Finding의 `l3`(3-12)로 준다. 근거에 넣으면 근거 해시가 달라지는데, 앱을 띄우지 않는 재대조(`SCHEDULE`)에는 이 근거가 없어 매일 사람 검토가 `EVIDENCE_CHANGED`로 되돌아가기 때문이다. `RUNTIME`의 `build`, `configKeys`, `invocations`, `observationMethod`, `observedAt`은 `l3.run`에 같은 이름으로 있다. `kind=RUNTIME`은 값만 남겨 둔다.
+- [구현] `kind=RUNTIME`은 서버가 L3로 판정을 올릴 때만 근거 끝에 한 줄 더한다(3-12 "판정 올리기"). 러너는 보내지 않는다. 관측 근거 항목(빌드, 설정 키, 보낸 요청, 확인 방법, 관측 시각, 시나리오)은 근거에 넣지 않고 Finding의 `l3.run`으로 준다. 근거 해시가 근거 전체로 만들어져서, 다시 대조할 때마다 바뀌는 값(스캔 번호, `rematch`)이나 같은 이미지를 다시 띄우면 바뀌는 값(관측 시각)을 넣으면 같은 결과인데도 사람 검토가 `EVIDENCE_CHANGED`로 되돌아가기 때문이다.
 
 예: CVE-2026-89407(jackson-core 3.1.5)의 사실 근거. 원자료에 줄 번호가 없어 `symbol`만 적었다.
 
@@ -625,7 +622,18 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 - 값은 그 대상(이미지 digest)의 **마지막 성공한 L3 결과**다. 같은 이미지를 다시 띄워 보거나, 재대조가 보관한 실행 기록을 다시 대조하면(`run.rematch`) 새 결과가 대신한다. `l3`가 없는 스캔(`PR`, 보관한 기록이 없는 재대조, 대시보드 요청 스캔)과 L3가 실패한 스캔은 이 값을 바꾸지 않는다.
 - **실행 기록 보관**: 앱을 띄운 관측의 실행 기록(구간별 실행 데이터와 `run`)을 이미지마다 보관한다(API-13 `l3Record`). 하루 1번 재대조는 앱을 다시 띄우지 않고 이 기록을 그날의 취약 함수 데이터·취약점 목록과 다시 대조한다. 그래서 이미지는 그대로인데 새 CVE가 나오거나 취약 함수 데이터가 늘어도 그 Finding에 `l3`가 붙는다. 앱마다 최근 이미지 5개와 실행 중인 이미지(L1)의 기록만 남긴다.
 - CVE와 패키지 좌표(group:artifact)로 Finding에 잇는다. 취약 함수 데이터가 없는 CVE, 다른 좌표의 사본(`UNANALYZED_COPY`), OS 패키지는 `l3`가 null이다.
-- L2가 `UNREACHABLE`인데 `reached`가 `REGION`이면 L2가 놓친 경우다. 상태는 그대로 두고 화면이 표시한다(SCR-02, SCR-03). 사람이 검토로 정한다(API-06).
+- **판정 올리기**: 서버가 결과(API-13)를 받을 때, PR 검사가 아니면 Finding마다 L3 결과(이번 묶음의 `l3`, 없으면 그 이미지에 남은 마지막 결과)로 도구 판정을 올린다. 그래서 앱을 띄우지 않는 재대조도 같은 판정이 된다.
+
+  | L2 판정 | L3 | 저장하는 판정 |
+  |---|---|---|
+  | `UNREACHABLE`, `UNKNOWN` | `REGION`(앱이 뜨는 동안만인 `startupOnly`도) | `REACHABLE` |
+  | `UNREACHABLE` | `FUNCTION`이고 `regionsChecked=false` | `UNKNOWN` |
+  | 그 밖 | `NONE`, `NOT_RECORDED`, 구간을 봤고 실행 안 된 `FUNCTION`, 결과 없음 | L2 그대로 |
+
+  - `method`는 L2의 것(`CALLGRAPH`/`RULE`) 그대로, `summary`는 L3 문장 뒤에 L2 판정과 L2 요약을 붙인다(500자). 근거 끝에 `kind=RUNTIME` 한 줄(3-5)을 더하고 근거 해시를 다시 만든다.
+  - 판정이 바뀌므로 사람 검토는 한 번 `VERDICT_CHANGED`로 되돌아간다. 같은 이미지를 다시 띄워 실행되지 않으면(`NONE`) L2 판정으로 돌아가고 역시 되돌아간다.
+  - PR 검사(`PR`)는 앱을 띄우지 않아 L2 판정 그대로다. 게이트는 PR 스캔 판정과 기준 스캔 판정을 비교하므로, 운영 이미지에서 L3로 올라간 Finding은 PR에서 "새로 닿게 된 것"이 되지 않는다.
+  - 이 규칙 전에 저장된 판정(도달 불가 + `REGION`)은 그 이미지의 다음 스캔(매일 재대조 포함)에서 올라간다. 그 전까지 화면은 "≠ 판정"으로 표시한다(SCR-02, SCR-03).
 
 **스캔의 L3** (API-02·API-03 `l3`)
 
