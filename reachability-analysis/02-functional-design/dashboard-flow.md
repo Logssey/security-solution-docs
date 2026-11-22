@@ -345,11 +345,12 @@ SCR-01-06 상태 × 심각도 표:
 | 방식 | 104 | `verdict.method` | 방식 태그. 분석 대상 아님은 "—" |
 | 검토 | 88 | `review.reviewState`, `review.disagreesWithTool` | 검토 배지. 사람 판정이 도구 판정과 다르면 배지 아래에 "≠ 불일치" 태그. 이어받은 검토가 되돌려졌으면(`review.resetReason`) "재검토 필요" 태그(FR-08) |
 | 배포 | 104 | `deployment` | 배포 배지 |
-| 실행 | 112 | `l3`(`reached`, `regionsChecked`, `startupOnly`), `verdict.status` | L3 배지(테두리만 있는 네모, 판정 배지와 모양을 다르게). 결과가 없으면 "—". L2가 도달 불가인데 L3가 실행 확인이면 배지 아래에 "≠ 판정" 태그. 열 제목 툴팁: "이미지를 실제로 띄워 시나리오를 보냈을 때 취약 코드가 실행됐는지. 판정을 바꾸지 않는 근거" |
+| 실행 | 112 | `l3`(`reached`, `regionsChecked`, `startupOnly`), `verdict.status` | L3 배지(테두리만 있는 네모, 판정 배지와 모양을 다르게). 결과가 없으면 "—". 판정이 도달 불가인데 L3가 실행 확인이거나 구간을 확인 못 한 함수 실행이면 배지 아래에 "≠ 판정" 태그(서버가 판정을 올리기 전에 저장된 판정에서만 보인다). 열 제목 툴팁: "이미지를 실제로 띄워 시나리오를 보냈을 때 취약 코드가 실행됐는지. 취약 구간이 실행됐으면 판정을 도달 가능으로 올려요" |
 | 근거 요약 | 244 | `verdict.summary`, `verdict.notAnalyzedReason`, `review.proposal`(`status`, `summary`) | 2줄까지, 넘치면 말줄임. 분석 대상 아님은 사유를 쓴다. 판정 제안(`review.proposal`)이 있으면 "제안(확정 대기)"와 제안 내용을 함께 쓴다(4-5) |
 
 - **가장 가까운 수정 버전**: `vulnerability.fixedVersions` 중 설치 버전보다 큰 값 가운데 가장 작은 값이다. 전체 목록은 SCR-03에서 보인다.
-- **기본 정렬**: 상태(도달 가능 → 미확인 → 도달 불가 → 분석 대상 아님) → 심각도(CRITICAL → UNKNOWN) → CVE 연도·번호 오름차순(번호는 숫자로 비교). API-04 `sort` 기본값(`-status,-severity,cve`)과 같은 순서다.
+- **기본 정렬**: 배포(실행 중 → 확인 못 함 → 실행 안 함) → 상태(도달 가능 → 미확인 → 도달 불가 → 분석 대상 아님) → 심각도(CRITICAL → UNKNOWN) → CVE 연도·번호 오름차순(번호는 숫자로 비교). API-04 `sort` 기본값(`-deployment,-status,-severity,cve`)과 같은 순서다. 운영에서 실행 중인 이미지의 취약점이 먼저 온다(FR-04).
+- **배포 묶음 줄**: 불러온 행에 배포 상태가 둘 이상 섞이면, 배포 상태가 바뀌는 행 앞에 표 너비 한 줄을 넣는다. 배포 배지와 설명(실행 중: "운영 클러스터에서 지금 돌고 있는 이미지", 확인 못 함: "레포 스캔이거나 클러스터 조회가 없어 실행 여부를 모르는 대상", 실행 안 함: "클러스터를 조회했는데 돌고 있지 않은 이미지")을 쓴다. 모두 같으면(스캔 하나, 배포 필터 하나) 넣지 않는다. 표 위 회색 안내: "운영에서 실행 중인 이미지의 Finding부터 보여 줘요(실행 중 → 확인 못 함 → 실행 안 함). 같은 배포 상태 안에서는 도달 가능 → 미확인 → 도달 불가 → 분석 대상 아님, 그다음 심각도·CVE 순이에요."
 - **새 Finding**: `firstSeenAt`이 직전 성공 스캔의 `finishedAt`보다 늦은 Finding이다. 직전 스캔은 API-02로 찾는다. PoC는 10/10 재스캔 23행이 10/7 스캔과 모두 같아 "새" 태그가 없다.
 
 ![SCR-02 Finding 목록 와이어프레임](../assets/dashboard/scr-02-finding-list.png)
@@ -368,7 +369,7 @@ SCR-02 Finding 목록 · Logssey UI 템플릿 시안
 | SCR-02-04 | CVE 검색 | 입력 | 요청 쿼리 `cveContains` | 입력이 멈추고 0.3초 뒤 검색한다. "CVE-2026-89407"과 "89407" 모두 찾는다 | `cveContains`는 부분 일치이고 대소문자를 가리지 않는다. API-04 `cve`는 CVE ID 완전 일치라 검색에는 쓰지 않는다 |
 | SCR-02-05 | 필터 초기화 | 텍스트 버튼 | - | 모든 필터를 지운다 | 걸린 필터가 없으면 비활성 |
 | SCR-02-06 | CVE로 묶기 | 토글 | `items[].vulnerability.id` | 켜면 같은 CVE의 행을 묶음 머리(SCR-02-09) 아래로 모은다 | 기본은 꺼짐. 묶어도 사본은 각각 별도 행이다(FR-07). 묶기는 불러온 행 안에서 한다 |
-| SCR-02-07 | 정렬 | 드롭다운 | 요청 쿼리 `sort` | 기본 정렬(`-status,-severity,cve`) / 심각도 먼저(`-severity,-status,cve`) / CVE 순(`cve`) / 패키지 순(`package,cve`) | CVE는 연도·번호를 숫자로 비교한다 |
+| SCR-02-07 | 정렬 | 드롭다운 | 요청 쿼리 `sort` | 기본 정렬(`-deployment,-status,-severity,cve`) / 심각도 먼저(`-severity,-status,cve`) / CVE 순(`cve`) / 패키지 순(`package,cve`) | CVE는 연도·번호를 숫자로 비교한다 |
 | SCR-02-08 | Finding 표 | 표 | API-04 `items[]`(열 정의 표의 필드) | 행 클릭 또는 행에서 Enter → SCR-03(`id`). 행에 마우스를 올리면 배경 `#F9FAFB` | 머리 행은 스크롤해도 남는다 |
 | SCR-02-09 | 묶음 머리 행 | 표 행(접기·펴기) | `vulnerability.id`, 사본 수, 사본별 `verdict.status` | 클릭하면 접고 편다 | 예: "CVE-2026-89407 · 사본 2개 · 도달 불가 1 · 분석 대상 아님 1" |
 | SCR-02-10 | 목록 끝·더 보기 | 글자, 버튼 | API-04 `nextCursor`·`hasNext`, `totalCount`(`include=total`) | [더 보기] → 같은 필터·정렬로 `cursor`를 넣어 다음 행을 표 아래에 붙인다 | 한 번에 `size` 50을 받는다(API 기본은 20, 최대 100). `hasNext`가 false면 버튼을 숨긴다. 왼쪽에 "23건 중 23건"(필터 결과 중 불러온 행 수) |
@@ -484,7 +485,7 @@ SCR-03 Finding 상세 · Logssey UI 템플릿 시안
 | SCR-03-02 | 제목 줄 | 제목, 칩, 아이콘 버튼 | `vulnerability.id`, `vulnerability.severity`, `vulnerability.severityNote`, `component.name`, `component.version`, `component.purl` | 복사 아이콘 → purl을 복사하고 알림(COM-06) | 심각도는 스캐너 값 그대로. 출처마다 값이 다르면 칩 옆 "i" 툴팁에 `vulnerability.severityNote`를 쓴다(예: CVE-2025-14813은 Trivy CRITICAL, CNA CVSS 벡터 7.5 HIGH). AI로 식별한 구성요소면 패키지 이름 옆에 "구성요소 추정" 태그를 달고, 툴팁에 출처와 신뢰도를 쓴다. 사람이 확인하기 전에는 이 Finding을 도달 불가로 확정하지 않는다(FR-02). 이미지 SBOM과 레포 SBOM의 좌표가 다르면 "좌표 차이" 태그를 달고 두 좌표를 툴팁에 쓴다(레포 SBOM 우선). API 추가 필요: 구성요소 추정 여부·출처·신뢰도, 좌표 차이 |
 | SCR-03-03 | 이전·다음·목록 | 버튼 3개 | SCR-02의 현재 필터·정렬 순서 | [◀ 이전]·[다음 ▶] → 옆 Finding. [목록으로] → SCR-02 | 주소로 바로 들어오면 이전·다음은 비활성 |
 | SCR-03-04 | 부제(취약점 정보) | 텍스트 + 펼침 | `vulnerability.affectedFeature`, `vulnerability.cwe`, `vulnerability.title`, `vulnerability.description`, `vulnerability.references` | [설명 보기] → 스캐너 설명 원문과 참고 링크를 펼친다 | 설명은 스캐너 원문(`vulnerability.description`, 영어)을 그대로 쓰고 "스캐너 설명"이라고 밝힌다 |
-| SCR-03-05 | 판정 요약 띠 | 요약 띠(칸 5개 + 결론) | `verdict.status`, `verdict.method`, `verdict.notAnalyzedReason`, `review.reviewState`, `review.proposal`, `deployment`, `l3`, `verdict.summary`, `verdict.analyzedAt`, `scanId` | 스캔 링크 → SCR-05(그 스캔 상세) | 판정 칸 제목 "판정(L2)", 배포 칸 제목 "배포(L1)", 실행 칸 제목 "실행(L3)"(L3 배지, 결과가 없으면 "—", L2 도달 불가 + L3 실행 확인이면 "≠ 판정" 태그). 세 층을 나란히 보이고 L3는 판정을 바꾸지 않는다. 도달 가능이면 띠 왼쪽에 4px 막대. 분석 대상 아님은 결론 자리에 사유(`verdict.notAnalyzedReason`)를 쓴다. 판정 제안(`review.proposal`)이 있으면 결론 아래에 "제안(확정 대기)"와 제안 내용을 쓴다(4-5) |
+| SCR-03-05 | 판정 요약 띠 | 요약 띠(칸 5개 + 결론) | `verdict.status`, `verdict.method`, `verdict.notAnalyzedReason`, `review.reviewState`, `review.proposal`, `deployment`, `l3`, `verdict.summary`, `verdict.analyzedAt`, `scanId` | 스캔 링크 → SCR-05(그 스캔 상세) | 판정 칸 제목 "판정(L2)", 배포 칸 제목 "배포(L1)", 실행 칸 제목 "실행(L3)"(L3 배지, 결과가 없으면 "—", "≠ 판정" 태그는 SCR-02와 같다. 판정 근거에 `kind=RUNTIME`(`l2Status`)이 있으면 "L3로 올림" 태그를 붙이고 결론 위에 "L3가 실제 실행을 확인해 판정을 올렸어요(코드 분석 L2 판정: 도달 불가)"를 쓴다). 세 층을 나란히 보인다. 도달 가능이면 띠 왼쪽에 4px 막대. 분석 대상 아님은 결론 자리에 사유(`verdict.notAnalyzedReason`)를 쓴다. 판정 제안(`review.proposal`)이 있으면 결론 아래에 "제안(확정 대기)"와 제안 내용을 쓴다(4-5) |
 | SCR-03-06 | 근거 ① 앱 코드 사실 | 표 | `verdict.evidence[]` 중 `kind=FACT`(`factId`, `value`, `summary`, `locations[]`(`file`, `line`), `informational`) | 파일:줄 클릭 → 저장소의 해당 줄([계획], 저장소 연결이 있을 때) | 판정에 쓴 사실을 먼저, 참고 사실(`informational`이 true)을 나중에 둔다. 참고 사실은 "참고" 태그. "판정에 씀" 칸은 `informational`의 반대다 |
 | SCR-03-07 | 근거 ② 확인 범위 | 목록 | `verdict.evidence[]`의 `checkedAbsent`, `checkedCount`, `summary` | - | 도달 불가의 근거는 "확인했지만 없던 것"이다. 확인한 개수(`checkedCount`)를 꼭 쓴다 |
 | SCR-03-08 | 근거 ③ 호출 경로 | 접힘 띠 + 단계 목록 | `verdict.callgraph`(`packageReached`, `vulnFunctionPresent`, `vulnFunctionReached`, `entryStage`, `weakOnly`), `verdict.evidence[]` 중 `kind=PATH`(`path`, `pathTarget`, `candidate`, `entryStage`, `weak`)와 `kind=NOTE`(`summary`) | [펼치기 ▾]·[접기 ▴]. 단계의 앱 코드 위치 클릭 → 저장소([계획]) | 띠 글자 "후보 경로, 실제와 다를 수 있음"은 항상 보인다. 가장 짧은 후보 경로 하나만 보인다. "판정과 달라 보이는 이유"는 `kind=NOTE` 근거다. API 추가 필요: 경로 단계별 위치(파일:줄, jar 이름)와 간선 단위 약한 경로 표시(지금은 경로 단위 `weak`) |
