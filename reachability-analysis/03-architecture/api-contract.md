@@ -78,17 +78,18 @@
 
 - 서명: 발급자의 공개 키(`https://token.actions.githubusercontent.com/.well-known/jwks`, RS256)
 - `iss = https://token.actions.githubusercontent.com`, 만료(`exp`), `aud`에 `logssey-reach` 포함
-- 클레임 `repository`(`소유자/이름`), `sub`, `event_name`, `ref`가 있어야 한다. `repository`는 200자, `sub`는 300자까지
+- 클레임 `repository`(`소유자/이름`), `sub`, `event_name`, `ref`가 있어야 한다(없으면 401). `job_workflow_ref`는 아래 권한 검사에서 본다(없으면 403). `repository`는 200자, `sub`는 300자까지
 
 **CI가 할 수 있는 일 (어긋나면 403 `FORBIDDEN`)**
 
 | 조건 | 설명 |
 |---|---|
+| Reach 워크플로 | 토큰 `job_workflow_ref`가 `<토큰 repository>/.github/workflows/reach.yml@<ref>`다(레포 이름은 대소문자 무시). 같은 레포의 다른 워크플로가 받은 토큰이나 이 클레임이 없는 토큰은 403이다 |
 | 감시 대상 레포 | 토큰 `repository`의 소유자가 설치 설정 `logssey.reach.ci.repository-owner`(예: `Logssey`)이고, 이름이 감시 대상 앱의 레포(FR-15, `logssey.reach.apps[*].repo`)다. 소유자 설정이 비어 있으면 모든 CI 토큰이 403이다 |
 | 본문·대상의 레포 | 본문 `repository`와 `target.repo.name`이 토큰 레포와 같다(소유자 없이 이름만 와도 된다, 대소문자 무시). 이미지 대상은 그 레포 앱의 이미지(`logssey.reach.apps[*].image`)여야 하고, `target.app`을 주면 그 레포의 앱이어야 한다 |
-| 이벤트 | `mode = PR`은 `event_name = pull_request`이고, `pullRequest.number`를 주면 토큰 `ref`가 `refs/pull/<번호>/merge`다. 그 밖의 mode(`IMAGE_BUILD`, `SCHEDULE`, `MANUAL`)는 토큰 `ref`가 `refs/heads/<기본 브랜치>`다. 기본 브랜치는 설치 설정 `logssey.reach.ci.default-branch`(기본 `main`) |
+| 이벤트 | `mode = PR`은 `event_name = pull_request`이고 `pullRequest.number`가 있어야 하며, 토큰 `ref`가 `refs/pull/<번호>/merge`다. 그 밖의 mode(`IMAGE_BUILD`, `SCHEDULE`, `MANUAL`)는 토큰 `ref`가 `refs/heads/<기본 브랜치>`이고 `event_name`이 `pull_request`로 시작하지 않는다(`pull_request_target`은 `ref`가 기본 브랜치라도 PR이 계기라 뺀다). 기본 브랜치는 설치 설정 `logssey.reach.ci.default-branch`(기본 `main`) |
 | 재검사 | CI 토큰은 `rescanOf`를 쓰지 못한다(403). 사람(API-01·12)과 대시보드의 하루 1번 재대조(6-1)만 쓴다 |
-| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰만. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404. 예외: 대시보드에서 요청한 스캔(API-01, `mode = MANUAL`)과 대시보드의 하루 1번 재대조(`mode = SCHEDULE`, 요청 주체 `SYSTEM`)는 서버가 띄운 실행의 토큰이 올린다. `event_name = workflow_dispatch`, `ref = refs/heads/<기본 브랜치>`이고 토큰 레포가 그 검사의 레포(레포 대상은 그 레포, 이미지 대상은 그 이미지 앱의 레포)여야 한다 |
+| 결과 조회·업로드 | 그 검사를 만든 레포의 토큰이 만들 때와 같은 이벤트 조건을 지킬 때만. PR 검사는 그 PR 번호의 `pull_request` 토큰만, 그 밖의 CI 검사(이미지 빌드)는 기본 브랜치 실행의 토큰만이다. 그래서 같은 레포의 PR 토큰이 기본 브랜치 이미지 검사의 결과를 보거나 올리지 못한다. 다른 레포나 대시보드 사용자가 만든 검사는 403, 없는 검사는 404. 예외: 대시보드에서 요청한 스캔(API-01, `mode = MANUAL`)과 대시보드의 하루 1번 재대조(`mode = SCHEDULE`, 요청 주체 `SYSTEM`)는 서버가 띄운 실행의 토큰이 올린다. `event_name = workflow_dispatch`, `ref = refs/heads/<기본 브랜치>`이고 토큰 레포가 그 검사의 레포(레포 대상은 그 레포, 이미지 대상은 그 이미지 앱의 레포)여야 한다 |
 | 경로 | CI 토큰으로 `/api/v1/reach/ci/**` 밖의 Reach API를 부르면 403 |
 
 - 순서는 본문 형식(400) → 권한(403) → 멱등 충돌(409)이다.
