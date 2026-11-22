@@ -161,8 +161,10 @@
 |---|---|
 | `severity` | `CRITICAL > HIGH > MEDIUM > LOW > UNKNOWN` |
 | `status` | `REACHABLE > UNKNOWN > UNREACHABLE > NOT_ANALYZED` |
+| `deployment` | `RUNNING > UNKNOWN > NOT_RUNNING`. 확인 못 함(`UNKNOWN`)은 실제로 돌고 있을 수 있어 실행 안 함보다 높다 |
 
-- Finding 기본 정렬(API-04)은 상태(`REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED`), 심각도(CRITICAL → UNKNOWN), CVE(연도·번호를 숫자로 비교) 순서다. CVE가 아닌 ID(GHSA 등)와 연도·번호가 9자리를 넘는 ID는 맨 뒤에 온다. 목록 화면(SCR-02)도 같은 순서를 쓴다.
+- Finding 기본 정렬(API-04)은 배포(`RUNNING` → `UNKNOWN` → `NOT_RUNNING`), 상태(`REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED`), 심각도(CRITICAL → UNKNOWN), CVE(연도·번호를 숫자로 비교) 순서다. 운영에서 실행 중인 이미지의 Finding이 먼저 오고, 같은 배포 상태 안에서는 판정 순이다(PRD FR-04, 시나리오 D). 레포 대상의 Finding은 지금 `UNKNOWN`이다(3-3). 스캔 하나(`scanId`·`target`)를 보면 대상이 하나라 배포가 모두 같아 상태부터 보는 것과 같다. CVE가 아닌 ID(GHSA 등)와 연도·번호가 9자리를 넘는 ID는 맨 뒤에 온다. 목록 화면(SCR-02)도 같은 순서를 쓴다.
+- 배포를 맨 앞에 넣은 것은 기본 정렬 변경이다(1-4). 지금 API-04를 부르는 곳은 함께 배포하는 대시보드 화면뿐이라 v1 안에서 바꿨다. 바꾸기 전에 받은 커서는 400 `INVALID_INPUT`이고, 화면은 처음부터 다시 받는다.
 
 **필터**
 
@@ -174,7 +176,7 @@
 - 모르는 파라미터나 열거값 밖의 값은 400 `INVALID_INPUT`다. `details.param`에 파라미터 이름을 준다. [계획] 지금 구현은 모르는 파라미터를 무시하고 열거값 밖의 값만 400으로 준다(`details`는 2-6처럼 아직 없다).
 - 예외: 스캔 ID 쿼리는 경로 변수와 맞춰 `scanId`로 쓴다(API-11의 `?scanId=` 표기). 비교 방식을 이름에 담은 쿼리도 있다: `firstSeenAfter`(이 시각 뒤), `cveContains`(부분 일치). 둘 다 API-04에서 쓴다.
 
-예: `GET /api/v1/reach/findings?status=REACHABLE,UNKNOWN&severity=CRITICAL,HIGH&sort=-status,-severity,cve`
+예: `GET /api/v1/reach/findings?status=REACHABLE,UNKNOWN&severity=CRITICAL,HIGH&sort=-deployment,-status,-severity,cve`
 
 ### 2-6. 오류 응답
 
@@ -965,7 +967,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `disagreesWithTool` | boolean | 아니요 | true면 사람 판정이 도구 판정과 다른 Finding만 준다(FR-08) |
 | `l3` | enum 목록 | 아니요 | L3 도달 수준(3-12 `reached`). 주면 `l3`가 없는 Finding은 빠진다. 예: `status=UNREACHABLE&l3=REGION`은 L2가 놓친 것 |
 | `firstSeenAfter` | date-time | 아니요 | `firstSeenAt`이 이 시각보다 뒤인 Finding만 준다. 직전 성공 스캔의 `finishedAt`을 넣으면 그 뒤에 새로 생긴 Finding이다(US-10) |
-| `sort` | string | 아니요 | 기본 `-status,-severity,cve`(2-5의 Finding 기본 정렬). 허용: `status`, `severity`, `cve`, `package`, `firstSeenAt`, `lastSeenAt` |
+| `sort` | string | 아니요 | 기본 `-deployment,-status,-severity,cve`(2-5의 Finding 기본 정렬, 실행 중 이미지 먼저). 허용: `deployment`, `status`, `severity`, `cve`, `package`, `firstSeenAt`, `lastSeenAt`. [계획] 지금 구현은 `sort`를 받지 않고 늘 기본 정렬로 준다 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
 목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`. `l3`는 `reached`·`regionsChecked`·`startupOnly`만 준다(없으면 null).

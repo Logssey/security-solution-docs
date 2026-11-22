@@ -142,7 +142,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 | **A. PR에 새 CVE가 들어올 때** | 의존성을 바꾼 PR → SBOM 생성·CVE 대조 → 새 Finding 판정 → PR 결과에 상태별 개수와 상세 링크(리포트 전용) → `REACHABLE`·`UNKNOWN`이면 보안 담당자가 검토 | US-04, 02, 03 |
 | **B. 운영 이미지 정기 점검** | 하루 1번 → 실행 중 digest 조회(L1) → 저장된 SBOM을 최신 DB로 재대조 → 새 Finding 판정 → 요약 갱신, 새 Finding 표시 | US-06, 10, 09 |
 | **C. 판정 근거 검토와 확정** | `UNREVIEWED` Finding을 거름 → 사실(파일·줄), 적용 규칙, 후보 경로 확인 → `CONFIRMED`·`PROVISIONAL`과 메모 기록 | US-02, 03, 11 |
-| **D. 업그레이드 우선순위 결정** | 기본 정렬(`REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED`, 같은 상태 안에서는 심각도 → CVE)과 `deployment`를 함께 봄 → 라이브러리별 최소 수정 버전과 시험 결과 확인 → 팀이 적용 결정. Reach는 PR을 만들지 않는다 | US-05, 01 |
+| **D. 업그레이드 우선순위 결정** | 기본 정렬(실행 중 이미지 먼저: `deployment` `RUNNING` → `UNKNOWN` → `NOT_RUNNING`, 같은 배포 상태 안에서는 `REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED` → 심각도 → CVE)으로 봄 → 라이브러리별 최소 수정 버전과 시험 결과 확인 → 팀이 적용 결정. Reach는 PR을 만들지 않는다 | US-05, 01 |
 | **E. 새 CVE 규칙 추가** | diff에서 취약 함수 결정 → 조사 파일과 생성 스크립트로 데이터 생성 → 필요하면 규칙 추가 → 대조군과 회귀 테스트 통과 후 반영 | US-08 |
 
 업계 공통 원칙(Sonatype): 도달 가능은 우선 처리, 도달 불가는 삭제가 아니라 보류, 판단 불가는 따로 조사한다.
