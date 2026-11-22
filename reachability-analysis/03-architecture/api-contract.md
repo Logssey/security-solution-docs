@@ -274,7 +274,7 @@ flowchart LR
 | `trigger` | enum | 예 | `MANUAL`(사람·API-01 직접) / `PR`(API-12, PR 검사) / `IMAGE_BUILD`(API-12, 이미지 빌드 단계, ECR push 전) / `SCHEDULE`(하루 1번 재대조) |
 | `rescanOf` | integer | 아니요 | 저장된 SBOM을 다시 쓴 경우 원래 스캔 ID |
 | `stages` | object 배열 | 예 | 단계별 진행. `name`(`SBOM` / `MATCH` / `L1` / `L2` / `REPORT`), `status`(`scanStatus` 값), `startedAt`, `finishedAt`, `durationSeconds`, `message` |
-| `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion` |
+| `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion`, `reachRef`, `sbomSource`. `reachRef`는 분석기·판정 데이터(`vuln-functions.json`, `rules.json`)·CI 스크립트를 받은 Logssey/dashboard-backend 커밋(40자, CI에서는 서비스 레포 변수 `REACH_REF`)이다. 로컬 실행에서 그 파일들을 고친 채 돌렸으면 끝에 `-dirty`가 붙는다. `rulesVersion`·`vulnFunctionsVersion`은 파일 형식 버전이라 데이터가 바뀌어도 그대로이고, 판정 데이터의 내용은 `reachRef`로 가린다. `sbomSource`는 재대조가 보관 SBOM을 썼을 때 `stored:scan-<id>`. 러너가 보내지 않은 값은 없다 |
 | `analysis` | object | 아니요 | L2 분석 규모. `appClasses`, `libraryJars`, `reachedMethods`, `jarSha256`(판정한 jar. 판정 대상을 결과에 남긴다) |
 | `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState`. 그 스캔이 낸 도구 판정을 센다. Finding의 마지막 스캔이 아니라 판정의 스캔으로 세서, 같은 Finding이 다음 스캔에 다시 나와도 이 스캔의 개수는 그대로다. 사람 판정(`MANUAL`)은 세지 않는다. 스캔 결과는 스캔이 낸 값으로 두고, 사람 판정은 요약(API-08)에만 반영된다. 값은 0까지 채운다. `byReviewState`는 지금의 검토 상태다(검토는 Finding마다 한 행뿐) |
 | `failure` | object | 아니요 | `FAILED`일 때만. `code`(E-코드), `stage`, `message` |
@@ -910,7 +910,8 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
   "tools": {
     "trivy": "0.75.0",
     "trivyDbUpdatedAt": "2026-10-10T14:44:00Z",
-    "reach": "v0"
+    "reach": "v0",
+    "reachRef": "4c912326c7c1f7fd9aa5e96dd993e9caca91a6bf"
   },
   "analysis": {
     "appClasses": 376,
