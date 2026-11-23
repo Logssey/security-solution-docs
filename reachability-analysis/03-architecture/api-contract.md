@@ -966,7 +966,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 기본 범위(`basis`)다. 이미지를 다시 빌드하면 digest마다 대상이 생기는데, 대상마다로 두면 옛 이미지의 Finding이 계속 쌓이기 때문에 앱·대상 종류마다 고른다. 옛 대상은 `target`으로 본다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). 목록 항목의 `verdict`·`review`는 지금 판정·검토다(API-05와 같음). 그래서 이미 스캔한 레포 커밋을 PR로 다시 스캔한 결과를 `scanId`로 보면, 기준 범위에도 있는 Finding은 기준 스캔의 판정으로 보인다(API-13 PR 규칙). 그 스캔이 낸 판정 그대로의 개수는 API-03 `counts`로 본다 |
+| `scanId` | integer | 아니요 | 이 스캔의 Finding. 없으면 기본 범위(`basis`)다. 이미지를 다시 빌드하면 digest마다 대상이 생기는데, 대상마다로 두면 옛 이미지의 Finding이 계속 쌓이기 때문에 앱·대상 종류마다 고른다. 옛 대상은 `target`으로 본다. 이 기준 범위에 PR 검사의 스캔은 넣지 않는다(ARD SR-09). PR 결과는 `scanId`로 지정해서 본다. 없는 스캔이면 404, `SUCCEEDED`가 아니면 409 `SCAN_NOT_READY`(2-6). `scanId`로 고르면 목록 항목의 `verdict`는 **그 스캔의 도구 판정**이다(사람 판정 `MANUAL`은 넣지 않는다). PR 검사 결과(API-12 `findingsUrl`)와 지난 스캔이 오늘 판정이 아니라 그때 판정을 보이고, 게이트·API-03 `counts`와 같은 판정으로 센다. `review`는 지금 검토다. `scanId`가 없거나 `target`이면 `verdict`는 지금 판정(사람 판정 포함)이다. 상세(API-05)는 늘 지금 판정이라, 지난 스캔 목록에서 연 상세는 목록과 다를 수 있다 |
 | `target` | integer | 아니요 | Target ID. 기준 범위를 이 대상의 PR이 아닌 최신 `SUCCEEDED` 스캔으로 바꾼다(그 `app`의 최신 대상이 아니어도 된다). 없는 대상이면 404, 성공한 스캔이 없는 대상이면 빈 목록이다. `scanId`와 함께 주면 그 스캔이 이 대상의 것이어야 한다(아니면 400 `INVALID_INPUT`). 커서는 `scanId`·`target`과도 묶인다(2-4) |
 | `basis` | enum | 아니요 | `scanId`·`target`이 없을 때의 기본 범위 기준. `RUNNING`(기본): 앱마다 운영에서 실행 중인 이미지(L1 신선한 조회, API-07과 같은 48시간)의 PR이 아닌 최신 `SUCCEEDED` 스캔을 쓴다. 같은 앱이 두 digest로 돌면 둘 다다. 실행 중 이미지의 스캔이 없는 앱의 이미지와 레포 대상은 `LATEST`와 같다. L1이 꺼졌거나 신선한 조회가 없으면 전체가 `LATEST`와 같다. `LATEST`: `app`·대상 종류(`REPO`/`IMAGE`)마다 PR이 아닌 최신 `SUCCEEDED` 스캔 하나. 다른 값이면 400 `INVALID_INPUT`. `scanId`·`target`이 있으면 쓰지 않는다. 커서는 `basis`와도 묶인다(2-4). PRD 목표 3(실제 배포물 기준) |
 | `status` | enum 목록 | 아니요 | 판정 상태 |
@@ -1908,6 +1908,8 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - 400 `INVALID_INPUT`: 같은 purl × 취약점 ID가 두 번 나옴, 근거 없는 `UNREACHABLE`(ARD 6-4), 방식이 `MANUAL`(사람 판정), `NOT_ANALYZED`인데 방식이 있거나 사유가 없음(그 반대도), `FACT`에 `factId`가 없음, `RULE`에 `ruleId`가 없음, 배열(`fixedVersions`·`cwe`·`references`·`vulnFunctionIds`)에 `null`이나 빈 문자열이 있음. 검사는 저장 전에 모두 해서 400이면 아무것도 저장하지 않는다.
 - PR 검사의 결과가 이미 스캔한 레포 커밋(같은 대상)의 Finding을 만나면, 그 스캔의 도구 판정만 남긴다. Finding의 스캐너 값·`scanId`·`lastSeenAt`, 지금 판정(`verdict`), 사람 검토는 기준 스캔의 것을 그대로 둔다(ARD SR-09). PR 결과 개수와 게이트는 그 스캔의 판정으로 센다.
 - 사람 판정이 남아 있고 새 도구 판정이 다시 `NOT_ANALYZED`면 사람 판정(`MANUAL`)이 계속 `verdict`다(API-06 예외). 이어받은 Finding도 같다.
+- 되돌릴지 비교하는 기준은 **사람이 검토할 때 화면에 있던 도구 판정**이다(API-06이 저장할 때 정한다). 지금 판정이 도구 판정이면 그것, 사람 판정(`MANUAL`)이면 PR이 아닌 스캔의 가장 늦게 저장한 도구 판정이다. PR 검사가 같은 Finding에 남긴 판정은 기준이 되지 않는다. 판정 시각(`analyzedAt`)은 러너가 보낸 값이라 순서에 쓰지 않는다.
+- 업로드는 Finding마다 검토를 잠그고 읽는다. 사람이 같은 Finding을 저장하는 중이면 끝날 때까지 기다렸다가 그 판정을 보고 되돌릴지 정한다. 업로드가 먼저 잡았으면 사람의 저장은 `version`이 달라 409 `CONFLICT`이고 다시 읽는다(API-06).
 - 저장 중 서버 오류가 나면 저장한 것을 되돌리고 스캔만 `FAILED`(`failure.code`는 `INTERNAL_ERROR`, `stage`는 `REPORT`)로 남긴다. 이 검사에 다시 올리면 409다.
 
 **L3 결과 (`l3`)**
