@@ -151,11 +151,11 @@ CVE 규칙은 "도달 가능 조건 → 도달 불가 조건 → 미확인 조�
 | 1 | 도달 가능 조건 | `REACHABLE` | 요청 본문 타입에 실수형 필드(89407), 강한 경로로 취약 메서드 도달(14813) |
 | 2 | 도달 불가 조건 | `UNREACHABLE` | FORM 인증기 사용 없음(68525), 취약 메서드 미도달(13506) |
 | 3 | 미확인 조건 | `UNKNOWN` | `F-dto.floating.tokens`(89407), `CertStore.getInstance`만 있음(0636), 약한 경로로만 도달, 취약 메서드가 jar에 없음 |
-| 4 | 기본값 | 규칙마다 정한 값(`rules.json`의 `otherwise`) | 지금 22개 규칙 모두 `UNREACHABLE` |
+| 4 | 기본값 | 규칙마다 정한 값(`rules.json`의 `otherwise`) | 지금 40개 규칙 중 39개가 `UNREACHABLE`, 77756만 `UNKNOWN` |
 
 - 먼저 성립한 단계의 결과를 쓰고 뒤 단계는 보지 않는다(추정: "순서로 평가한다"의 뜻. 원본(`verdict.py`) 확인 필요). 그래서 도달 가능 조건이 다른 조건보다 앞선다.
-- **설정을 보지 못하면 도달 불가로 두지 않는다.** 규칙이 레포 사실(`F-repo.*`, 7절)을 조건에 쓰는데 설정 파일을 하나도 읽지 못했으면(소스 레포도, 앱 jar 안 설정 파일도 없음) ②·④에서 나온 `UNREACHABLE`을 `UNKNOWN`으로 바꾼다. 없는 설정이 아니라 못 본 설정이기 때문이다. 근거에 그 이유(NOTE)를 남기고, 규칙 근거의 맞은 조건은 `UNKNOWN`이다. 지금 해당하는 규칙: 65182·65905·68525·8763·65637·86350·101296·101356
-- **규칙이 없는 CVE의 기본 규칙**: 강한 경로로 취약 함수 도달 → `REACHABLE`, 취약 함수가 jar에 없거나(`sinks_missing`) **약한 경로로만 닿으면**(`sink_weak`) → `UNKNOWN`, 그 밖 → `UNREACHABLE`. 약한 경로(Object 메서드 호출, JDK 콜백)는 닿는다고도 안 닿는다고도 할 수 없어서다. 지금 판정 데이터의 22개는 모두 자기 규칙이 있어 이 기본 규칙을 쓰지 않는다
+- **설정을 보지 못하면 도달 불가로 두지 않는다.** 규칙이 레포 사실(`F-repo.*`, 7절)을 조건에 쓰는데 설정 파일을 하나도 읽지 못했으면(소스 레포도, 앱 jar 안 설정 파일도 없음) ②·④에서 나온 `UNREACHABLE`을 `UNKNOWN`으로 바꾼다. 없는 설정이 아니라 못 본 설정이기 때문이다. 근거에 그 이유(NOTE)를 남기고, 규칙 근거의 맞은 조건은 `UNKNOWN`이다. 지금 해당하는 규칙: 65182·65905·68525·8763·65637·86350·101296·101356·65183·65927·66422·68569·68763·73581·74048·75973·77762·78437·88041·93446
+- **규칙이 없는 CVE의 기본 규칙**: 강한 경로로 취약 함수 도달 → `REACHABLE`, 취약 함수가 jar에 없거나(`sinks_missing`) **약한 경로로만 닿으면**(`sink_weak`) → `UNKNOWN`, 그 밖 → `UNREACHABLE`. 약한 경로(Object 메서드 호출, JDK 콜백)는 닿는다고도 안 닿는다고도 할 수 없어서다. 지금 판정 데이터의 40개는 모두 자기 규칙이 있어 이 기본 규칙을 쓰지 않는다
 - Jackson 타입 규칙(89407·68497·91776·91777·19032·83557)은 도달 불가 조건(앱에 그 타입·설정이 없음)이 미확인 조건(`sink`)보다 앞선다. JSON을 받는 앱이면 호출 그래프는 거의 늘 Jackson 내부의 취약 함수에 닿기 때문에(샘플 앱 `app-like`에서도 강한 경로가 있다) 경로만으로는 가를 수 없고, 역직렬화되는 타입으로 가른다. 타입은 요청 본문·리스너·클라이언트 응답 같은 출발점(6-1)과, 앱 코드 어디에든 나오는 클래스 리터럴·TypeReference(tokens)로 넓게 모은다. 그래서 `readValue(json, clazz)`처럼 타입을 변수로 받아도, 그 변수에 넘기는 `Foo.class`가 앱 코드에 있으면 tokens에 잡혀 미확인이 된다
 - `RULE` 방식에서는 규칙의 사실 조건이 판정을 정하고, 호출 그래프 결과는 보고서에 참고로 보인다(기록 11-2절). 규칙이 그래프 결과를 조건에 함께 쓰는지는 원본(`rules.json`) 확인 필요.
 
@@ -305,7 +305,8 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 - 사실은 `reach.jar`가 앱 클래스 바이트코드에서 뽑는다(`Facts.java`, GR-07).
 - 원자료 기준 사실은 **40개**다(처음 38개, 89407 규칙 개선 후 40개). 아래는 원자료에 나온 것만 적었다. 나머지와, CVE 4개를 더한 뒤(기록 14-4·15-1절)의 목록은 원본(`rules.json`) 확인 필요.
 - 11/19에 CVE 2개(65637, 5598)를 더하면서 사실 5개와 레포 사실 3개를 더했다(사실 51개, 레포 사실 7개).
-- 11/23에 Tomcat CVE 6개를 더하면서 사실 8개와 레포 사실 1개를 더했다. 지금 `rules.json`은 사실 59개, 레포 사실 8개다.
+- 11/23에 Tomcat CVE 6개를 더하면서 사실 8개와 레포 사실 1개를 더했다(사실 59개, 레포 사실 8개).
+- 11/23에 Tomcat CVE 18개를 더 더하면서 사실 16개와 레포 사실 6개를 더했다. 지금 `rules.json`은 사실 75개, 레포 사실 14개다.
 - 이름이 원자료에 없는 사실은 "(이름 미정)"으로 두고 뜻만 적는다. 이름을 새로 짓지 않는다.
 
 ### 7-1. 이름이 확인된 사실
@@ -320,18 +321,33 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | `F-dto.floating.tokens` | tokens 범위(6-1)의 타입에 실수형 필드가 있다 | tokens 출발점에서 필드 타입을 따라간다. 출발점 목록은 `dto_type_tokens`에 남는다 | RULE-CVE-2026-89407 미확인 조건 |
 | `F-dto.floating.any` | 앱 클래스 전체에 실수형 필드가 있다 | 앱 클래스 전체 | RULE-CVE-2026-89407 `info`(참고). 12절 개선 전에는 미확인 조건이었다 |
 | `F-jackson.polymorphicSerializer` | `@class`로 타입을 지정할 수 있는 직렬화기(`GenericJackson(2)JsonRedisSerializer`)를 쓴다 | 앱 코드에서 사용 여부 | RULE-CVE-2026-89407 미확인 조건. default typing이 이 사실에 들어가는지, 다른 규칙에서도 쓰는지는 원본(`rules.json`) 확인 필요 |
-| `F-jar.springBoot4` | bootJar에 Spring Boot 4 jar(`spring-boot-4.x.y.jar`)가 있다 | 라이브러리 jar 파일 이름(정규식 `^spring-boot-4\.[0-9]+\.[0-9]+`) | RULE-CVE-2026-65182·65905·68525·65637·76183·86350·101296·101356·103119 미확인 조건(`!F-jar.springBoot4`, 8-1) |
+| `F-jar.springBoot4` | bootJar에 Spring Boot 4 jar(`spring-boot-4.x.y.jar`)가 있다 | 라이브러리 jar 파일 이름(정규식 `^spring-boot-4\.[0-9]+\.[0-9]+`) | RULE-CVE-2026-65182·65905·68525·65637·76183·86350·101296·101356·103119·65183·65927·66422·68569·68763·73180·73581·74048·75973·77762·77791·78383·78437·79677·87022·88041·93446 미확인 조건(`!F-jar.springBoot4`, 8-1) |
 | `F-jsonIdentityInfo.any` | 앱 코드에 `@JsonIdentityInfo`가 있다(mix-in 클래스에 붙은 것 포함) | 앱 코드의 어노테이션. 범위가 앱 전체인지는 이름으로 본 추정이다. 원본(`Facts.java`) 확인 필요 | RULE-CVE-2026-91777 미확인 조건 |
-| `F-repo.spring.http2Enabled` | 레포의 설정이 내장 서버의 HTTP/2를 켠다(`server.http2.enabled=true`, 환경 변수 `SERVER_HTTP2_ENABLED=true`) | 레포와 앱 jar 안 설정 파일(아래 "레포 사실을 읽는 곳")의 `*.properties`·`*.yml`·`*.yaml`·`*.env`·`Dockerfile*`을 줄 단위 정규식으로 본다. 배포할 때만 넣는 환경 변수는 레포에 없으면 보이지 않는다 | RULE-CVE-2026-65637 도달 가능 조건(`F-repo.spring.serverSsl`과 함께), 미확인 조건. RULE-CVE-2026-86350·101356 미확인 조건 |
-| `F-repo.spring.http2Yaml` | `application*.yml`에 `http2:` 블록이 있다. 값이 다음 줄에 있어 켰는지는 알 수 없다 | 같은 방식 | RULE-CVE-2026-65637·86350·101356 미확인 조건 |
-| `F-repo.spring.serverSsl` | 내장 서버가 TLS를 직접 받는다(`server.ssl.key-store`·`certificate`·`bundle`, `server.ssl.enabled=true`) | 같은 방식 | RULE-CVE-2026-65637 도달 가능 조건 |
-| `F-tomcat.http2ProtocolNew`, `F-tomcat.addUpgradeProtocol`, `F-spring.http2SetEnabled` | 앱 코드가 HTTP/2를 켠다 | 앱 코드의 `new Http2Protocol`, `Connector.addUpgradeProtocol` 호출, `Http2.setEnabled`·`setHttp2` 호출 | RULE-CVE-2026-65637·86350·101356 미확인 조건 |
+| `F-repo.spring.http2Enabled` | 레포의 설정이 내장 서버의 HTTP/2를 켠다(`server.http2.enabled=true`, 환경 변수 `SERVER_HTTP2_ENABLED=true`) | 레포와 앱 jar 안 설정 파일(아래 "레포 사실을 읽는 곳")의 `*.properties`·`*.yml`·`*.yaml`·`*.env`·`Dockerfile*`을 줄 단위 정규식으로 본다. 배포할 때만 넣는 환경 변수는 레포에 없으면 보이지 않는다 | RULE-CVE-2026-65637 도달 가능 조건(`F-repo.spring.serverSsl`과 함께), 미확인 조건. RULE-CVE-2026-86350·101356·68763·77762·78437·88041 미확인 조건 |
+| `F-repo.spring.http2Yaml` | `application*.yml`에 `http2:` 블록이 있다. 값이 다음 줄에 있어 켰는지는 알 수 없다 | 같은 방식 | RULE-CVE-2026-65637·86350·101356·68763·77762·78437·88041 미확인 조건 |
+| `F-repo.spring.serverSsl` | 내장 서버가 TLS를 직접 받는다(`server.ssl.key-store`·`certificate`·`bundle`, `server.ssl.enabled=true`) | 같은 방식 | RULE-CVE-2026-65637 도달 가능 조건. RULE-CVE-2026-93446 미확인 조건 |
+| `F-tomcat.http2ProtocolNew`, `F-tomcat.addUpgradeProtocol`, `F-spring.http2SetEnabled` | 앱 코드가 HTTP/2를 켠다 | 앱 코드의 `new Http2Protocol`, `Connector.addUpgradeProtocol` 호출, `Http2.setEnabled`·`setHttp2` 호출 | RULE-CVE-2026-65637·86350·101356·68763·77762·78437·88041 미확인 조건 |
 | `F-bc.frodoString`, `F-bc.frodoJceSpec` | 앱 코드가 FrodoKEM을 JCE 이름으로 고른다 | 앱 코드의 문자열 상수(정규식 `(?i)^frodo`), `FrodoParameterSpec` 타입 참조 | RULE-CVE-2026-5598 미확인 조건 |
-| `F-websocket.serverEndpointAnn`, `F-websocket.endpointExporterNew`, `F-websocket.addEndpoint` | 앱이 Tomcat WebSocket 컨테이너에 JSR-356 엔드포인트를 등록한다 | 앱 코드의 `@ServerEndpoint`(`jakarta.websocket.server`), `new ServerEndpointExporter`(Spring), `ServerContainer.addEndpoint` 호출 | RULE-CVE-2026-76183 미확인 조건 |
+| `F-websocket.serverEndpointAnn`, `F-websocket.endpointExporterNew`, `F-websocket.addEndpoint` | 앱이 Tomcat WebSocket 컨테이너에 JSR-356 엔드포인트를 등록한다 | 앱 코드의 `@ServerEndpoint`(`jakarta.websocket.server`), `new ServerEndpointExporter`(Spring), `ServerContainer.addEndpoint` 호출 | RULE-CVE-2026-76183·73180·77791·87022 미확인 조건 |
 | `F-jar.tomcatCoyoteFfm` | bootJar에 `tomcat-coyote-ffm` jar(OpenSSL FFM 구현)가 있다 | 라이브러리 jar 파일 이름(정규식 `^tomcat-coyote-ffm-`) | RULE-CVE-2026-86248 미확인 조건 |
 | `F-tomcat.jndiRealmNew`, `F-tomcat.jndiRealmSubclass` | 앱 코드가 Tomcat `JNDIRealm`을 쓴다 | 앱 코드의 `new JNDIRealm`, `JNDIRealm` 하위 클래스 | RULE-CVE-2026-101296 미확인 조건 |
 | `F-repo.tomcat.jndiRealm` | 레포의 설정이 Tomcat `JNDIRealm`을 쓴다 | 레포와 앱 jar 안 설정 파일의 `server.xml`·`context.xml`·`*.xml`에서 `org.apache.catalina.realm.JNDIRealm`을 찾는다 | RULE-CVE-2026-101296 미확인 조건 |
-| `F-tomcat.ajpProtocolNew`, `F-tomcat.ajpConnectorString` | 앱 코드가 AJP 커넥터를 만든다 | 앱 코드의 `new AjpNioProtocol`·`new AjpNio2Protocol`, 문자열 상수(정규식 `^(AJP/1\.3\|org\.apache\.coyote\.ajp\.)`) | RULE-CVE-2026-103119 미확인 조건 |
+| `F-tomcat.ajpProtocolNew`, `F-tomcat.ajpConnectorString` | 앱 코드가 AJP 커넥터를 만든다 | 앱 코드의 `new AjpNioProtocol`·`new AjpNio2Protocol`, 문자열 상수(정규식 `^(AJP/1\.3\|org\.apache\.coyote\.ajp\.)`) | RULE-CVE-2026-103119·78383 미확인 조건 |
+| `F-tomcat.udsPathString` | 앱 코드가 커넥터를 Unix 도메인 소켓으로 연다 | 앱 코드의 문자열 상수(정규식 `^unixDomainSocketPath(Permissions)?$`). 보통 `Connector.setProperty`에 이름으로 준다 | RULE-CVE-2026-65183 미확인 조건 |
+| `F-repo.tomcat.udsPath` | 레포의 설정이 커넥터를 Unix 도메인 소켓으로 연다 | 레포와 앱 jar 안 설정 파일의 `server.xml`·`*.xml`에서 `unixDomainSocketPath`를 찾는다 | RULE-CVE-2026-65183 미확인 조건 |
+| `F-tomcat.rewriteValveNew`, `F-tomcat.rewriteValveSubclass` | 앱 코드가 Tomcat `RewriteValve`를 쓴다 | 앱 코드의 `new RewriteValve`, `RewriteValve` 하위 클래스 | RULE-CVE-2026-65927 미확인 조건 |
+| `F-repo.tomcat.rewriteValve` | 레포의 설정이 Tomcat `RewriteValve`를 쓴다 | 레포와 앱 jar 안 설정 파일의 `server.xml`·`context.xml`·`*.xml`에서 `org.apache.catalina.valves.rewrite.RewriteValve`를 찾는다 | RULE-CVE-2026-65927 미확인 조건 |
+| `F-tomcat.dataSourceRealmNew`, `F-tomcat.dataSourceRealmSubclass` | 앱 코드가 Tomcat `DataSourceRealm`을 쓴다 | 앱 코드의 `new DataSourceRealm`, `DataSourceRealm` 하위 클래스 | RULE-CVE-2026-68569 미확인 조건 |
+| `F-repo.tomcat.dataSourceRealm` | 레포의 설정이 Tomcat `DataSourceRealm`을 쓴다 | 레포와 앱 jar 안 설정 파일의 `server.xml`·`context.xml`·`*.xml`에서 `org.apache.catalina.realm.DataSourceRealm`을 찾는다 | RULE-CVE-2026-68569 미확인 조건 |
+| `F-tomcat.crlCall` | 앱 코드가 인증서 폐기 목록(CRL)을 설정한다 | 앱 코드의 `SSLHostConfig.setCertificateRevocationListFile`·`setCertificateRevocationListPath` 호출 | RULE-CVE-2026-73581 미확인 조건 |
+| `F-repo.tomcat.crl` | 레포의 설정이 CRL을 설정한다 | 레포와 앱 jar 안 설정 파일의 `server.xml`·`*.xml`에서 정규식 `certificateRevocationList(File\|Path)`를 찾는다 | RULE-CVE-2026-73581 미확인 조건 |
+| `F-tomcat.opensslLifecycleListenerNew`, `F-tomcat.opensslListenerFips` | 앱 코드가 Tomcat `OpenSSLLifecycleListener`를 쓴다 | 앱 코드의 `new OpenSSLLifecycleListener`, `OpenSSLLifecycleListener.setFIPSMode` 호출 | RULE-CVE-2026-74048 미확인 조건 |
+| `F-repo.tomcat.opensslListener` | 레포의 설정이 Tomcat `OpenSSLLifecycleListener`를 쓴다 | 레포와 앱 jar 안 설정 파일의 `server.xml`·`*.xml`에서 `org.apache.catalina.core.OpenSSLLifecycleListener`를 찾는다 | RULE-CVE-2026-74048 미확인 조건 |
+| `F-tomcat.simpleAuthConfigProviderNew`, `F-tomcat.simpleAuthConfigProviderSubclass` | 앱 코드가 JASPIC(Jakarta Authentication)의 Tomcat `SimpleAuthConfigProvider`를 쓴다 | 앱 코드의 `new SimpleAuthConfigProvider`, `SimpleAuthConfigProvider` 하위 클래스 | RULE-CVE-2026-75973 미확인 조건 |
+| `F-repo.tomcat.simpleAuthConfigProvider` | 레포의 설정이 `SimpleAuthConfigProvider`를 쓴다 | 레포와 앱 jar 안 설정 파일의 `jaspic-providers.xml`·`*.xml`에서 `org.apache.catalina.authenticator.jaspic.SimpleAuthConfigProvider`를 찾는다 | RULE-CVE-2026-75973 미확인 조건 |
+| `F-websocket.springEnableAnn`, `F-websocket.springConfigurer` | 앱이 Spring WebSocket 서버를 설정한다 | 앱 코드의 `@EnableWebSocket`·`@EnableWebSocketMessageBroker`, `WebSocketConfigurer`·`WebSocketMessageBrokerConfigurer`·`WebSocketConfigurationSupport`·`WebSocketMessageBrokerConfigurationSupport`를 구현·상속한 클래스 | RULE-CVE-2026-73180·77791·87022 미확인 조건 |
+| `F-websocket.asyncRemote`, `F-websocket.asyncSendTimeout` | 앱이 WebSocket 비동기 전송과 전송 시간 제한을 쓴다 | 앱 코드의 `Session.getAsyncRemote` 호출, `WebSocketContainer`·`RemoteEndpoint.Async`·`ServletServerContainerFactoryBean`의 `setAsyncSendTimeout`·`setSendTimeout` 호출 | RULE-CVE-2026-79677 미확인 조건(둘이 함께 있을 때) |
+| `F-spring.setSsl`, `F-tomcat.sslHostConfigNew` | 앱 코드가 내장 서버의 TLS를 켠다 | 앱 코드의 `ConfigurableWebServerFactory.setSsl` 호출, `new SSLHostConfig` | RULE-CVE-2026-93446 미확인 조건 |
 
 "실수형"에 드는 타입 목록은 원본(`Facts.java`) 확인 필요. 원자료에 나온 것은 `double`, `Double`, `BigDecimal`이다. 공지는 89407의 대상 타입으로 `BigDecimal`, `BigInteger`, `Double`, `Float`를 적는다.
 
@@ -341,7 +357,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 
 | ID | 뜻 | 수집 방법(원자료에 나온 모양) | 쓰는 규칙 |
 |---|---|---|---|
-| (이름 미정) | 컨테이너 보안 제약을 설정한다 | `SecurityConstraint`, `LoginConfig`, `@ServletSecurity`, `addConstraint` 등. 이 목록은 정답지(사람 판정)의 근거다. 사실이 잡는 모양은 원본(`rules.json`) 확인 필요 | RULE-CVE-2026-65182 |
+| (이름 미정) | 컨테이너 보안 제약을 설정한다 | `SecurityConstraint`, `LoginConfig`, `@ServletSecurity`, `addConstraint` 등. 이 목록은 정답지(사람 판정)의 근거다. 사실이 잡는 모양은 원본(`rules.json`) 확인 필요 | RULE-CVE-2026-65182·66422 |
 | (이름 미정) | Tomcat DIGEST 인증기를 쓴다 | `new DigestAuthenticator`(실험 A) | RULE-CVE-2026-65905 |
 | (이름 미정) | Tomcat FORM 인증기와 메서드별 제약을 쓴다 | `new FormAuthenticator` + `addMethod`(실험 A) | RULE-CVE-2026-68525 |
 | (이름 미정) | GOST CTR 모드를 쓴다 | `new G3413CTRBlockCipher`(실험 A), JCE 이름 `"GOST3412-2015/CTR"`(실험 B). 사실로 잡는지 그래프 모델로 잡는지는 원본(`rules.json`, `reach.jar`) 확인 필요 | RULE-CVE-2025-14813 |
@@ -380,13 +396,15 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 
 - 배포 이미지(`a6ffffef…`) 스캔 23행 중 Java CVE 14개의 규칙이다. 판정 대상은 `service-backend` 커밋 `6583020`의 bootJar다. 이 커밋은 배포 이미지의 revision `bb4639b`와 소스 트리가 같다(10절).
 - 조건 칸은 원자료에 나온 것만 적었다. 원자료가 규칙으로 설명한 조건은 그대로 옮겼다. 정답지(사람 판정)의 근거나 추론으로 채운 조건에는 "정확한 조건식은 원본(`rules.json`) 확인 필요"를 붙였다. 원자료에 없는 조건은 "원본(`rules.json`) 확인 필요"로만 두었다.
-- 기본값(4절)은 22개 규칙 모두 `UNREACHABLE`이다(`rules.json`의 `otherwise`). 표에는 89407에만 적었다.
+- 기본값(4절)은 40개 규칙 중 39개가 `UNREACHABLE`이고 77756만 `UNKNOWN`이다(`rules.json`의 `otherwise`). 표에는 89407과 77756에만 적었다.
 - "공통"은 호출 그래프 기본 조건(약한 경로로만 닿음, 취약 메서드가 jar에 없음 → `UNKNOWN`, 4절)이다.
 - 수정 버전은 배포 digest 재스캔(Trivy, 10/10)의 값이다. 우리 앱의 업그레이드 대상은 Tomcat 11.0.25, bcprov 1.85, Jackson 3.1.7 이상이다(기록 3절). 적용 여부는 팀이 정한다.
 - "verify N절"은 노트북 확인 결과 `verify-report.txt`의 절 번호다.
 - 11/19에 판정 데이터가 없던 2개(CVE-2026-65637, CVE-2026-5598)의 규칙을 더했다. 이 둘의 취약 함수는 판정 데이터 도구(12절)의 초안을 jar와 대조해 넣었고, 사람 판정(정답지)은 아직 없다.
 - 11/23에 Tomcat CVE 6개(76183, 86248, 86350, 101296, 101356, 103119)의 규칙을 더했다. 판정 데이터 도구(12절)가 검토 전 GitHub 권고문, 공식 CVE 기록의 영향 버전, Tomcat 보안 페이지의 수정 커밋으로 자료를 모으고, AI 초안을 사람(jinseob123)이 검토해 넣었다(검토 기록 `reach-analyzer/research/vulndata/`). 사람 판정은 이 검토 기록뿐이고 정답지는 아직 없다.
 - 11/23에 Re:Used api 운영 jar(Spring Boot 4.1.1, Tomcat 11.0.24)와 `service-backend` 소스로 분석기와 판정을 돌렸다. 6개 모두 `UNREACHABLE`이고, 호출 그래프는 6개의 취약 함수 어디에도 닿지 않았다.
+- 11/23에 Tomcat CVE 18개(65183, 65927, 66422, 68569, 68763, 73180, 73581, 74048, 75973, 77756, 77762, 77791, 78383, 78437, 79677, 87022, 88041, 93446)의 규칙을 더 더했다. 판정 데이터·규칙은 40개가 됐다. 자료를 모으고 검토한 방법은 앞 6개와 같다(검토자 jinseob123). 사람 판정은 이 검토 기록뿐이고 정답지는 아직 없다.
+- 같은 날 같은 운영 jar와 소스로 18개를 돌렸다. 17개가 `UNREACHABLE`, 77756이 `UNKNOWN`이고, 호출 그래프는 18개 CVE의 취약 함수 어디에도 닿지 않았다.
 
 ### 8-0. 요약
 
@@ -414,16 +432,37 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | RULE-CVE-2026-101296 | tomcat-embed-core 11.0.24 | CRITICAL | `RULE` | `UNREACHABLE` | 아직 없음 |
 | RULE-CVE-2026-101356 | tomcat-embed-core 11.0.24 | CRITICAL | `RULE` | `UNREACHABLE` | 아직 없음 |
 | RULE-CVE-2026-103119 | tomcat-embed-core 11.0.24 | CRITICAL | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-65183 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-65927 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-66422 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-68569 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-68763 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-73180 | tomcat-embed-websocket 11.0.24 | MEDIUM | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-73581 | tomcat-embed-core 11.0.24 | MEDIUM | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-74048 | tomcat-embed-core 11.0.24 | MEDIUM | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-75973 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-77756 | tomcat-embed-core 11.0.24 | LOW | `RULE` | `UNKNOWN` | 아직 없음 |
+| RULE-CVE-2026-77762 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-77791 | tomcat-embed-websocket 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-78383 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-78437 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-79677 | tomcat-embed-websocket 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-87022 | tomcat-embed-websocket 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-88041 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
+| RULE-CVE-2026-93446 | tomcat-embed-core 11.0.24 | HIGH | `RULE` | `UNREACHABLE` | 아직 없음 |
 
-고유 CVE 기준 CRITICAL 12 · HIGH 7 · MEDIUM 3(11/19에 더한 2개, 11/23에 더한 6개 포함). 처음 10개는 정답지와 10/10 일치, 추가 4개 중 13506만 사람 판정이 잠정이다. jackson-core·databind는 `tools.jackson.core` 좌표(Jackson 3)다.
+고유 CVE 기준 CRITICAL 12 · HIGH 21 · MEDIUM 6 · LOW 1(11/19에 더한 2개, 11/23에 더한 6개와 18개 포함). 처음 10개는 정답지와 10/10 일치, 추가 4개 중 13506만 사람 판정이 잠정이다. jackson-core·databind는 `tools.jackson.core` 좌표(Jackson 3)다.
 
-### 8-1. Tomcat (`org.apache.tomcat.embed:tomcat-embed-core` 11.0.24)
+### 8-1. Tomcat (`org.apache.tomcat.embed:tomcat-embed-core`, `org.apache.tomcat.embed:tomcat-embed-websocket` 11.0.24)
 
 - 세 CVE 모두 컨테이너가 실행한다. Spring Boot 내장 Tomcat은 기본 인증기 때문에 `RealmBase.findSecurityConstraints`를 요청마다 실행하지만, 제약 목록이 비어 있어 취약 구간에 들어가지 않는다. 그래서 "앱이 제약·인증기를 설정했나"를 보는 `RULE`로 판정한다(5-1).
 - "내장 Tomcat이 제약·인증기를 만들지 않는다"는 근거는 Spring Boot 4.0.8·4.1.1 소스로만 확인했다. 그래서 세 규칙 모두 Spring Boot 4가 아니면(`!F-jar.springBoot4`) 미확인 조건에 걸려 `UNREACHABLE`을 내지 않는다. Spring Boot 2·3, Spring Boot 없이 Tomcat을 쓰는 앱이 여기에 든다(GR-01, 거짓 `UNREACHABLE` 금지). 다른 버전을 소스로 확인하면 조건을 넓힌다. 공개 취약 앱(log4shell-vulnerable-app, Spring Boot 2.6.1 + Tomcat 9.0.55)에서 이 조건이 없을 때 세 CVE가 `UNREACHABLE`로 나온 것을 보고 더했다(2026-11-09).
 - Trivy 수정 버전은 11.0.25, 10.1.58, 9.0.121이다. 10.1.58은 릴리스되지 않아 10.1.x의 수정 버전은 10.1.59다(기록 3절). 우리 앱은 11.0.25다.
 - 11/23에 더한 6개(76183~103119)는 모두 `RULE`이고 모양이 같다. 기능을 켜는 사실이 있거나, 호출 그래프가 취약 함수에 닿거나(`sink`, `sink_weak`), Spring Boot 4가 아니면 `UNKNOWN`이다. 아니면 `UNREACHABLE`이다. 도달 가능 조건은 없다. 두 번째 조건(논블로킹 출력, SASL 방식, 잘못된 헤더 입력 등)은 정적으로 볼 수 없어서다. 86248만 Spring Boot 조건이 없다(jar 유무로 판정한다).
 - 6개의 심각도는 CVE 기록의 CVSS 값이다. Tomcat 보안 페이지의 등급은 각 소절 첫 줄에 적었다.
+- 11/23에 더 더한 18개(65183~93446)도 모두 `RULE`이고 앞 6개와 모양이 같다. 다른 것은 둘이다. 79677은 `sink` 조건이 없고, 비동기 전송 사실 둘이 함께 있거나 Spring Boot 4가 아니면 `UNKNOWN`이다. 77756은 조건이 없어 늘 `UNKNOWN`이다.
+- WebSocket 4개(73180, 77791, 79677, 87022)는 tomcat-embed-websocket 좌표다. 73180·77791·87022는 Spring WebSocket(`@EnableWebSocket`, STOMP, `WebSocketConfigurer`)을 써도 해당으로 본다. Spring WebSocket도 Tomcat에서는 `ServerContainer.upgradeHttpToWebSocket`으로 업그레이드해(spring-websocket 7.0.9 `StandardWebSocketUpgradeStrategy` 138행) `WsSession`·`WsRemoteEndpointImplServer`·`PerMessageDeflate`를 지나기 때문이다. 76183은 이와 다르다. 76183의 취약 함수는 엔드포인트 매핑(`findMapping`)이고 Spring WebSocket은 그 경로를 쓰지 않아 뺐다. 79677은 Spring이 블로킹 전송만 써서 뺐다(11/23 결정).
+- 18개의 심각도도 CVE 기록의 CVSS 값이다. Tomcat 보안 페이지 등급(Low·Moderate·Important)과 다른 것이 많다. 보안 페이지 등급은 각 소절 첫 줄에 적었다.
 
 #### RULE-CVE-2026-65182
 
@@ -498,7 +537,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 
 #### RULE-CVE-2026-76183
 
-11/23에 더했다. 이 CVE만 패키지가 `org.apache.tomcat.embed:tomcat-embed-websocket`이다(나머지는 tomcat-embed-core). Tomcat 보안 페이지 제목은 "Bypass of security constraints for WebSocket endpoints"(등급 Important), 수정 커밋은 `e182d86b`다.
+11/23에 더했다. 앞 6개 중 이 CVE만 패키지가 `org.apache.tomcat.embed:tomcat-embed-websocket`이다(나머지는 tomcat-embed-core). Tomcat 보안 페이지 제목은 "Bypass of security constraints for WebSocket endpoints"(등급 Important), 수정 커밋은 `e182d86b`다.
 
 | 항목 | 내용 |
 |---|---|
@@ -613,6 +652,348 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
 | L3 | `OutputBuffer.updateBytesWritten` 447~448행(수정이 바꾼 조건과 `close()`). Content-Length가 있는 모든 응답 쓰기에서 실행되므로, 실행돼도 논블로킹 출력을 보여주지는 않는다 |
+
+#### RULE-CVE-2026-65183
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "TOCTOU when setting specific permissions for Unix Domain Sockets"(등급 Low), 수정 커밋은 `4fb4523d`다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.25 · HIGH |
+| 취약 기능 | Unix 도메인 소켓 커넥터의 권한 설정 틈(TOCTOU). 소켓 파일을 먼저 만들고 나중에 권한을 바꿔, 그 사이에 같은 서버의 다른 로컬 사용자가 접속할 수 있다 |
+| 취약 함수 | `org.apache.tomcat.util.net.NioEndpoint.initServerSocket`. NIO 커넥터가 시작할 때마다 실행되고, 취약한 곳은 Unix 도메인 소켓 분기뿐이다 |
+| 발동 조건 | 커넥터를 TCP 포트가 아니라 Unix 도메인 소켓으로 열고(`unixDomainSocketPath`), 소켓 권한(`unixDomainSocketPathPermissions`)을 정했고, 같은 호스트에 Tomcat 실행 계정이 아닌 로컬 사용자·프로세스가 있다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 소켓 권한과 로컬 사용자는 사람이 확인한다 |
+| unreachable 조건 | 앱이 Unix 도메인 소켓 커넥터를 설정하지 않고, 호출 그래프가 `initServerSocket`에 닿지 않는다. Spring Boot 내장 Tomcat은 TCP 커넥터만 만든다 |
+| unknown 조건 | Unix 도메인 소켓을 설정한다(`F-tomcat.udsPathString`, `F-repo.tomcat.udsPath`). 또는 호출 그래프가 `initServerSocket`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. Unix 도메인 소켓 설정이 앱 코드와 레포에 없고, 호출 그래프도 `initServerSocket`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `NioEndpoint.initServerSocket` 317~321행(소켓 파일을 만드는 bind와, 그 뒤 권한을 바꾸는 분기의 시작). Unix 도메인 소켓 커넥터면 실행되므로, 실행돼도 다른 로컬 사용자가 그 틈에 접속했다는 뜻은 아니다 |
+
+#### RULE-CVE-2026-65927
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "RewriteValve [N] restarts at the second rule and may bypass access control"(등급 Important), 수정 커밋은 `bce83410`·`b80929d6`이다. `bce83410`은 `[C]`·QSD 처리 등도 함께 고쳤지만, 보안 페이지 제목을 따라 `[N]`만 본다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.25 · HIGH |
+| 취약 기능 | RewriteValve에서 `[N]`(next) 플래그 규칙이 맞으면 규칙을 처음이 아니라 두 번째부터 다시 돈다. 첫 규칙이 접근 제한이면 건너뛰어 제한을 우회할 수 있다 |
+| 취약 함수 | `org.apache.catalina.valves.rewrite.RewriteValve.invoke` |
+| 발동 조건 | Tomcat RewriteValve를 쓰고(Engine·Host·Context의 Valve), 규칙 중에 `[N]`(`[next]`) 플래그 규칙이 있고, 첫 규칙이 접근 제한(`[F]`, `[G]`, 리다이렉트 등)이다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 규칙 내용(`rewrite.config`)은 사람이 확인한다 |
+| unreachable 조건 | 앱이 RewriteValve를 만들거나 설정하지 않고, 호출 그래프가 `invoke`에 닿지 않는다. Spring Boot 내장 Tomcat은 RewriteValve를 붙이지 않는다 |
+| unknown 조건 | RewriteValve를 쓴다(`F-tomcat.rewriteValveNew`, `F-tomcat.rewriteValveSubclass`, `F-repo.tomcat.rewriteValve`). 또는 호출 그래프가 `invoke`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. RewriteValve 사용이 앱 코드와 레포에 없고, 호출 그래프도 `invoke`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `RewriteValve.invoke` 555행(`i = 0`, 규칙을 다시 도는 줄). `[N]` 규칙이 맞았을 때만 실행돼 공격에 가깝지만, 건너뛴 첫 규칙이 접근 제한이었다는 것까지 보여주지는 않는다 |
+
+#### RULE-CVE-2026-66422
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Servlet role references can bypass declarative role constraints"(등급 Low), 수정 커밋은 `2c2c510a`다. 65182와 같은 컨테이너 보안 제약 사실을 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.25 · HIGH |
+| 취약 기능 | 서블릿의 역할 별칭(`security-role-ref`)이 선언적 접근 제한(security-constraint의 auth-constraint) 확인에도 적용된다. 제한에 적힌 역할이 없는 사용자가 별칭으로 통과할 수 있다 |
+| 취약 함수 | `org.apache.catalina.realm.RealmBase.hasRole`. `Request.isUserInRole`도 이 함수를 부르는데 그쪽은 별칭이 맞는 동작이다. 취약한 것은 `hasResourcePermission`에서 부를 때다 |
+| 발동 조건 | Tomcat 컨테이너 인증과 Realm을 쓰고, 선언적 접근 제한(`web.xml` security-constraint, `@ServletSecurity`, `setServletSecurity`, `Context.addConstraint`)이 있고, 그 URL의 서블릿에 `security-role-ref` 별칭(또는 컨텍스트 역할 매핑)이 있다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 별칭과 제약 역할의 이름이 겹치는지는 사람이 확인한다 |
+| unreachable 조건 | 앱이 컨테이너 보안 제약을 추가하지 않고, 호출 그래프가 `hasRole`에 닿지 않는다. 제약이 없으면 우회할 것이 없다. Spring Security의 권한 확인은 Tomcat Realm을 쓰지 않는다 |
+| unknown 조건 | 컨테이너 보안 제약을 추가한다(`F-tomcat.addConstraint`, `F-tomcat.securityCollection`, `F-tomcat.servletSecurityAnn`, `F-tomcat.setServletSecurity`, `F-repo.webxml.securityConstraint`). 또는 호출 그래프가 `hasRole`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. 컨테이너 보안 제약이 앱 코드와 레포에 없고, 호출 그래프도 `hasRole`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `RealmBase.hasRole` 907행(`role = realRole`, 별칭을 적용하는 줄). 별칭이 있을 때만 실행되지만 `isUserInRole`에서도 실행되므로, 실행돼도 별칭이 보안 제약에 적용됐다는 뜻은 아니다 |
+
+#### RULE-CVE-2026-68569
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Principal lookup could fail open in some cases"(등급 Important), 수정 커밋은 `790d6e2c`다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.25 · HIGH |
+| 취약 기능 | DataSourceRealm(DB로 사용자 확인)이 이름만으로 사용자를 찾을 때(CLIENT-CERT·SPNEGO), DB에 그 사용자가 없거나 DB 연결이 실패해도 로그인한 사용자로 만든다 |
+| 취약 함수 | `org.apache.catalina.realm.DataSourceRealm.getPrincipal(String)`, `DataSourceRealm.authenticate(Connection, String, String)`. 뒤의 것은 비밀번호 경로로, 같은 커밋이 역할 조회 실패를 로그인 실패로 바꿨다 |
+| 발동 조건 | Tomcat에 DataSourceRealm을 쓰고(CombinedRealm·LockOutRealm 안에 둔 것 포함), CLIENT-CERT나 SPNEGO처럼 이름으로 사용자를 찾는 인증을 쓰고, 인증서·티켓의 사용자가 DB에 없거나 그때 DB 연결이 실패한다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 인증 방식과 DB 상태는 사람이 확인한다 |
+| unreachable 조건 | 앱이 DataSourceRealm을 만들거나 설정하지 않고, 호출 그래프가 두 함수에 닿지 않는다. Spring Boot 내장 Tomcat은 Realm을 따로 설정하지 않는다. Spring Security의 JDBC 인증은 다른 구현이라 해당 없다 |
+| unknown 조건 | DataSourceRealm을 쓴다(`F-tomcat.dataSourceRealmNew`, `F-tomcat.dataSourceRealmSubclass`, `F-repo.tomcat.dataSourceRealm`). 또는 호출 그래프가 두 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. DataSourceRealm 사용이 앱 코드와 레포에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `DataSourceRealm.getPrincipal` 454행(DB 연결이 없을 때 사용자를 만드는 줄), 457행(사용자가 있는지 보지 않고 만드는 줄). 457행은 이름으로 찾는 모든 로그인에서 실행되므로, 실행돼도 DB에 없는 사용자라는 뜻은 아니다. 비밀번호 경로(`authenticate` 333행)는 넣지 않았다 |
+
+#### RULE-CVE-2026-68763
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "DoS via allocation leak in HTTP/2 backlog tracking when a stream is reset"(등급 Important), 수정 커밋은 `2a5ec806`다. 65637과 같은 HTTP/2 사실을 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.25 · HIGH |
+| 취약 기능 | HTTP/2 흐름 제어 대기열(backlog)에 들어간 스트림이 리셋되면, 대기열의 스트림과 받아 둔 할당량을 치우지 않는다. 반복하면 연결의 전송 창이 줄어 응답을 보내지 못한다(서비스 거부) |
+| 취약 함수 | `org.apache.coyote.http2.Http2UpgradeHandler.reserveWindowSize`, `Http2UpgradeHandler.replaceStream`, `Http2UpgradeHandler.allocate` |
+| 발동 조건 | HTTP/2를 받고, 연결 창이 모자라 스트림이 대기열에 들어가고(클라이언트가 WINDOW_UPDATE를 보내지 않으면 만들 수 있다), 그 스트림을 클라이언트가 리셋한다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 클라이언트의 동작은 정적으로 볼 수 없다 |
+| unreachable 조건 | HTTP/2를 켜는 설정·코드가 없고, 호출 그래프가 세 함수에 닿지 않는다. 근거는 86350과 같다 |
+| unknown 조건 | HTTP/2를 켜는 설정이나 코드가 있다(86350과 같은 사실 5개). 앞단 프록시가 HTTP/2를 끝내는지 사람이 확인한다. 또는 호출 그래프가 세 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 세 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `Http2UpgradeHandler.reserveWindowSize` 1088~1090, 1098~1103행(스트림을 대기열에 넣는 두 분기). 연결 창이 바닥났을 때만 실행되지만 느린 클라이언트에 큰 응답을 보낼 때도 그렇다. 실행돼도 대기열의 스트림이 리셋됐다는 뜻은 아니다. `replaceStream`(1974행)은 끝난 모든 스트림에서 실행돼 넣지 않았다 |
+
+#### RULE-CVE-2026-73180
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Authenticated WebSocket session survives end of HTTP session"(등급 Low), 수정 커밋은 `e617a5d4`다. 76183의 WebSocket 사실에 Spring WebSocket 사실을 더해 쓴다(8-1 머리). 수정 커밋은 tomcat-catalina-ha의 `DeltaSession`도 고쳤지만, 그 jar는 Spring Boot에 없어(Spring Boot 4.1.1의 Tomcat 의존성은 tomcat-embed-core·el·websocket뿐) WebSocket 쪽만 본다. 클러스터 세션 복제(catalina-ha)를 쓰는 배포는 따로 본다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-websocket 11.0.24 → 11.0.25 · MEDIUM |
+| 취약 기능 | 로그인한 HTTP 세션에서 연 WebSocket이 그 HTTP 세션이 끝나도 닫히지 않는다. 연결 당시의 세션 ID로만 기억해서, 뒤에 세션 ID가 바뀌면 로그아웃·만료 뒤에도 연결이 남는다 |
+| 취약 함수 | `org.apache.tomcat.websocket.server.WsServerContainer.registerAuthenticatedSession` |
+| 발동 조건 | 앱이 Tomcat 위에서 WebSocket 서버를 쓰고(JSR-356 엔드포인트 또는 Spring WebSocket·STOMP), 핸드셰이크 요청에 사용자 principal과 HTTP 세션이 함께 있고(세션을 만들지 않는 토큰 인증이면 해당 없다), 연결 뒤 세션 ID가 바뀐 다음(`changeSessionId`, 세션 고정 방지 등) HTTP 세션이 끝난다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 세션 기반 인증과 세션 ID 변경은 사람이 확인한다 |
+| unreachable 조건 | 앱에 WebSocket 서버 코드가 없고, 호출 그래프가 `registerAuthenticatedSession`에 닿지 않는다. 업그레이드할 엔드포인트가 없으면 실행되지 않는다 |
+| unknown 조건 | WebSocket 서버 코드가 있다(`F-websocket.serverEndpointAnn`, `F-websocket.endpointExporterNew`, `F-websocket.addEndpoint`, `F-websocket.springEnableAnn`, `F-websocket.springConfigurer`). 또는 호출 그래프가 `registerAuthenticatedSession`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. WebSocket 서버 코드가 없고, 호출 그래프도 `registerAuthenticatedSession`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `WsServerContainer.registerAuthenticatedSession` 370행(핸드셰이크 때의 세션 ID로 WebSocket 세션 묶음을 찾는 줄). HTTP 세션이 있는 인증된 핸드셰이크마다 실행되므로, 실행돼도 세션 ID가 바뀌었거나 연결이 남았다는 뜻은 아니다 |
+
+#### RULE-CVE-2026-73581
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "OpenSSL and OpenSSL-FFM TLS implementations ignore CRLs when certificate uses a keystore"(등급 Moderate), 수정 커밋은 `15a76156`다. 커밋의 FFM(panama) 부분은 tomcat-embed-core에 없다(86248과 같다). 그래서 JNI(tomcat-native) 쪽 `OpenSSLContext.addCertificate`를 취약 함수로 두고, 판정은 CRL 설정으로 한다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.26 · MEDIUM |
+| 취약 기능 | TLS를 OpenSSL(tomcat-native 또는 FFM)로 처리하고 서버 인증서를 키스토어로 주면, 설정한 인증서 폐기 목록(CRL)을 OpenSSL에 넣지 않는다. 클라이언트 인증서 확인에서 폐기된 인증서가 통과할 수 있다 |
+| 취약 함수 | `org.apache.tomcat.util.net.openssl.OpenSSLContext.addCertificate`. tomcat-native(JNI)만이다. FFM 쪽 같은 코드는 tomcat-coyote-ffm에 있다 |
+| 발동 조건 | 내장 Tomcat이 TLS를 직접 받고, SSL 구현이 OpenSSL이고(tomcat-native, 또는 tomcat-coyote-ffm + Java 22 이상), 서버 인증서를 키스토어로 주고, 클라이언트 인증서 확인과 CRL을 켰다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. SSL 구현과 인증서 형식은 사람이 확인한다 |
+| unreachable 조건 | 앱이 CRL을 설정하지 않고, 호출 그래프가 `addCertificate`에 닿지 않는다. CRL이 없으면 무시될 것이 없다. Spring Boot 내장 Tomcat의 TLS는 기본으로 JSSE다 |
+| unknown 조건 | CRL을 설정한다(`F-tomcat.crlCall`, `F-repo.tomcat.crl`). 또는 호출 그래프가 `addCertificate`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. CRL 설정이 앱 코드와 레포에 없고, 호출 그래프도 `addCertificate`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `OpenSSLContext.addCertificate` 545~546행(키스토어 분기의 시작. CRL을 넣지 않고 끝나는 쪽). tomcat-native OpenSSL에서 키스토어 인증서마다 CRL 유무와 상관없이 실행된다. FFM 경로는 이 jar에 없어 보지 않는다 |
+
+#### RULE-CVE-2026-74048
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "OpenSSL-FFM FIPS failure does not prevent start-up"(등급 Low), 수정 커밋은 `db6d674b`다. 고친 코드는 tomcat-embed-core에 있고, tomcat-coyote-ffm jar가 없을 때도 실패 경로로 들어간다. 그래서 86248과 달리 jar 유무(`F-jar.tomcatCoyoteFfm`)로 가르지 않는다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.27 · MEDIUM |
+| 취약 기능 | OpenSSLLifecycleListener에 FIPS 모드를 켰는데 FIPS 활성화가 실패해도 오류만 남기고 시작한다. FIPS가 아닌 TLS(JSSE)로 서비스한다 |
+| 취약 함수 | `org.apache.catalina.core.OpenSSLLifecycleListener.lifecycleEvent` |
+| 발동 조건 | OpenSSLLifecycleListener를 등록하고, FIPS 모드를 off가 아닌 값으로 정했고, Java 22 이상이고, FIPS 활성화가 실패한다(FIPS 모듈 없음 등). 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. FIPS 모드 값과 런타임 버전은 사람이 확인한다 |
+| unreachable 조건 | 앱이 OpenSSLLifecycleListener를 만들거나 설정하지 않고, 호출 그래프가 `lifecycleEvent`에 닿지 않는다. Spring Boot 내장 Tomcat은 이 리스너를 붙이지 않는다 |
+| unknown 조건 | OpenSSLLifecycleListener를 쓴다(`F-tomcat.opensslLifecycleListenerNew`, `F-tomcat.opensslListenerFips`, `F-repo.tomcat.opensslListener`). 또는 호출 그래프가 `lifecycleEvent`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. OpenSSLLifecycleListener 사용이 앱 코드와 레포에 없고, 호출 그래프도 `lifecycleEvent`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `OpenSSLLifecycleListener.lifecycleEvent` 143~147행. FIPS 모드를 정했는데 활성화되지 않았을 때만 실행된다(고친 버전은 여기서 예외를 던진다). 실행되면 FIPS 실패 뒤에도 시작했다는 뜻이다 |
+
+#### RULE-CVE-2026-75973
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Cross-context authentication mix-up with Jakarta Authentication configured"(등급 Low), 수정 커밋은 `2585fc79`다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.26 · HIGH |
+| 취약 기능 | Jakarta Authentication(JASPIC)의 SimpleAuthConfigProvider를 여러 웹앱이 같이 쓰면, 처음 인증한 웹앱의 설정(Realm)을 모든 웹앱에 쓴다. 다른 웹앱의 사용자 정보로 로그인이 판정될 수 있다 |
+| 취약 함수 | `org.apache.catalina.authenticator.jaspic.SimpleAuthConfigProvider.getServerAuthConfig` |
+| 발동 조건 | JASPIC 공급자로 SimpleAuthConfigProvider를 쓰고, 그것을 기본 공급자로 등록해 여러 웹앱이 같이 쓰고, 웹앱마다 Realm이 다르다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 웹앱 수와 등록 방식은 사람이 확인한다. Spring Boot 내장 Tomcat은 보통 웹앱이 하나다 |
+| unreachable 조건 | 앱이 SimpleAuthConfigProvider를 쓰지 않고, 호출 그래프가 `getServerAuthConfig`에 닿지 않는다. Spring Boot 내장 Tomcat은 JASPIC 공급자를 설정하지 않는다 |
+| unknown 조건 | SimpleAuthConfigProvider를 쓴다(`F-tomcat.simpleAuthConfigProviderNew`, `F-tomcat.simpleAuthConfigProviderSubclass`, `F-repo.tomcat.simpleAuthConfigProvider`). 또는 호출 그래프가 `getServerAuthConfig`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. SimpleAuthConfigProvider 사용이 앱 코드와 레포에 없고, 호출 그래프도 `getServerAuthConfig`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `SimpleAuthConfigProvider.getServerAuthConfig` 73~74행(캐시한 설정을 읽는 줄). 웹앱이 하나여도 이 공급자로 인증할 때마다 실행되므로, 실행돼도 다른 웹앱의 설정을 받았다는 뜻은 아니다 |
+
+#### RULE-CVE-2026-77756
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Transfer-Encoding honored for HTTP/1.0 requests"(등급 Low), 수정 커밋은 `1ad63de8`다. 앱 코드·설정으로 가를 사실이 없어 이 규칙은 늘 `UNKNOWN`이다. 확신이 없으면 `UNKNOWN`으로 둔다(GR-01, 11/23 결정).
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.26 · LOW |
+| 취약 기능 | HTTP/1.0 요청의 Transfer-Encoding 헤더를 HTTP/1.1처럼 받아 본문 길이를 정한다. 앞단 리버스 프록시가 본문 길이를 다르게 읽으면 요청 경계가 어긋나(요청 스머글링), 같은 연결의 다른 사용자 요청이 실패할 수 있다 |
+| 취약 함수 | `org.apache.coyote.http11.Http11Processor.prepareInputFilters`. 기본 커넥터의 모든 HTTP/1.x 요청에서 실행된다 |
+| 발동 조건 | Tomcat 앞에 리버스 프록시가 있고, 그 프록시가 HTTP/1.0 + Transfer-Encoding 요청을 Tomcat과 다르게 해석해 그대로 넘기고, 연결을 여러 사용자의 요청이 같이 쓴다. 내장 Tomcat의 기본 HTTP/1.1 커넥터가 HTTP/1.0도 받으므로, Tomcat 쪽 조건에는 거의 모든 앱이 든다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음 |
+| unreachable 조건 | 없음. 이 기능을 끄는 앱 설정이 없다 |
+| unknown 조건 | 늘 성립한다(조건 없이 `otherwise`가 `UNKNOWN`). 앞단 프록시가 HTTP/1.0 + Transfer-Encoding 요청을 그대로 넘기는지 사람이 확인한다 |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNKNOWN`. 규칙에 조건이 없어 늘 이렇다. 호출 그래프는 `prepareInputFilters`에 닿지 않았지만 판정에 쓰지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `Http11Processor.prepareInputFilters` 827~831행(Transfer-Encoding 값을 읽고 입력 필터를 붙이는 줄). 보통의 HTTP/1.1 chunked 업로드에서도 실행되므로, 실행돼도 HTTP/1.0 요청이라는 뜻은 아니다 |
+
+#### RULE-CVE-2026-77762
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Stale HPACK emitter injects trailers into recycled pooled Request"(등급 Low), 수정 커밋은 `fd309997`다. 65637과 같은 HTTP/2 사실을 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.26 · HIGH |
+| 취약 기능 | HTTP/2 스트림이 끝나 요청 객체가 재사용 풀로 돌아간 뒤에도, 헤더 해석기(HPACK)가 옛 스트림을 계속 쥐고 있을 수 있다. 공격자가 그때 트레일러를 보내면, 그 요청 객체를 새로 받은 다른 사용자의 요청에 트레일러가 들어간다 |
+| 취약 함수 | `org.apache.coyote.http2.Http2UpgradeHandler.replaceStream`, `org.apache.coyote.http2.HpackDecoder.emitHeader` |
+| 발동 조건 | HTTP/2를 받고, 끝난 스트림으로 트레일러 HEADERS 프레임이 들어온다(경쟁 조건). 앱이 트레일러를 읽는지는 조건이 아니다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 공격 입력과 타이밍은 정적으로 볼 수 없다 |
+| unreachable 조건 | HTTP/2를 켜는 설정·코드가 없고, 호출 그래프가 두 함수에 닿지 않는다. 근거는 86350과 같다 |
+| unknown 조건 | HTTP/2를 켜는 설정이나 코드가 있다(86350과 같은 사실 5개). 앞단 프록시가 HTTP/2를 끝내는지 사람이 확인한다. 또는 호출 그래프가 두 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `Stream.emitHeader` 508행(트레일러를 요청 객체에 넣는 줄). 고친 줄이 아니라 영향이 나타나는 줄이다. 정상 트레일러에서도 실행되므로, 실행돼도 스트림이 재사용됐다는 뜻은 아니다. 고친 줄(`replaceStream` 1974행, `HpackDecoder.emitHeader` 461행)은 모든 스트림·헤더에서 실행돼 넣지 않았다 |
+
+#### RULE-CVE-2026-77791
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "DoS via busy wait during WebSocket close"(등급 Important), 수정 커밋은 `ce291bbc`다. 73180과 같은 WebSocket 사실을 쓴다(8-1 머리).
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-websocket 11.0.24 → 11.0.26 · HIGH |
+| 취약 기능 | 다른 스레드가 메시지를 보내는 중에 서버가 close 메시지를 보내야 하면, 앞 전송이 끝날 때까지 쉬지 않고 반복해서 확인하며 CPU를 쓴다. 앞 전송이 오래 걸리면 기본 20초까지 스레드가 묶인다(서비스 거부) |
+| 취약 함수 | `org.apache.tomcat.websocket.server.WsRemoteEndpointImplServer.acquireMessagePartInProgressSemaphore` |
+| 발동 조건 | 앱이 Tomcat 위에서 WebSocket 서버를 쓰고(JSR-356 엔드포인트 또는 Spring WebSocket·STOMP), 서버가 소켓 처리 스레드에서 close를 보내고(클라이언트 close에 응답, 콜백 안에서 `Session.close()`), 그때 다른 스레드가 같은 연결로 메시지를 보내는 중이다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 스레드 사이의 동시 전송은 정적으로 단정하기 어렵다 |
+| unreachable 조건 | 앱에 WebSocket 서버 코드가 없고, 호출 그래프가 `acquireMessagePartInProgressSemaphore`에 닿지 않는다 |
+| unknown 조건 | WebSocket 서버 코드가 있다(73180과 같은 사실 5개). 또는 호출 그래프가 `acquireMessagePartInProgressSemaphore`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. WebSocket 서버 코드가 없고, 호출 그래프도 `acquireMessagePartInProgressSemaphore`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `WsRemoteEndpointImplServer.acquireMessagePartInProgressSemaphore` 138행(대기 루프 안의 `Thread.yield()`. 수정은 이 줄을 `Thread.sleep(50)`으로 바꿨다). close가 다른 전송을 기다릴 때만 실행되지만 공격 없이도 잠깐 생길 수 있고, 루프가 얼마나 돌았는지는 보여주지 않는다 |
+
+#### RULE-CVE-2026-78383
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "AJP DoS via missing request body"(등급 Important), 수정 커밋은 `6dabd430`다. 103119와 같은 AJP 사실을 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.26 · HIGH |
+| 취약 기능 | AJP 요청이 본문이 있다고 알리고 보내지 않으면, 오류로 끝나는 경우에도 본문 패킷을 기다리며 처리 스레드를 붙잡는다. 인증 없이 반복하면 AJP 처리 스레드가 모두 묶인다(서비스 거부) |
+| 취약 함수 | `org.apache.coyote.ajp.AjpProcessor.finishResponse` |
+| 발동 조건 | AJP 커넥터로 요청을 받고, 공격자가 AJP 포트에 직접 또는 앞단 프록시를 거쳐 닿는다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. AJP 포트에 누가 닿는지는 사람이 확인한다 |
+| unreachable 조건 | 앱이 AJP 커넥터를 만들지 않고, 호출 그래프가 `finishResponse`에 닿지 않는다. Spring Boot 내장 Tomcat은 AJP를 기본으로 열지 않는다 |
+| unknown 조건 | AJP 커넥터를 만든다(`F-tomcat.ajpProtocolNew`, `F-tomcat.ajpConnectorString`). 또는 호출 그래프가 `finishResponse`에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. AJP 커넥터가 없고, 호출 그래프도 `finishResponse`에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `AjpProcessor.finishResponse` 1019행(읽지 않은 본문 패킷을 기다리는 줄). 앱이 본문을 읽지 않은 보통 AJP 요청에서도 실행되므로, 실행돼도 오류 응답이나 본문을 보내지 않는 클라이언트라는 뜻은 아니다 |
+
+#### RULE-CVE-2026-78437
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "HTTP/2 DoS via malformed request"(등급 Low), 수정 커밋은 `70579060`다. 65637과 같은 HTTP/2 사실을 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.26 · HIGH. 영향 범위는 11.0.19~11.0.25다 |
+| 취약 기능 | HTTP/2 요청의 `:authority`·`host` 헤더 형식이 잘못되면 요청 객체에 '잘못된 요청' 표시가 남는다. 검사 단계 전에 스트림이 끝나면 표시가 지워지지 않은 채 재사용된다. 그 객체를 받은 다른 사용자의 요청이 400으로 실패할 수 있다 |
+| 취약 함수 | `org.apache.coyote.http2.StreamProcessor.validateRequest`, `StreamProcessor.process` |
+| 발동 조건 | HTTP/2를 받고, 잘못된 `:authority`·`host` 헤더를 보낸 스트림이 검사 전에 끝난다(리셋 등). 타이밍에 따라 다른 요청이 실패한다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 공격 입력과 타이밍은 정적으로 볼 수 없다 |
+| unreachable 조건 | HTTP/2를 켜는 설정·코드가 없고, 호출 그래프가 두 함수에 닿지 않는다. 근거는 86350과 같다 |
+| unknown 조건 | HTTP/2를 켜는 설정이나 코드가 있다(86350과 같은 사실 5개). 앞단 프록시가 HTTP/2를 끝내는지 사람이 확인한다. 또는 호출 그래프가 두 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `Stream.parseAuthority` 535행, `Stream.compareAuthority` 563행(잘못된 헤더에 표시를 남기는 줄. 고친 줄은 아니다). 그런 입력에서만 실행돼 공격에 가깝지만, 스트림이 검사 전에 끝났거나 다른 요청이 실패했다는 것까지 보여주지는 않는다 |
+
+#### RULE-CVE-2026-79677
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "WebSocket DoS due to lost asynchronous write timeout"(등급 Moderate), 수정 커밋은 `7ab11d10`다. 다른 WebSocket 규칙과 달리 비동기 전송 사실만 보고, `sink` 조건이 없다(8-1 머리).
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-websocket 11.0.24 → 11.0.26 · HIGH |
+| 취약 기능 | WebSocket 비동기 전송에 시간 제한을 걸면, 시간 제한을 볼 연결 목록(만료 시각 순 정렬)에서 항목이 빠지거나 검사가 중간에 멈춘다. 멈춘 전송이 정리되지 않고 쌓인다(서비스 거부) |
+| 취약 함수 | `org.apache.tomcat.websocket.server.WsWriteTimeout.register`, `WsWriteTimeout.backgroundProcess` |
+| 발동 조건 | 앱이 WebSocket 서버에서 비동기 전송(`Session.getAsyncRemote()`)을 쓰고, 비동기 전송 시간 제한을 0보다 크게 정했다(기본 -1). 블로킹 전송(`getBasicRemote`)은 `register`를 부르지 않는다. 호출 주체는 앱 코드와 컨테이너(`both`) |
+| reachable 조건 | 없음. 시간 제한이 실제로 사라지는지는 정적으로 볼 수 없다 |
+| unreachable 조건 | 앱이 비동기 전송과 시간 제한을 함께 쓰지 않는다. Spring WebSocket·STOMP는 블로킹 전송만 써서 해당하지 않는다(8-1 머리) |
+| unknown 조건 | 비동기 전송과 시간 제한을 함께 쓴다(`F-websocket.asyncRemote` + `F-websocket.asyncSendTimeout`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`). 호출 그래프 조건(`sink`, `sink_weak`)은 넣지 않았다. 호출 그래프는 블로킹 전송도 `register`에 닿는 것으로 보기 때문이다 |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. 비동기 전송과 시간 제한 사용이 앱 코드에 없다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `WsWriteTimeout.register` 95행(만료 시각 순 집합에 넣는 줄). 시간 제한이 있는 비동기 전송마다 실행되므로, 실행되면 시간 제한을 쓴다는 뜻이지 시간 제한이 사라졌다는 뜻은 아니다. `backgroundProcess`는 `register` 뒤에만 실행돼 넣지 않았다 |
+
+#### RULE-CVE-2026-87022
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "WebSocket message smuggling with per-message-deflate"(등급 Low), 수정 커밋은 `4fef25fe`다. 73180과 같은 WebSocket 사실을 쓴다(8-1 머리).
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-websocket 11.0.24 → 11.0.26 · HIGH |
+| 취약 기능 | 압축 확장(permessage-deflate)을 쓰는 연결에서, 한 메시지의 중간 압축 블록에 '마지막 블록' 표시(BFINAL)를 붙이면 Tomcat이 거기서 프레임을 끝내고 남은 데이터를 제대로 풀지 않는다. Tomcat이 읽는 메시지 내용·경계가 보낸 쪽이나 중간 검사 장비와 달라져 메시지를 끼워 넣을 수 있다 |
+| 취약 함수 | `org.apache.tomcat.websocket.PerMessageDeflate.getMoreData`, `PerMessageDeflate.endFrame` |
+| 발동 조건 | 앱이 Tomcat 위에서 WebSocket 서버를 쓰고(JSR-356 엔드포인트 또는 Spring WebSocket·STOMP), 연결에 permessage-deflate가 협상된다. Tomcat은 이 확장을 기본으로 설치하고 클라이언트가 요청하면 받아들인다(Spring의 업그레이드도 같다). 공격자가 클라이언트면 이런 블록을 직접 만든다. 앞단이 메시지 내용·경계로 판단하는 구성에서 의미가 있다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 앞단의 메시지 검사 여부는 사람이 확인한다 |
+| unreachable 조건 | 앱에 WebSocket 서버 코드가 없고, 호출 그래프가 두 함수에 닿지 않는다 |
+| unknown 조건 | WebSocket 서버 코드가 있다(73180과 같은 사실 5개). 또는 호출 그래프가 두 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. WebSocket 서버 코드가 없고, 호출 그래프도 두 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `PerMessageDeflate.getMoreData` 270행(입력이 남았는데 프레임을 끝내는 줄. 수정이 복구 코드를 더한 곳). 압축 메시지의 정상 끝에서도 실행되므로, 실행돼도 메시지 중간의 BFINAL 블록이라는 뜻은 아니다 |
+
+#### RULE-CVE-2026-88041
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "HTTP/2 trailer header cross-contamination"(등급 Low), 수정 커밋은 `a276dea8`다. 65637과 같은 HTTP/2 사실을 쓴다. 수정은 77762 수정 위에 잠금을 더한 것이라, 11.0.24에서는 77762와 같은 코드를 가리킨다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.27 · HIGH |
+| 취약 기능 | HTTP/2에서 스트림이 끝나 요청 객체가 재사용되는 순간과 같은 스트림의 트레일러를 해석하는 순간이 겹치면, 앞 요청의 트레일러가 그 객체를 다음에 쓰는 요청으로 넘어간다 |
+| 취약 함수 | `org.apache.coyote.http2.HpackDecoder.emitHeader`, `org.apache.coyote.http2.Http2UpgradeHandler.headersStart`, `Http2UpgradeHandler.replaceStream` |
+| 발동 조건 | HTTP/2를 받고, 스트림 교체와 트레일러 해석이 겹친다(좁은 경쟁 조건). 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. 타이밍은 정적으로 볼 수 없다 |
+| unreachable 조건 | HTTP/2를 켜는 설정·코드가 없고, 호출 그래프가 세 함수에 닿지 않는다. 근거는 86350과 같다 |
+| unknown 조건 | HTTP/2를 켜는 설정이나 코드가 있다(86350과 같은 사실 5개). 앞단 프록시가 HTTP/2를 끝내는지 사람이 확인한다. 또는 호출 그래프가 세 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 세 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `Stream.emitHeader` 508행(77762와 같은 줄). 정상 트레일러에서도 실행되므로, 실행돼도 경쟁이 일어났다는 뜻은 아니다. 고친 줄(`HpackDecoder.emitHeader` 461행, `headersStart`, `replaceStream` 1974행)은 모든 헤더·스트림에서 실행돼 넣지 않았다 |
+
+#### RULE-CVE-2026-93446
+
+11/23에 더했다. Tomcat 보안 페이지 제목은 "Possible TLS 1.3 connection failures"(등급 Low), 수정 커밋은 `e49e0c47`다. 레포 사실은 65637의 `F-repo.spring.serverSsl`을 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 패키지·버전 | tomcat-embed-core 11.0.24 → 11.0.27 · HIGH |
+| 취약 기능 | NIO 커넥터가 TLS를 직접 처리할 때, '핸드셰이크 데이터를 보내야 함' 표시가 여러 버퍼 쓰기와 연결 객체 재사용에서 지워지지 않는다. 남은 표시 때문에 뒤의 읽기가 오류로 끝나 TLS 1.3 연결이 간헐적으로 끊긴다(서비스 거부) |
+| 취약 함수 | `org.apache.tomcat.util.net.SecureNioChannel.reset`, `SecureNioChannel.write(ByteBuffer[], int, int)` |
+| 발동 조건 | 내장 Tomcat이 TLS를 직접 받고(NIO 커넥터), TLS 1.3 연결이다. 앞단(로드밸런서·프록시)에서 TLS를 끝내면 해당 없다. 호출 주체는 컨테이너 |
+| reachable 조건 | 없음. `F-repo.spring.serverSsl`은 `server.ssl.enabled=false`와 키스토어 설정이 함께 있어도 맞으므로 도달로 올리지 않는다 |
+| unreachable 조건 | 내장 Tomcat이 TLS를 받는 설정·코드가 없고, 호출 그래프가 두 함수에 닿지 않는다. Spring Boot는 Ssl이 켜졌을 때만 커넥터에 TLS를 붙인다 |
+| unknown 조건 | 내장 Tomcat이 TLS를 받을 수 있다(`F-repo.spring.serverSsl`, `F-spring.setSsl`, `F-tomcat.sslHostConfigNew`). TLS 1.3 사용과 앞단의 TLS 종료는 사람이 확인한다. 또는 호출 그래프가 두 함수에 닿는다(`sink`, `sink_weak`). 또는 Spring Boot 4가 아니다(`!F-jar.springBoot4`) |
+| 방식 | `RULE` |
+| 현재 판정(api) | `UNREACHABLE`. TLS 설정이 레포와 앱 코드에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
+| 사람 판정 | 아직 없음 |
+| 대조군 | 아직 없음 |
+| L3 | `SecureNioChannel.reset` 114행, `SecureNioChannel.write` 911행(수정이 표시를 지우는 곳). NIO 커넥터의 보통 TLS 통신에서도 실행되므로, 실행되면 Tomcat이 TLS를 직접 받는다는 뜻이지 표시가 남았거나 연결이 끊겼다는 뜻은 아니다 |
 
 ### 8-2. BouncyCastle (`org.bouncycastle:bcprov-jdk18on` 1.81)
 
@@ -1001,7 +1382,7 @@ dashboard-backend가 계산하는 방법(구현, API 명세 3-3):
 
 새 CVE를 더하거나 규칙을 고칠 때의 순서다. 경로는 노트북의 `reach-poc/` 기준이다.
 
-11/19부터 1~4단계는 `dashboard-backend/reach-analyzer/vulndata/vulndata.py`로 한다(쓰는 법은 `reach-analyzer/README.md` "판정 데이터 만들기"). 도구가 공지·두 버전의 jar·수정 커밋을 모아 후보를 만들고(`prepare`), AI가 초안을 쓰고, 도구가 초안의 메서드·줄을 설치 버전 jar와 대조한 뒤(`check`) 사람이 확인한 것만 넣는다(`apply`, 확인한 사람이 `research/vulndata/`에 남는다). GitHub 권고문이 아직 검토 전(`unreviewed`)이면 Maven 패키지·수정 버전·수정 커밋이 없다. 그때는 `prepare`에 `--coordinates`를 주어 공식 CVE 기록의 영향 버전으로 채우고, 수정 커밋은 프로젝트 보안 페이지(Tomcat은 `security-11.html`)에서 찾아 `--commit`으로 준다(11/23 Tomcat 6개). `make_spec.py`는 처음 14개를 만든 방법이고, 그 뒤로는 `vuln-functions.json`에 직접 더한다(4단계의 "생성 파일을 직접 고치지 않는다"는 처음 14개에만 해당). 5단계부터는 그대로다.
+11/19부터 1~4단계는 `dashboard-backend/reach-analyzer/vulndata/vulndata.py`로 한다(쓰는 법은 `reach-analyzer/README.md` "판정 데이터 만들기"). 도구가 공지·두 버전의 jar·수정 커밋을 모아 후보를 만들고(`prepare`), AI가 초안을 쓰고, 도구가 초안의 메서드·줄을 설치 버전 jar와 대조한 뒤(`check`) 사람이 확인한 것만 넣는다(`apply`, 확인한 사람이 `research/vulndata/`에 남는다). GitHub 권고문이 아직 검토 전(`unreviewed`)이면 Maven 패키지·수정 버전·수정 커밋이 없다. 그때는 `prepare`에 `--coordinates`를 주어 공식 CVE 기록의 영향 버전으로 채우고, 수정 커밋은 프로젝트 보안 페이지(Tomcat은 `security-11.html`)에서 찾아 `--commit`으로 준다(11/23 Tomcat 24개). `make_spec.py`는 처음 14개를 만든 방법이고, 그 뒤로는 `vuln-functions.json`에 직접 더한다(4단계의 "생성 파일을 직접 고치지 않는다"는 처음 14개에만 해당). 5단계부터는 그대로다.
 
 | 단계 | 할 일 | 산출물 | 주의 |
 |---|---|---|---|
