@@ -2153,7 +2153,8 @@ sequenceDiagram
 
 - 여러 조건이 맞으면 가장 나쁜 결과를 따른다: `FAIL > WARN > PASS`.
 - `exitCode`는 `FAIL`이면 1, 아니면 0이다.
-- "새 Finding"은 기준 스캔에 없던 purl × CVE다. 기준 스캔이 다른 대상(예: 운영 이미지)이어도 purl과 CVE로 비교한다. purl은 한정자(`?…`)와 하위 경로(`#…`)를 떼고 비교한다. 레포 SBOM(cdxgen)은 같은 패키지를 `pkg:maven/g/a@v?type=jar`로, 이미지 스캔(Trivy)은 `pkg:maven/g/a@v`로 적기 때문이다. 사람 판정(`MANUAL`)은 세지 않는다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11). PR 검사의 기준은 API-12 `baselineScanId`를 따른다.
+- "새 Finding"은 기준 스캔에 없던 purl × CVE, 또는 기준 스캔의 같은 purl × CVE보다 판정이 나빠진 것이다. 판정의 순위는 `REACHABLE` > `UNKNOWN` = `NOT_ANALYZED` > `UNREACHABLE`이다. 라이브러리는 그대로인데 코드가 바뀌어 `UNREACHABLE` → `REACHABLE`이 되면 새 Finding이라 `REACHABLE_CRITICAL_HIGH`에 걸린다. 순위가 같거나 낮아진 것은 이미 있던 Finding이다. 기준 스캔이 다른 대상(예: 운영 이미지)이어도 purl과 CVE로 비교한다. purl은 한정자(`?…`)와 하위 경로(`#…`)를 떼고 비교한다. 레포 SBOM(cdxgen)은 같은 패키지를 `pkg:maven/g/a@v?type=jar`로, 이미지 스캔(Trivy)은 `pkg:maven/g/a@v`로 적기 때문이다. 사람 판정(`MANUAL`)은 세지 않는다. 기준 스캔이 없으면 모두 새 것으로 본다. 이미 같거나 더 나쁜 판정으로 있던 Finding 때문에 PR을 막지 않는다(PRD FR-11). PR 검사의 기준은 API-12 `baselineScanId`를 따른다.
+- 판정 데이터(`vuln-functions.json`, `rules.json`)나 분석기를 바꾼 직후에는, 기준 스캔이 옛 데이터의 판정이라 운영에 이미 있던 Finding이 "판정이 나빠진 것"으로 셀 수 있다(예: 데이터를 더한 CVE가 기준에서는 `NOT_ANALYZED`, PR에서는 `REACHABLE`). 다음 하루 1번 재대조나 운영 이미지 스캔 요청(API-01)으로 기준 스캔이 새 데이터로 바뀌면 풀린다.
 - API-12 예시의 첫 실행 결과는 `WARN`이다. `REACHABLE`과 `UNKNOWN`은 0이고, `NOT_ANALYZED`인 HIGH 5건(Jackson 2 사본, 제안(확정 대기))이 경고 조건에 걸린다.
 - 예외: `FAIL`인 PR이라도 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 그 Finding의 검토 기록에 남고, 만료되면 다시 게이트 대상이 된다(PRD FR-11). 예외를 기록하는 API와 형식은 아직 정하지 않았다(1-5, ARD Q-07).
 - 되돌리기: 전환 뒤 오탐으로 머지가 막히면 그 조건만 `WARN`으로 내리고, 사례를 검증 세트(ARD C-14)에 추가한다(PRD FR-11).
