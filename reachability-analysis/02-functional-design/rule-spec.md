@@ -154,6 +154,9 @@ CVE 규칙은 "도달 가능 조건 → 도달 불가 조건 → 미확인 조�
 | 4 | 기본값 | 규칙마다 정한 값 | 원본(`rules.json`) 확인 필요 |
 
 - 먼저 성립한 단계의 결과를 쓰고 뒤 단계는 보지 않는다(추정: "순서로 평가한다"의 뜻. 원본(`verdict.py`) 확인 필요). 그래서 도달 가능 조건이 다른 조건보다 앞선다.
+- **설정을 보지 못하면 도달 불가로 두지 않는다.** 규칙이 레포 사실(`F-repo.*`, 7절)을 조건에 쓰는데 설정 파일을 하나도 읽지 못했으면(소스 레포도, 앱 jar 안 설정 파일도 없음) ②·④에서 나온 `UNREACHABLE`을 `UNKNOWN`으로 바꾼다. 없는 설정이 아니라 못 본 설정이기 때문이다. 근거에 그 이유(NOTE)를 남기고, 규칙 근거의 맞은 조건은 `UNKNOWN`이다. 지금 해당하는 규칙: 65182·65905·68525·8763·65637
+- **규칙이 없는 CVE의 기본 규칙**: 강한 경로로 취약 함수 도달 → `REACHABLE`, 취약 함수가 jar에 없거나(`sinks_missing`) **약한 경로로만 닿으면**(`sink_weak`) → `UNKNOWN`, 그 밖 → `UNREACHABLE`. 약한 경로(Object 메서드 호출, JDK 콜백)는 닿는다고도 안 닿는다고도 할 수 없어서다. 지금 판정 데이터의 16개는 모두 자기 규칙이 있어 이 기본 규칙을 쓰지 않는다
+- Jackson 타입 규칙(89407·68497·91776·91777·19032·83557)은 도달 불가 조건(앱에 그 타입·설정이 없음)이 미확인 조건(`sink`)보다 앞선다. JSON을 받는 앱이면 호출 그래프는 거의 늘 Jackson 내부의 취약 함수에 닿기 때문에(샘플 앱 `app-like`에서도 강한 경로가 있다) 경로만으로는 가를 수 없고, 역직렬화되는 타입으로 가른다. 타입은 요청 본문·리스너·클라이언트 응답 같은 출발점(6-1)과, 앱 코드 어디에든 나오는 클래스 리터럴·TypeReference(tokens)로 넓게 모은다. 그래서 `readValue(json, clazz)`처럼 타입을 변수로 받아도, 그 변수에 넘기는 `Foo.class`가 앱 코드에 있으면 tokens에 잡혀 미확인이 된다
 - `RULE` 방식에서는 규칙의 사실 조건이 판정을 정하고, 호출 그래프 결과는 보고서에 참고로 보인다(기록 11-2절). 규칙이 그래프 결과를 조건에 함께 쓰는지는 원본(`rules.json`) 확인 필요.
 
 ```mermaid
@@ -306,6 +309,11 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 
 ### 7-1. 이름이 확인된 사실
 
+**레포 사실(`F-repo.*`)을 읽는 곳**: 두 곳을 모두 읽고 하나라도 찾으면 성립한다.
+1. 소스 레포: 스캔한 커밋의 체크아웃(PR 검사, 레포 대상, 이미지의 `pr-<커밋>` 태그로 찾은 커밋). 빌드 폴더·`.git`은 건너뛰고, 심볼릭 링크는 따라가지 않는다(PR 체크아웃은 믿을 수 없는 입력)
+2. 앱 jar 안의 설정 파일: `BOOT-INF/classes`, `WEB-INF` 등 앱 자신의 파일. 라이브러리 jar(`BOOT-INF/lib`, `WEB-INF/lib`)는 앱 설정이 아니라 보지 않는다. 그래서 커밋을 모르는 이미지(태그 없음, 대시보드 요청 스캔)도 빌드에 들어간 `application.properties`·`application.yml`·`web.xml`은 본다
+- 둘 다 읽지 못하면 4절대로 `UNKNOWN`이다. 운영 환경 변수·ConfigMap·이미지 `ENV`는 어느 쪽에도 없어 보지 않는다(한계). 레포의 `Dockerfile*`·`*.env`에 적힌 것만 본다
+
 | ID | 뜻 | 수집 방법 | 쓰는 규칙 |
 |---|---|---|---|
 | `F-dto.floating.tokens` | tokens 범위(6-1)의 타입에 실수형 필드가 있다 | tokens 출발점에서 필드 타입을 따라간다. 출발점 목록은 `dto_type_tokens`에 남는다 | RULE-CVE-2026-89407 미확인 조건 |
@@ -313,7 +321,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | `F-jackson.polymorphicSerializer` | `@class`로 타입을 지정할 수 있는 직렬화기(`GenericJackson(2)JsonRedisSerializer`)를 쓴다 | 앱 코드에서 사용 여부 | RULE-CVE-2026-89407 미확인 조건. default typing이 이 사실에 들어가는지, 다른 규칙에서도 쓰는지는 원본(`rules.json`) 확인 필요 |
 | `F-jar.springBoot4` | bootJar에 Spring Boot 4 jar(`spring-boot-4.x.y.jar`)가 있다 | 라이브러리 jar 파일 이름(정규식 `^spring-boot-4\.[0-9]+\.[0-9]+`) | RULE-CVE-2026-65182·65905·68525 미확인 조건(`!F-jar.springBoot4`, 8-1) |
 | `F-jsonIdentityInfo.any` | 앱 코드에 `@JsonIdentityInfo`가 있다(mix-in 클래스에 붙은 것 포함) | 앱 코드의 어노테이션. 범위가 앱 전체인지는 이름으로 본 추정이다. 원본(`Facts.java`) 확인 필요 | RULE-CVE-2026-91777 미확인 조건 |
-| `F-repo.spring.http2Enabled` | 레포의 설정이 내장 서버의 HTTP/2를 켠다(`server.http2.enabled=true`, 환경 변수 `SERVER_HTTP2_ENABLED=true`) | 레포의 `*.properties`·`*.yml`·`*.yaml`·`*.env`·`Dockerfile*`을 줄 단위 정규식으로 본다. 배포할 때만 넣는 환경 변수는 레포에 없으면 보이지 않는다 | RULE-CVE-2026-65637 도달 가능 조건(`F-repo.spring.serverSsl`과 함께), 미확인 조건 |
+| `F-repo.spring.http2Enabled` | 레포의 설정이 내장 서버의 HTTP/2를 켠다(`server.http2.enabled=true`, 환경 변수 `SERVER_HTTP2_ENABLED=true`) | 레포와 앱 jar 안 설정 파일(아래 "레포 사실을 읽는 곳")의 `*.properties`·`*.yml`·`*.yaml`·`*.env`·`Dockerfile*`을 줄 단위 정규식으로 본다. 배포할 때만 넣는 환경 변수는 레포에 없으면 보이지 않는다 | RULE-CVE-2026-65637 도달 가능 조건(`F-repo.spring.serverSsl`과 함께), 미확인 조건 |
 | `F-repo.spring.http2Yaml` | `application*.yml`에 `http2:` 블록이 있다. 값이 다음 줄에 있어 켰는지는 알 수 없다 | 같은 방식 | RULE-CVE-2026-65637 미확인 조건 |
 | `F-repo.spring.serverSsl` | 내장 서버가 TLS를 직접 받는다(`server.ssl.key-store`·`certificate`·`bundle`, `server.ssl.enabled=true`) | 같은 방식 | RULE-CVE-2026-65637 도달 가능 조건 |
 | `F-tomcat.http2ProtocolNew`, `F-tomcat.addUpgradeProtocol`, `F-spring.http2SetEnabled` | 앱 코드가 HTTP/2를 켠다 | 앱 코드의 `new Http2Protocol`, `Connector.addUpgradeProtocol` 호출, `Http2.setEnabled`·`setHttp2` 호출 | RULE-CVE-2026-65637 미확인 조건 |
