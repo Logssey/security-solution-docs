@@ -281,7 +281,7 @@ flowchart LR
 | `trigger` | enum | 예 | `MANUAL`(사람·API-01 직접) / `PR`(API-12, PR 검사) / `IMAGE_BUILD`(API-12, 이미지 빌드 단계, ECR push 전) / `SCHEDULE`(하루 1번 재대조) |
 | `rescanOf` | integer | 아니요 | 저장된 SBOM을 다시 쓴 경우 원래 스캔 ID |
 | `stages` | object 배열 | 예 | 단계별 진행. `name`(`SBOM` / `MATCH` / `L1` / `L2` / `REPORT`), `status`(`scanStatus` 값), `startedAt`, `finishedAt`, `durationSeconds`, `message` |
-| `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion`, `reachRef`, `sbomSource`. `reachRef`는 분석기·판정 데이터(`vuln-functions.json`, `rules.json`)·CI 스크립트를 받은 Logssey/dashboard-backend 커밋(40자, CI에서는 서비스 레포 변수 `REACH_REF`)이다. 로컬 실행에서 그 파일들을 고친 채 돌렸으면 끝에 `-dirty`가 붙는다. `rulesVersion`·`vulnFunctionsVersion`은 파일 형식 버전이라 데이터가 바뀌어도 그대로이고, 판정 데이터의 내용은 `reachRef`로 가린다. `sbomSource`는 재대조가 보관 SBOM을 썼을 때 `stored:scan-<id>`. 러너가 보내지 않은 값은 없다 |
+| `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion`, `reachRef`, `sbomSource`. `reachRef`는 분석기·판정 데이터(`vuln-functions.json`, `rules.json`)·CI 스크립트를 받은 Logssey/dashboard-backend 커밋(40자)이다. CI에서는 대시보드가 알려 준 자기 커밋(아래 "러너가 받을 Reach 코드", API-12 보조)이고, 서비스 레포 변수 `REACH_REF`가 있으면 그 값이다. 로컬 실행에서 그 파일들을 고친 채 돌렸으면 끝에 `-dirty`가 붙는다. `rulesVersion`·`vulnFunctionsVersion`은 파일 형식 버전이라 데이터가 바뀌어도 그대로이고, 판정 데이터의 내용은 `reachRef`로 가린다. `sbomSource`는 재대조가 보관 SBOM을 썼을 때 `stored:scan-<id>`. 러너가 보내지 않은 값은 없다 |
 | `analysis` | object | 아니요 | L2 분석 규모. `appClasses`, `libraryJars`, `reachedMethods`, `jarSha256`(판정한 jar. 판정 대상을 결과에 남긴다) |
 | `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState`. 그 스캔이 낸 도구 판정을 센다. Finding의 마지막 스캔이 아니라 판정의 스캔으로 세서, 같은 Finding이 다음 스캔에 다시 나와도 이 스캔의 개수는 그대로다. 사람 판정(`MANUAL`)은 세지 않는다. 스캔 결과는 스캔이 낸 값으로 두고, 사람 판정은 요약(API-08)에만 반영된다. 값은 0까지 채운다. `byReviewState`는 지금의 검토 상태다(검토는 Finding마다 한 행뿐) |
 | `failure` | object | 아니요 | `FAILED`일 때만. `code`(E-코드), `stage`, `message` |
@@ -1967,6 +1967,20 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 - 200, `Content-Type: application/x-xz`. 본문은 tar.xz 그대로다.
 - 404 `NOT_FOUND`: 검사가 없음, 재대조가 아닌 검사, 그 이미지에 보관한 기록이 없음(앱을 띄워 본 적 없는 이미지, 정리된 기록, 레포 대상). 러너는 404면 `l3` 없이 올린다(그 대상의 예전 `l3`는 그대로 남는다).
 - 원래 스캔이 아니라 같은 대상의 다른 스캔에 보관돼 있어도 준다(재대조의 재대조도 같은 기록을 쓴다).
+
+**러너가 받을 Reach 코드**
+
+| 항목 | 내용 |
+|---|---|
+| 메서드·경로 | `GET /api/v1/reach/ci/code` |
+| 권한 | 감시 대상 레포(`logssey.reach.apps`)의 Reach 워크플로가 받은 CI 토큰(이벤트 무관), 대시보드 세션 `ADMIN` |
+| 설명 | 대시보드가 지금 돌리는 Logssey/dashboard-backend 커밋을 준다. 러너는 그 커밋의 분석기·판정 데이터·CI 스크립트를 받아, 결과를 올릴 API와 같은 버전으로 스캔한다. 그래서 판정 데이터를 고쳐 대시보드에 배포하면 서비스 레포를 고치지 않아도 다음 스캔부터 반영된다 |
+
+- 200 `{"commit": "<40자>"}`. 커밋은 이미지를 만들 때 넣은 값(`LOGSSEY_BUILD_COMMIT`)이고 설정 `logssey.reach.ci.code-commit`으로 바꿀 수 있다.
+- 404 `NOT_FOUND`: 대시보드가 자기 커밋을 모름(로컬 실행, 커밋을 넣기 전 이미지). 러너는 서비스 레포 변수 `REACH_REF`가 없으면 멈춘다.
+- 러너는 받은 커밋(또는 `REACH_REF`)이 `develop`에 들어 있는지 GitHub에서 확인한 뒤에만 받는다. 서비스 레포에 설치할 GitHub App은 대시보드가 워크플로를 띄우는 앱(`Actions: write`) 하나뿐이다.
+
+**오류**: `UNAUTHENTICATED`, `FORBIDDEN`(감시 대상이 아닌 레포, Reach 워크플로가 아닌 토큰), `NOT_FOUND`
 
 ### API-14 감시 대상 앱
 
