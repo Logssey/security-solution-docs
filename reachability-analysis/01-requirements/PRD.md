@@ -31,14 +31,14 @@
 | 워크로드 | 운영 클러스터에서 실행 중인 파드·디플로이먼트와 그 imageID(digest) |
 | L1 / L2 / L3 | 배포 여부 / 호출 경로 / 실제 실행(1-1) |
 | 정답지, 검증 세트 | 도구와 독립적으로 만든 사람 판정(M-03), 샘플 앱·대조군·회귀 테스트 묶음(ARD C-14). 운영 사람 검토(`reviewState`)와 다르다 |
-| 게이트 | 조건에 걸리면 PR 머지를 막는 필수 검사. `REPORT_ONLY`로 시작한다(FR-11) |
+| 게이트 | 조건에 걸리면 PR 머지를 막는 필수 검사. `REPORT_ONLY`로 시작했고 11/23부터 service-backend는 `GATE`다(FR-11) |
 | 제안(확정 대기) | 사람이 조사한 판정 제안이 있지만 확정 전인 상태. `status`·`reviewState`는 그대로 두고 제안을 함께 보인다(FR-08 수용 기준 6) |
 | 참고 사실 | 판정에 쓰지 않고 참고로만 보이는 사실. `rules.json`의 `info`, API의 `infoFacts`·`informational` |
 
 | 필드 | 값 |
 |---|---|
 | `status` | `REACHABLE` / `UNREACHABLE` / `UNKNOWN` / `NOT_ANALYZED` |
-| `notAnalyzedReason` | `NO_VULN_FUNCTION_DATA` / `OS_PACKAGE` / `UNANALYZED_COPY` / `UNSUPPORTED_ECOSYSTEM` / `ANALYSIS_TIMEOUT`(NFR-03) |
+| `notAnalyzedReason` | `NO_VULN_FUNCTION_DATA` / `OS_PACKAGE` / `UNANALYZED_COPY` / `UNSUPPORTED_ECOSYSTEM` / `ANALYSIS_TIMEOUT`(NFR-03. 예약값: 지금 분석기는 내지 않고 API-13도 받지 않는다) |
 | `method` | `CALLGRAPH`(호출 그래프) / `RULE`(설정·타입 규칙) / `MANUAL`(사람) |
 | `reviewState` | `UNREVIEWED` / `PROVISIONAL` / `CONFIRMED`. 되돌린 이유 `resetReason`: `VERDICT_CHANGED` / `EVIDENCE_CHANGED` |
 | `deployment` | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
@@ -60,7 +60,7 @@
 
 | 시점 | SBOM | 대조 | L1 | L2 | L3 |
 |---|---|---|---|---|---|
-| PR | 레포 SBOM(cdxgen) | ✓ | 없음(배포 전) | ✓ 새 Finding | 없음 |
+| PR | PR 커밋을 빌드한 bootJar의 SBOM(Trivy `rootfs`) | ✓ | 없음(배포 전) | ✓ 모든 Finding(게이트는 새 Finding만 센다) | 없음 |
 | 이미지 빌드(ECR push 전) | 이미지 SBOM(Trivy), digest와 함께 보관 | ✓ | 없음 | ✓ | ✓ 그 이미지를 띄워 시나리오 실행(서비스 레포에 시나리오가 있을 때) |
 | 매일 | 저장된 SBOM 재사용 | ✓ 최신 DB로 재대조 | ✓ 실행 중 digest 조회 | ✓ 새 Finding | ✓ 보관한 실행 기록을 다시 대조(앱은 띄우지 않는다) |
 | 수동 | 필요 시 | ✓ | ✓ | ✓ | 없음(앱을 띄우지 않는다. 그 이미지의 마지막 L3 결과가 남는다) |
@@ -115,7 +115,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 
 | 하지 않는 것 | 이유 | 대신 하는 것 |
 |---|---|---|
-| 스캐너·취약점 DB 직접 개발 | 성숙한 OSS가 있다 | Trivy, Grype, cdxgen을 조합하고 연결·판정만 만든다 |
+| 스캐너·취약점 DB 직접 개발 | 성숙한 OSS가 있다 | Trivy, Grype를 조합하고 연결·판정만 만든다 |
 | 우리 코드 자체의 취약점 분석(SAST) | 이미 도구가 많다 | 확장 단계에서 Semgrep CE 같은 결과를 공통 Finding으로 받는 것을 검토한다 |
 | 자동 수정, 자동 PR | 적용은 팀이 결정하고 호환성 확인이 필요하다 | 최소 수정 버전, 패치, 실험용 clone 테스트 결과를 제안까지만 한다(FR-13) |
 | 최종 판정에 AI 사용 | 규칙이 더 정확하고 AI 결과는 재현할 수 없다 | AI는 취약 함수 후보, 구성요소 식별 후보(FR-02), 판정 설명에만 쓴다. 보내는 데이터 범위는 ARD SR-11(NFR-04) |
@@ -139,7 +139,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 
 | 시나리오 | 흐름 | 관련 US |
 |---|---|---|
-| **A. PR에 새 CVE가 들어올 때** | 의존성을 바꾼 PR → SBOM 생성·CVE 대조 → 새 Finding 판정 → PR 결과에 상태별 개수와 상세 링크(리포트 전용) → `REACHABLE`·`UNKNOWN`이면 보안 담당자가 검토 | US-04, 02, 03 |
+| **A. PR에 새 CVE가 들어올 때** | 의존성을 바꾼 PR → SBOM 생성·CVE 대조 → 새 Finding 판정 → PR 결과에 상태별 개수와 상세 링크(게이트에 걸리면 머지할 수 없다, FR-11) → `REACHABLE`·`UNKNOWN`이면 보안 담당자가 검토 | US-04, 02, 03 |
 | **B. 운영 이미지 정기 점검** | 하루 1번 → 실행 중 digest 조회(L1) → 저장된 SBOM을 최신 DB로 재대조 → 새 Finding 판정 → 요약 갱신, 새 Finding 표시 | US-06, 10, 09 |
 | **C. 판정 근거 검토와 확정** | `UNREVIEWED` Finding을 거름 → 사실(파일·줄), 적용 규칙, 후보 경로 확인 → `CONFIRMED`·`PROVISIONAL`과 메모 기록 | US-02, 03, 11 |
 | **D. 업그레이드 우선순위 결정** | 기본 정렬(실행 중 이미지 먼저: `deployment` `RUNNING` → `UNKNOWN` → `NOT_RUNNING`, 같은 배포 상태 안에서는 `REACHABLE` → `UNKNOWN` → `UNREACHABLE` → `NOT_ANALYZED` → 심각도 → CVE)으로 봄 → 라이브러리별 최소 수정 버전과 시험 결과 확인 → 팀이 적용 결정. Reach는 PR을 만들지 않는다 | US-05, 01 |
@@ -201,7 +201,7 @@ PR에서 돌릴 수 있는 속도는 목표가 아니라 넘지 않아야 할 �
 
 ### FR-02 SBOM 생성
 
-이미지와 레포에서 CycloneDX SBOM을 만든다. 구성 요소의 키는 purl이다. 지금 도구는 이미지 Trivy, 레포 cdxgen(Gradle 빌드를 실행해 간접 의존성까지 잡음)이며, 아래 기준을 만족하면 바꿀 수 있다.
+이미지와 레포에서 CycloneDX SBOM을 만든다. 구성 요소의 키는 purl이다. 지금 도구는 Trivy다. 이미지는 `trivy image`, 레포(PR 검사 등)는 러너가 빌드한 bootJar에 `trivy rootfs`(jar 안 라이브러리로 간접 의존성까지 잡음), Java 빌드가 없는 대상은 lock 파일에 `trivy fs`를 쓴다. cdxgen은 쓰지 않는다. 아래 기준을 만족하면 바꿀 수 있다.
 
 #### 수용 기준
 
@@ -314,22 +314,21 @@ Finding을 Logssey 공통 Finding(OCSF)으로 내보낸다. 형식은 팀 합의
 
 ### FR-11 CI 연동
 
-GitHub Actions의 `pull_request`(PR마다 빠른 대조), `schedule`(하루 1번 재대조·재판정), `workflow_dispatch`(수동)와 배포 파이프라인의 이미지 빌드 단계(ECR push 전)에서 돈다. 시점별로 하는 일은 1-2 표를 따른다.
+GitHub Actions의 `pull_request`(PR마다 빠른 대조), `workflow_dispatch`(수동, 그리고 하루 1번 재대조·재판정)와 배포 파이프라인의 이미지 빌드 단계(ECR push 전)에서 돈다. 하루 1번 재대조는 GitHub `schedule`이 아니라 대시보드가 띄운다(한국 04:30, 실행 중 이미지마다). 어떤 digest가 운영에서 도는지는 대시보드(L1)만 알기 때문이다(API 명세서 6-1). 시점별로 하는 일은 1-2 표를 따른다.
 
 **게이트 전환** (ARD Q-07, AD-17)
 
-처음부터 막으면 오탐 하나가 개발을 멈추므로 리포트 전용(`REPORT_ONLY`)으로 시작해 아래 기준을 만족하면 게이트(`GATE`)로 바꾼다.
+처음부터 막으면 오탐 하나가 개발을 멈추므로 리포트 전용(`REPORT_ONLY`)으로 시작해 게이트(`GATE`)로 바꾼다. 11/23 Reach 담당이 게이트로 바꿨다. service-backend는 저장소 변수 `REACH_POLICY=GATE`이고 PR 검사 `pr`이 `develop`의 필수 검사라, 게이트가 실패하면 PR을 머지할 수 없다. 게이트를 거는 것은 PR 검사뿐이고, 이미지 검사·재대조·수동 검사는 리포트 전용이다.
 
 - 대상: PR에서 새로 생겼거나 판정이 나빠진 Finding만 본다. 기준 스캔에 없던 purl × CVE, 또는 기준 스캔에서는 판정이 더 낮던 것이다(예: 라이브러리는 그대로인데 코드가 바뀌어 `UNREACHABLE` → `REACHABLE`). 이미 같거나 더 나쁜 판정으로 있던 Finding 때문에 PR을 막지 않는다.
 - 조건: API 명세서 6-2를 따른다. `REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고, 나머지는 통과다. `UNREACHABLE`은 막지 않는다(보류 원칙).
-- 전환 기준(제안): 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `REACHABLE` 오탐 0건, 경고 Finding 모두 검토.
 - 예외: 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 검토 기록에 남고 만료되면 다시 게이트 대상이다.
 - 되돌리기: 전환 뒤 오탐으로 막히면 그 조건만 경고로 내리고 사례를 검증 세트에 추가한다.
 
 #### 수용 기준
 
 1. PR마다 새로 생긴 Finding과 판정을 PR 결과로 보여준다.
-2. 처음에는 리포트 전용이라 빌드를 깨지 않는다. 게이트 전환은 위 기준을 따른다.
+2. 처음에는 리포트 전용이라 빌드를 깨지 않는다. 게이트로 바꾸면(service-backend는 11/23부터) 게이트가 실패한 PR은 머지할 수 없다.
 3. 하루 1번 저장된 SBOM을 최신 DB로 다시 대조하고 새 Finding을 판정한다.
 4. 수동 실행을 지원한다.
 5. 재사용 워크플로(`workflow_call`)로 한 번 정의하고 레포마다 호출한다.
@@ -404,7 +403,7 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 |---|---|---|---|
 | NFR-01 | **거짓 unreachable 금지** | 확신이 없으면 `UNKNOWN`. 대조군에 넣은 취약 조건은 모두 `REACHABLE` 또는 `UNKNOWN` | 실제 앱 사본 주입 실험, 샘플 앱 회귀 테스트(기대값은 실행 전 고정), 정답지 대조 |
 | NFR-02 | **설명 가능성** | 모든 판정에 방식과 근거. 앱 코드 사실은 파일·줄까지 | 판정 행마다 `method`와 근거가 있는지 검사. 주입 실험에서 근거가 넣은 줄을 가리키는지 확인 |
-| NFR-03 | **성능** | **원칙**: PR 대기 시간을 늘리지 않고, 속도를 위해 정확도를 낮추지 않는다(NFR-01 우선).<br>① Reach 작업은 기존 테스트 작업과 병렬로 돌고 그보다 먼저 끝난다. 예산(제안): SBOM·대조·L2 전체 5분 이내<br>② L2 분석 목표(제안): 최소 실행 환경(NFR-06)에서 60초 이내<br>③ 시간 제한(제안 3분)이나 메모리를 넘으면 PR을 막지 않고 해당 Finding을 `NOT_ANALYZED`(`ANALYSIS_TIMEOUT`)로 남긴다. 메서드 하나를 읽지 못해도 분석을 멈추지 않고, 그 메서드를 거쳐야 하는 Finding은 `UNKNOWN`으로 두며 건너뛴 메서드를 근거에 남긴다<br>④ Finding당 근거 경로는 하나(BFS 최단 경로)다<br>⑤ 넘치면 순서대로: 새 Finding이 없으면 L2 생략 → 같은 bootJar sha256이면 그래프 캐시 → PR에서는 대조만 하고 L2는 이미지 빌드 단계로. PR에서 L2를 빼는 것은 요구 변경이라 ARD 결정과 FR-11 수정이 함께 필요하다 | 실행마다 단계별 시간(그래프 생성, 탐색)과 메모리를 앱 클래스 수, jar 수, 도달 메서드 수, 간선 수와 함께 기록(bootJar 빌드 제외). 크기가 다른 앱 3~4개로 증가 곡선을 잰다. RTA는 최악의 경우 크기의 제곱으로 늘 수 있어 선형을 가정하지 않는다 |
+| NFR-03 | **성능** | **원칙**: PR 대기 시간을 늘리지 않고, 속도를 위해 정확도를 낮추지 않는다(NFR-01 우선).<br>① Reach 작업은 기존 테스트 작업과 병렬로 돌고 그보다 먼저 끝난다. 예산(제안): SBOM·대조·L2 전체 5분 이내<br>② L2 분석 목표(제안): 최소 실행 환경(NFR-06)에서 60초 이내<br>③ 시간 제한(제안 3분)이나 메모리를 넘으면 PR을 막지 않고 해당 Finding을 `NOT_ANALYZED`(`ANALYSIS_TIMEOUT`)로 남긴다. `ANALYSIS_TIMEOUT`은 예약값이다. 지금 분석기는 내지 않고 API-13도 받지 않는다(400). 메서드 하나를 읽지 못해도 분석을 멈추지 않고, 그 메서드를 거쳐야 하는 Finding은 `UNKNOWN`으로 두며 건너뛴 메서드를 근거에 남긴다<br>④ Finding당 근거 경로는 하나(BFS 최단 경로)다<br>⑤ 넘치면 순서대로: 새 Finding이 없으면 L2 생략 → 같은 bootJar sha256이면 그래프 캐시 → PR에서는 대조만 하고 L2는 이미지 빌드 단계로. PR에서 L2를 빼는 것은 요구 변경이라 ARD 결정과 FR-11 수정이 함께 필요하다 | 실행마다 단계별 시간(그래프 생성, 탐색)과 메모리를 앱 클래스 수, jar 수, 도달 메서드 수, 간선 수와 함께 기록(bootJar 빌드 제외). 크기가 다른 앱 3~4개로 증가 곡선을 잰다. RTA는 최악의 경우 크기의 제곱으로 늘 수 있어 선형을 가정하지 않는다 |
 | NFR-04 | **재현성** | 같은 입력이면 같은 판정. AI는 후보 생성·설명에만 쓴다. AI 후보는 입력 기준으로 저장해 재사용하고 모델·프롬프트 버전을 기록한다 | 같은 입력 반복 실행 비교, 회귀 테스트, 판정 경로에 AI 호출이 없는지 점검 |
 | NFR-05 | **최소 권한과 도구 무결성** | 클러스터는 읽기 전용. 스캐너·DB 버전 고정과 무결성 확인. 위협과 통제 전체는 ARD 11-1·11-2 | 권한 목록 점검, 스캐너 버전·DB 날짜 기록 여부, 설치 파일 체크섬·서명 확인 여부 |
 | NFR-06 | **실행 환경** | **원칙**: 정해 둔 최소 실행 환경에서 별도 서버나 전용 인프라 없이 돈다.<br>① 최소 실행 환경은 CI 표준 러너 사양(코어, 메모리, 디스크)으로 정의하고 기록한다<br>② 모든 단계가 그 메모리·디스크 안에서 돈다. L2 힙 상한도 여기서 정한다<br>③ 상주 서버나 전용 DB가 필요한 도구는 쓰지 않는다. 쓰려면 ARD 결정으로 남긴다<br>④ 외부 자원(취약점 DB 등)은 버전과 크기를 결과에 남긴다<br>⑤ 같은 입력이면 노트북과 CI 러너에서 같은 판정을 낸다 | 환경별 성공 여부와 판정 일치, 단계별 최대 메모리·디스크·다운로드 크기 |
@@ -438,7 +437,7 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 
 | 항목 | 내용 | 필요한 곳 |
 |---|---|---|
-| 클러스터 파드 조회 권한(읽기 전용) | 클러스터 API 서버가 내부에 있어 지금은 SSM을 거친 수동 조회만 된다 | FR-04, M-09 |
+| 클러스터 파드 조회 권한(읽기 전용) | 클러스터 안 수집기(CronJob)가 `reused`의 pods `list`만 가진 서비스 계정으로 6시간마다 조회해 올린다(ARD 7-3) | FR-04, M-09 |
 | 공통 Finding/Asset 스키마 합의 | 각자 스키마를 만들면 나중에 합쳐지지 않는다 | FR-10 |
 | 이미지 revision 라벨 | CI가 `org.opencontainers.image.revision`(커밋 SHA)을 붙인다. L1에서 digest로 커밋을 찾는 전제다 | FR-04 |
 | bootJar 입력 | CI는 bootJar만 만든다(plain jar 꺼짐). 로컬에서는 bootJar 경로를 직접 지정한다 | FR-05, 06 |
@@ -446,7 +445,7 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 | base image digest 고정과 출처 라벨 | 태그만 쓰면 빌드 당시 base를 추적할 수 없다 | FR-04 |
 | GitHub 조직 설정 | Dependency graph(지금 Off), Code scanning(SARIF) 사용 가능 여부. 비교 기준과 PR 결과 표시 위치 후보다 | FR-03, 11 |
 | ECR 레지스트리 스캔 | 교차 확인 후보. 현재 동작 여부는 확인 필요 | FR-03 |
-| `gradle.lockfile` 도입 | 레포 스캔 도구 선택 폭과 빌드 재현성이 생긴다. Reach는 cdxgen을 써서 필수는 아니다 | FR-02 |
+| `gradle.lockfile` 도입 | 레포 스캔 도구 선택 폭과 빌드 재현성이 생긴다. Reach는 레포 대상도 빌드한 bootJar로 SBOM을 만들어(`trivy rootfs`) 필수는 아니다 | FR-02 |
 | 런타임 데이터 | L3 능동 관측은 Reach가 직접 한다. 런타임 담당(Falco·Tetragon)의 출력은 확장 단계의 의존성이다 | FR-14 |
 | 실행 환경 | `reach.jar`는 Java 21, `verdict.py`는 Python 3(외부 라이브러리 없음) | FR-05, 06, 07 |
 
@@ -476,11 +475,11 @@ PoC 실측은 [PoC 결과](../05-research/poc-results.md) 3절에 있다.
 | CVE-2026-13506 사람 판정 | 잠정 | 사람 확정 | FR-08, M-08 |
 | 업그레이드 적용 여부 | 제안서와 패치 준비(실험용 clone). 적용 전 `marketplaceE2E`와 실제 기동 확인 필요 | 팀 | FR-13 |
 | 공통 Finding(OCSF) 스키마, 통합 대시보드의 주인 | 팀 합의 전 | 팀 | FR-10, API-11, ARD Q-02 |
-| L1 자동화 방식 | 읽기 전용 서비스 계정은 정해졌고 조회 위치가 미정. A 클러스터 안 수집기(권장), B SSM 경유(차선, 제한 전제), C 모니터링 메트릭. 상세는 ARD 7-3 | 팀, 인프라 운영자 | FR-04, API-07, ARD Q-03 |
-| CI 게이트 전환 기준 | FR-11 "게이트 전환"에 제안. 팀 확정과 예외 기록 API 설계가 남음 | 팀 | FR-11, ARD Q-07 |
-| 매일 재판정의 L2 입력 | bootJar를 결과 저장소에 보관할지, 실행 중 digest의 이미지에서 꺼낼지 | 팀 | FR-11, ARD C-13 |
+| ~~L1 자동화 방식~~ | 닫음(11/16): A 클러스터 안 수집기(CronJob, 6시간마다). 상세는 ARD 7-3 | - | FR-04, API-07, ARD Q-03 |
+| ~~CI 게이트 전환 기준~~ 게이트 예외 기록 | 전환은 정했다(11/23): service-backend는 `REACH_POLICY=GATE`이고 `pr`이 `develop` 필수 검사다(FR-11 "게이트 전환"). 예외 기록 API 설계가 남음 | Reach 담당 | FR-11, ARD Q-07 |
+| ~~매일 재판정의 L2 입력~~ | 닫음(11/17): SBOM은 결과 저장소에 보관하고, jar는 실행 중 digest의 이미지에서 꺼낸다(ARD Q-06) | - | FR-11, ARD C-13 |
 | ~~L3 에이전트의 테스트 시간 영향~~ | 답(11/18 측정, Re:Used api): 테스트가 아니라 이미지를 띄우는 방식으로 정했다. 앱 기동 9초 → 에이전트와 11~13초, 메모리 약 470MB → 540MB, 요청 36개를 단계마다 끊어 기록하는 데 24초, 대조 약 5초. 이미지 검사에 넣는다 | - | FR-11, FR-14 |
-| PR 대조의 cdxgen 시간 | Gradle 빌드를 실행하므로 PR마다 돌릴 만큼 빠른지 측정 | 보안 담당자 | FR-02, FR-11 |
+| ~~PR 대조의 cdxgen 시간~~ | 답: cdxgen을 쓰지 않는다. PR 검사는 러너가 빌드한 bootJar에 `trivy rootfs`를 쓴다(FR-02) | - | FR-02, FR-11 |
 | hibernate-core 좌표 재대조 | 이미지 SBOM에 groupId가 `org.hibernate`로 들어가 있다(실제 `org.hibernate.orm`). 올바른 좌표로 다시 대조해 놓친 CVE가 있는지 확인 필요 | 보안 담당자 | FR-02, FR-03 |
 | 새 Finding 알림 채널, PR 결과 표시 위치 | 미정. SARIF 사용 가능 여부 확인 필요 | 팀 | FR-11, API-12 |
 | 역할 분리 | MVP는 대시보드 공통 `ADMIN` 하나다. 조회 전용·검토자·게이트 예외 승인자를 나눌지는 대시보드 공통 역할 체계와 함께 정한다(API 명세서 1-5). API 위치와 인증은 ARD AD-18로 정했다 | 팀 | FR-08, FR-11 |

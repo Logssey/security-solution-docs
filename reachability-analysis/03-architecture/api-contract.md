@@ -1,8 +1,8 @@
 # API 명세서
 
-**한 줄 요약**: Reach(Logssey 도달 가능성 분석 모듈)의 MVP용 HTTP API 설계 초안이다. API는 별도 서버가 아니라 dashboard-backend의 `reach` 모듈로 들어가고(ARD AD-18), 형식·이름·오류는 [대시보드 API 공통 규약](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)을 따른다(ADR-D008). 지금은 API가 없고, 같은 일을 CLI와 파일이 한다(8절 대응표).
+**한 줄 요약**: Reach(Logssey 도달 가능성 분석 모듈)의 MVP용 HTTP API 설계 초안이다. API는 별도 서버가 아니라 dashboard-backend의 `reach` 모듈로 들어가고(ARD AD-18), 형식·이름·오류는 [대시보드 API 공통 규약](https://github.com/Logssey/dashboard-design-docs/blob/main/05-api/api-spec.md)을 따른다(ADR-D008). API-01~14는 모두 develop·운영에 있다. API 전에 같은 일을 하던 CLI와 파일은 8절 대응표에 있다.
 
-**상태 표기**: [완료] PoC로 구현·검증됨 / [부분] 일부만 구현되었거나 수동 / [계획] 아직 없음(설계). 이 문서의 API는 모두 [계획]이다.
+**상태 표기**: [완료] PoC로 구현·검증됨 / [부분] 일부만 구현되었거나 수동 / [계획] 아직 없음(설계). API-01~14는 운영 중이고, 아직 없는 필드·동작은 그 자리에 [계획]으로 적었다.
 
 ## 1. 개요
 
@@ -25,9 +25,10 @@
 | 항목 | 상태 |
 |---|---|
 | 이 문서 | 설계 초안 v0.2 (2026-10-18, 대시보드 공통 규약에 맞춤) |
-| API(dashboard-backend `reach` 모듈), 인증, 웹후크 | [계획] |
+| API(dashboard-backend `reach` 모듈), 인증 | 운영 중. API-01~14가 develop·운영에 있다(대시보드 세션, CI는 GitHub OIDC, L1 수집기는 서비스 계정 토큰) |
+| 웹후크 | [계획] (7절) |
 | 판정 엔진 | [완료] v0. CLI(`reach.jar`, `verdict.py`, `run-reach.sh`)로 동작한다. 배포 이미지의 Java CVE 14개를 판정했고 모두 `UNREACHABLE`이다. 처음 10개는 정답지와 10/10 일치, 샘플 앱 회귀 테스트는 44/44 일치 |
-| 엔드포인트별 지금 구현 | 4절 표의 "지금 같은 일" 열과 8절 대응표 |
+| 엔드포인트별 지금 구현 | 모두 운영 중. 4절 표의 "지금 같은 일" 열과 8절 대응표는 API 전에 같은 일을 하던 CLI·파일이다 |
 
 ### 1-4. 버전 정책
 
@@ -281,7 +282,7 @@ flowchart LR
 | `trigger` | enum | 예 | `MANUAL`(사람·API-01 직접) / `PR`(API-12, PR 검사) / `IMAGE_BUILD`(API-12, 이미지 빌드 단계, ECR push 전) / `SCHEDULE`(하루 1번 재대조) |
 | `rescanOf` | integer | 아니요 | 저장된 SBOM을 다시 쓴 경우 원래 스캔 ID |
 | `stages` | object 배열 | 예 | 단계별 진행. `name`(`SBOM` / `MATCH` / `L1` / `L2` / `REPORT`), `status`(`scanStatus` 값), `startedAt`, `finishedAt`, `durationSeconds`, `message` |
-| `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `cdxgen`, `reach`, `rulesVersion`, `vulnFunctionsVersion`, `reachRef`, `sbomSource`. `reachRef`는 분석기·판정 데이터(`vuln-functions.json`, `rules.json`)·CI 스크립트를 받은 Logssey/dashboard-backend 커밋(40자)이다. CI에서는 대시보드가 알려 준 자기 커밋(아래 "러너가 받을 Reach 코드", API-12 보조)이고, 서비스 레포 변수 `REACH_REF`가 있으면 그 값이다. 로컬 실행에서 그 파일들을 고친 채 돌렸으면 끝에 `-dirty`가 붙는다. `rulesVersion`·`vulnFunctionsVersion`은 파일 형식 버전이라 데이터가 바뀌어도 그대로이고, 판정 데이터의 내용은 `reachRef`로 가린다. `sbomSource`는 재대조가 보관 SBOM을 썼을 때 `stored:scan-<id>`. 러너가 보내지 않은 값은 없다 |
+| `tools` | object | 예 | 쓴 도구와 DB 버전(NFR-04, NFR-05). `trivy`, `trivyDbUpdatedAt`, `grype`, `reach`, `rulesVersion`, `vulnFunctionsVersion`, `reachRef`, `sbomSource`. `reachRef`는 분석기·판정 데이터(`vuln-functions.json`, `rules.json`)·CI 스크립트를 받은 Logssey/dashboard-backend 커밋(40자)이다. CI에서는 대시보드가 알려 준 자기 커밋(아래 "러너가 받을 Reach 코드", API-12 보조)이고, 서비스 레포 변수 `REACH_REF`가 있으면 그 값이다. 로컬 실행에서 그 파일들을 고친 채 돌렸으면 끝에 `-dirty`가 붙는다. `rulesVersion`·`vulnFunctionsVersion`은 파일 형식 버전이라 데이터가 바뀌어도 그대로이고, 판정 데이터의 내용은 `reachRef`로 가린다. `sbomSource`는 재대조가 보관 SBOM을 썼을 때 `stored:scan-<id>`. 러너가 보내지 않은 값은 없다 |
 | `analysis` | object | 아니요 | L2 분석 규모. `appClasses`, `libraryJars`, `reachedMethods`, `jarSha256`(판정한 jar. 판정 대상을 결과에 남긴다) |
 | `counts` | object | 아니요 | `SUCCEEDED`일 때만. `total`, `bySeverity`, `byStatus`, `byReviewState`. 그 스캔이 낸 도구 판정을 센다. Finding의 마지막 스캔이 아니라 판정의 스캔으로 세서, 같은 Finding이 다음 스캔에 다시 나와도 이 스캔의 개수는 그대로다. 사람 판정(`MANUAL`)은 세지 않는다. 스캔 결과는 스캔이 낸 값으로 두고, 사람 판정은 요약(API-08)에만 반영된다. 값은 0까지 채운다. `byReviewState`는 지금의 검토 상태다(검토는 Finding마다 한 행뿐) |
 | `failure` | object | 아니요 | `FAILED`일 때만. `code`(E-코드), `stage`, `message` |
@@ -292,7 +293,7 @@ flowchart LR
 
 | 단계 | 하는 일 | 관련 FR |
 |---|---|---|
-| `SBOM` | 이미지는 Trivy, 레포는 cdxgen으로 SBOM을 만든다(지금 도구이며 바꿀 수 있다). cdxgen은 Gradle 빌드를 실행해 간접 의존성까지 잡는다. 이미지와 레포 SBOM의 좌표가 다르면 레포를 우선하고 차이를 기록한다. 버전을 확정하지 못하면 "버전 미확정"으로 두고 범위 전체로 대조한다. 결정적 방법으로 식별하지 못한 구성요소만 AI 후보를 만들고 "구성요소 추정"으로 표시한다. 이 Finding은 `UNREACHABLE`로 확정하지 않는다 | FR-02 |
+| `SBOM` | Trivy로 SBOM을 만든다(지금 도구이며 바꿀 수 있다). 이미지는 `trivy image`, 레포는 러너가 빌드한 bootJar에 `trivy rootfs`(jar 안 라이브러리로 간접 의존성까지 잡는다), Java 빌드가 없는 대상은 lock 파일에 `trivy fs`다. cdxgen은 쓰지 않는다. 이미지와 레포 SBOM의 좌표가 다르면 레포를 우선하고 차이를 기록한다. 버전을 확정하지 못하면 "버전 미확정"으로 두고 범위 전체로 대조한다. 결정적 방법으로 식별하지 못한 구성요소만 AI 후보를 만들고 "구성요소 추정"으로 표시한다. 이 Finding은 `UNREACHABLE`로 확정하지 않는다 | FR-02 |
 | `MATCH` | Trivy로 대조하고 Grype로 교차 확인한다. purl을 키로 합친다(두 도구 결과가 다를 때의 병합 규칙은 ARD Q-08) | FR-03 |
 | `L1` | 실행 중 파드의 imageID와 스캔 digest를 조인한다. revision 라벨로 커밋을 확인한다 | FR-04 |
 | `L2` | bootJar 바이트코드로 호출 그래프(RTA, 진입점 2단계, 약한 경로 분리)를 만들고, CVE별 규칙으로 판정한다 | FR-05, FR-06 |
@@ -326,7 +327,7 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
 | `app` | 레포 | 이미지 저장소 | 주력 스캔 | L2 판정 |
 |---|---|---|---|---|
 | `API` | `service-backend` | `logssey/reused-api` | 이미지(Trivy) | [완료] v0 (Java) |
-| `WEB` | `service-frontend` | `logssey/reused-web` | 레포(cdxgen). 이미지에는 minify된 번들만 있다 | [계획] (npm) |
+| `WEB` | `service-frontend` | `logssey/reused-web` | 레포(lock 파일에 `trivy fs`). 이미지에는 minify된 번들만 있다 | [계획] (npm) |
 | `CHAT` | `service-backend`의 `chat-server` | `logssey/reused-chat` | 레포 + 이미지 | [계획] (Node) |
 
 ### 3-3. Finding
@@ -498,7 +499,7 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 | `version` | string | 예 | 규칙 데이터 버전(스키마 `reach-rules/v0`의 `v0`) |
 | `updatedAt` | date-time | 아니요 [계획] | 마지막 변경 시각. 지금 데이터에 없어 주지 않는다 |
 
-- 규칙은 데이터 파일(`data/rules.json`)에 있다. CVE를 더할 때 분석기 코드를 고치지 않는다(NFR-07).
+- 규칙은 데이터 파일(dashboard-backend `src/main/resources/reach/rules.json`)에 있다. 분석기와 API-09가 같은 파일을 읽는다. CVE를 더할 때 분석기 코드를 고치지 않는다(NFR-07).
 
 ### 3-8. VulnFunction
 
@@ -522,7 +523,7 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 | `excluded` | boolean | 아니요 [계획] | true면 일부러 뺀 메서드다. `include=excluded`일 때만 목록에 나온다 |
 | `exclusionReason` | string | `excluded`가 true일 때 [계획] | 뺀 이유 |
 
-- [계획] `provenance`, `verifiedWith`, `candidateSource`, `excluded`, `exclusionReason`은 지금 데이터 파일(`data/vuln-functions.json`, reach-spec/v0)에 없어 주지 않는다. 생성 스크립트가 이 칸을 쓰게 되면 준다. 그때까지 정한 방법은 아래 메모를 본다.
+- [계획] `provenance`, `verifiedWith`, `candidateSource`, `excluded`, `exclusionReason`은 지금 데이터 파일(dashboard-backend `src/main/resources/reach/vuln-functions.json`, reach-spec/v0)에 없어 주지 않는다. 생성 스크립트가 이 칸을 쓰게 되면 준다. 그때까지 정한 방법은 아래 메모를 본다.
 
 - 취약 함수 데이터는 조사 파일에서 생성 스크립트(`make_spec.py`)로 만든다(FR-09).
 - PoC의 CVE 14개: 처음 10개는 `VERSION_DIFF`다(Tomcat 3개는 수정 커밋을 찾아 태그 diff와 대조했다). CVE-2026-13506과 MEDIUM 3개(0636, 19032, 83557)는 `FIX_COMMIT_DIFF`다. 모두 `javap`로 시그니처를 확인했다.
@@ -586,7 +587,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | Scan `trigger` | `MANUAL` / `PR` / `IMAGE_BUILD` / `SCHEDULE` |
 | Scan `stages[].name` | `SBOM` / `MATCH` / `L1` / `L2` / `REPORT` |
 | Finding `sources` | `TRIVY` / `GRYPE` |
-| Verdict `notAnalyzedReason` | `NO_VULN_FUNCTION_DATA` / `OS_PACKAGE` / `UNANALYZED_COPY` / `UNSUPPORTED_ECOSYSTEM` |
+| Verdict `notAnalyzedReason` | `NO_VULN_FUNCTION_DATA` / `OS_PACKAGE` / `UNANALYZED_COPY` / `UNSUPPORTED_ECOSYSTEM`. PRD 1절의 `ANALYSIS_TIMEOUT`(NFR-03)은 예약값이다. DB 제약에는 있지만 지금 분석기는 내지 않고 API-13도 받지 않는다(400 `INVALID_INPUT`) |
 | Review `resetReason` | `VERDICT_CHANGED` / `EVIDENCE_CHANGED` |
 | Evidence `kind` | `FACT` / `PATH` / `RULE` / `NOTE` / `RUNTIME` |
 | Evidence `pathTarget` | `VULN_FUNCTION` / `PACKAGE` |
@@ -607,7 +608,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 
 ### 3-12. L3 (능동 관측 결과)
 
-러너가 스캔한 이미지를 실제로 띄워 요청 시나리오를 보냈을 때, 취약 코드 쪽으로 **어디까지 실행됐는지**다(PRD FR-14). L2 판정(`verdict`) 옆에 놓는 근거이고 판정·사람 검토·게이트·요약 숫자를 바꾸지 않는다(US-12 "L2 판정과 나란히 본다"). L2가 무엇이라고 했든 취약 함수 데이터가 있는 모든 CVE를 본다. 판정 근거(3-5)와 따로 저장한다.
+러너가 스캔한 이미지를 실제로 띄워 요청 시나리오를 보냈을 때, 취약 코드 쪽으로 **어디까지 실행됐는지**다(PRD FR-14). L2 판정(`verdict`) 옆에 놓는 근거다(US-12 "L2 판정과 나란히 본다"). 취약 구간이 실행됐으면 서버가 결과를 받을 때 판정을 올리고, 실행되지 않았다는 것만으로 L2 판정을 낮추지 않는다(아래 "판정 올리기"). L2가 무엇이라고 했든 취약 함수 데이터가 있는 모든 CVE를 본다. 판정 근거(3-5)와 따로 저장한다. 마이그레이션 V55의 주석("상태·근거 해시·게이트를 바꾸지 않는다")은 판정 올리기 규칙 전의 설명이다. 머지된 마이그레이션은 고칠 수 없어 그대로 둔다.
 
 **Finding의 L3** (API-04는 앞의 세 필드만, API-05는 전부)
 
@@ -665,8 +666,8 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | API-07 | `GET /api/v1/reach/workloads` | `ADMIN` | 마지막 조회의 워크로드와 digest, 스캔 연결. 등록 여부는 [계획] | FR-04, FR-15 | SCR-04 | 수동 kubectl 결과 업로드 |
 | (API-07 아래) | `PUT /api/v1/reach/l1/workloads` | `ADMIN` · L1 수집기 | L1 수집 결과 올리기(수동, 클러스터 수집기) | FR-04 | - | 사람이 kubectl로 조회한 결과 |
 | API-08 | `GET /api/v1/reach/summary` | `ADMIN` | 대시보드 요약 | FR-12 | SCR-01 | 없음 |
-| API-09 | `GET /api/v1/reach/rules`, `GET /api/v1/reach/rules/{ruleId}` | `ADMIN` | 규칙 조회 | FR-06 | SCR-06 | `data/rules.json` |
-| API-10 | `GET /api/v1/reach/vuln-functions` | `ADMIN` | 취약 함수 데이터 조회 | FR-09 | SCR-06 | `data/vuln-functions.json` |
+| API-09 | `GET /api/v1/reach/rules`, `GET /api/v1/reach/rules/{ruleId}` | `ADMIN` | 규칙 조회 | FR-06 | SCR-06 | `rules.json` |
+| API-10 | `GET /api/v1/reach/vuln-functions` | `ADMIN` | 취약 함수 데이터 조회 | FR-09 | SCR-06 | `vuln-functions.json` |
 | API-11 | `GET /api/v1/reach/exports/ocsf?scanId=` | `ADMIN` | 공통 Finding(OCSF) 내보내기 | FR-10 | - | 없음 |
 | API-12 | `POST /api/v1/reach/ci/checks`, `GET /api/v1/reach/ci/checks/{checkId}` | CI(OIDC) | CI(PR) 검사 실행과 결과 | FR-11 | SCR-05 | 없음 |
 | API-13 | `PUT /api/v1/reach/ci/checks/{checkId}/results` | CI(OIDC) | 러너의 분석 결과 업로드 | FR-01, FR-11 | - | `run-reach.sh`가 만드는 파일 |
@@ -797,7 +798,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 }
 ```
 
-- 레포 대상은 cdxgen이 Gradle 빌드를 실행한다. 간접 의존성까지 잡지만 빌드 스크립트를 실행하므로, 빌드는 러너에서만 하고 서버는 PR 코드를 실행하지 않는다(ARD AD-18, SR-09).
+- 레포 대상은 러너가 그 커밋을 Gradle로 빌드한 bootJar로 SBOM(`trivy rootfs`)을 만든다. 빌드는 대상 레포의 빌드 스크립트를 실행하므로 러너에서만 하고, 서버는 PR 코드를 실행하지 않는다(ARD AD-18, SR-09).
 - `rescanOf`는 재빌드 없이 저장된 SBOM을 최신 DB로 다시 대조한다. 하루 1번 재대조(FR-11)에 쓴다.
 - 어떤 서비스를 스캔할지는 PRD FR-15의 대상(서비스) 등록 목록(레포에 커밋한 설정 파일)이 정한다. 하루 1번 재대조(`trigger=SCHEDULE`)는 이 목록의 서비스를 대상으로 한다. 등록하지 않은 대상을 API-01로 요청했을 때 받을지는 정하지 않았다. [계획] 지금 구현은 `app`을 정할 수 있으면(3-2) 받는다.
 - 서버는 요청과 함께 `mode=MANUAL`인 CI 검사를 만들고 `options`를 거기에 남긴다(러너가 읽는다). 검사의 `repository`는 레포 대상이면 그 레포, 이미지 대상이면 설정(`logssey.reach.apps`)에서 그 이미지 앱의 레포다.
@@ -973,13 +974,13 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `severity` | enum 목록 | 아니요 | 심각도 |
 | `deployment` | enum 목록 | 아니요 | 배포 상태 |
 | `reviewState` | enum 목록 | 아니요 | 사람 검토 상태 |
-| `method` | enum 목록 | 아니요 | 판정 방식 |
-| `package` | string | 아니요 | purl 앞부분 일치. 버전을 빼면 모든 버전이다. URL 인코딩한다 |
-| `cve` | string 목록 | 아니요 | CVE ID 완전 일치 |
+| `method` | enum 목록 | 아니요 | 판정 방식. [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
+| `package` | string | 아니요 | purl 앞부분 일치. 버전을 빼면 모든 버전이다. URL 인코딩한다. [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
+| `cve` | string 목록 | 아니요 | CVE ID 완전 일치. [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
 | `cveContains` | string | 아니요 | CVE ID 부분 일치(대소문자 무시). 예: `89407` |
-| `disagreesWithTool` | boolean | 아니요 | true면 사람 판정이 도구 판정과 다른 Finding만 준다(FR-08) |
+| `disagreesWithTool` | boolean | 아니요 | true면 사람 판정이 도구 판정과 다른 Finding만 준다(FR-08). [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
 | `l3` | enum 목록 | 아니요 | L3 도달 수준(3-12 `reached`). 주면 `l3`가 없는 Finding은 빠진다. 예: `status=UNREACHABLE&l3=REGION`은 L2가 놓친 것 |
-| `firstSeenAfter` | date-time | 아니요 | `firstSeenAt`이 이 시각보다 뒤인 Finding만 준다. 직전 성공 스캔의 `finishedAt`을 넣으면 그 뒤에 새로 생긴 Finding이다(US-10) |
+| `firstSeenAfter` | date-time | 아니요 | `firstSeenAt`이 이 시각보다 뒤인 Finding만 준다. 직전 성공 스캔의 `finishedAt`을 넣으면 그 뒤에 새로 생긴 Finding이다(US-10). [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
 | `sort` | string | 아니요 | 기본 `-deployment,-status,-severity,cve`(2-5의 Finding 기본 정렬, 실행 중 이미지 먼저). 허용: `deployment`, `status`, `severity`, `cve`, `package`, `firstSeenAt`, `lastSeenAt`. [계획] 지금 구현은 `sort`를 받지 않고 늘 기본 정렬로 준다 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
@@ -1538,7 +1539,7 @@ Content-Type: application/json; charset=utf-8
 | 권한 | `ADMIN`(대시보드 세션) |
 | 설명 | CVE별 판정 규칙의 목록과 하나를 준다. 조건식 원문은 `include=definition`일 때만 준다 |
 | 관련 | FR-06 · SCR-06 |
-| 지금 같은 일 | `data/rules.json` [완료] v0 |
+| 지금 같은 일 | `rules.json`(dashboard-backend `src/main/resources/reach/`, 분석기와 같은 파일) [완료] v0 |
 
 | 파라미터 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
@@ -1650,7 +1651,7 @@ Content-Type: application/json; charset=utf-8
 | 권한 | `ADMIN`(대시보드 세션) |
 | 설명 | CVE별 취약 함수와 그 출처(정한 방법 `provenance`, 수정 커밋, 확인 방법)를 준다. 일부러 뺀 메서드는 `include=excluded`일 때 이유와 함께 준다 |
 | 관련 | FR-09 · SCR-06 |
-| 지금 같은 일 | `data/vuln-functions.json`(`make_spec.py`가 조사 파일에서 생성) [완료] v0 |
+| 지금 같은 일 | `vuln-functions.json`(dashboard-backend `src/main/resources/reach/`, 분석기와 같은 파일. 처음 14개는 `make_spec.py`가 조사 파일에서 생성) [완료] v0 |
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
@@ -1721,7 +1722,7 @@ Content-Type: application/json; charset=utf-8
 | 권한 | `ADMIN`(대시보드 세션) |
 | 설명 | 스캔 하나의 Finding을 Logssey 공통 Finding 형식(OCSF)으로 준다. 상태와 상관없이 모두 내보낸다. 결과는 지우지 않는다. 매핑은 팀 스키마 합의 전 제안이다(5절) |
 | 관련 | FR-10 · 화면 없음 |
-| 지금 같은 일 | 없음 [계획] |
+| 지금 같은 일 | 없음(API 전에는 같은 일을 하는 것이 없었다) |
 
 | 쿼리 | 타입 | 필수 | 설명 |
 |---|---|---|---|
@@ -1766,7 +1767,7 @@ Content-Type: application/json; charset=utf-8
 | 권한 | CI(GitHub OIDC, 2-2) 또는 대시보드 세션 `ADMIN`. 결과 조회는 검사를 만든 레포의 토큰만(대시보드에서 요청한 스캔은 서버가 띄운 실행, 2-2). 목록은 대시보드 세션만(CI 토큰은 403: 한 레포의 토큰으로 모든 레포의 검사를 보지 않는다) |
 | 설명 | CI가 PR·이미지 빌드·정기·수동 실행 때 검사를 등록한다. 서버는 검사와 스캔을 만들고 202를 준다. 러너가 분석한 결과를 API-13으로 올리면, 서버가 `L1`을 채우고 기준 스캔과 비교해 게이트 결과(`PASS` / `WARN` / `FAIL`)를 낸다. 정책은 6절. 목록은 최신 검사부터 결과 조회와 같은 모양으로 준다(화면 SCR-05-10). PR 검사가 만든 스캔은 API-02(`trigger=PR`)로도 본다 |
 | 관련 | FR-11 · SCR-05 |
-| 지금 같은 일 | 없음 [계획] |
+| 지금 같은 일 | 없음(API 전에는 같은 일을 하는 것이 없었다) |
 
 | 이름 | 위치 | 타입 | 필수 | 설명 |
 |---|---|---|---|---|
@@ -2108,12 +2109,12 @@ CVE-2026-68525(tomcat-embed-core 11.0.24) 한 건이다.
 
 | 원하는 것 | GitHub Actions 트리거 | `mode` | 하는 일 |
 |---|---|---|---|
-| PR 검사 | `pull_request` | `PR` | 레포 SBOM(cdxgen)으로 대조하고 새 Finding을 판정(L2)한다. 게이트를 적용한다. L1·L3는 없다 |
+| PR 검사 | `pull_request` | `PR` | PR 커밋을 빌드한 bootJar의 SBOM(Trivy `rootfs`)으로 대조하고 모든 Finding을 판정(L2)한다. 게이트를 적용하고, 게이트는 새 Finding만 센다(6-2). L1·L3는 없다 |
 | 이미지 빌드(ECR push 전) | 배포 파이프라인의 이미지 빌드 단계 | `IMAGE_BUILD` | 이미지 SBOM(Trivy)을 digest와 함께 보관하고 대조·판정(L2)한다. 서비스 레포에 시나리오가 있으면 그 이미지를 띄워 시나리오를 보내고 L3 근거(`l3`)를 남긴다(PRD FR-14) |
 | 하루 1번 | 대시보드가 `workflow_dispatch` | `SCHEDULE` | 운영에서 실행 중인 이미지(L1)마다 그 이미지의 저장된 SBOM을 최신 DB로 재대조하고, 새 Finding을 판정(L2)한다. 새로 생긴 것은 Finding의 처음 본 시각으로 구분한다 |
 | 원할 때 | `workflow_dispatch` | `MANUAL` | 대시보드에서 스캔을 요청하면(API-01) 서버가 띄운다. 레포 대상은 그 커밋을 빌드한 bootJar, 이미지 대상은 그 digest 이미지로 대조·판정(L2)하고 그 검사에 올린다. L1은 서버가 채운다. L3(PRD FR-14)는 아직 없다 |
 
-- PR 검사(`PR`)는 레포 대상(`type=REPO`, `headCommit`)이다. cdxgen으로 레포 SBOM을 만들고 새 Finding만 L2로 판정한다. 배포 전이라 L1은 없다(PRD FR-11).
+- PR 검사(`PR`)는 레포 대상(`type=REPO`, `headCommit`)이다. 러너가 PR 커밋의 bootJar를 빌드해 `trivy rootfs`로 SBOM을 만들고, 모든 Finding을 L2로 판정한다. 게이트는 그중 새 Finding만 센다(6-2). 배포 전이라 L1은 없다(PRD FR-11).
 - 이미지 스캔(`IMAGE_BUILD`)은 ECR push 전에 한다(PRD FR-11). 러너가 방금 빌드한 이미지로 SBOM을 만들고 결과만 올리므로(API-13), 서버가 레지스트리에서 이미지를 읽을 필요가 없다.
 - 하루 1번 재대조(`SCHEDULE`)는 GitHub `schedule`이 아니라 대시보드가 띄운다. 어떤 digest가 운영에서 도는지는 대시보드(L1)만 알기 때문이다. 기본 한국 04:30(L1 수집 03:17 뒤), 설치 설정 `logssey.reach.rescan.cron`(`-`이면 끔). 대상은 요약 기본 범위(API-08 `basis=RUNNING`)가 실행 중인 이미지로 쓰는 스캔이고, L1이 꺼졌거나 신선한 조회가 없으면 띄우지 않는다. 검사마다 `rescanOf` = 그 스캔, 요청 주체 `SYSTEM`, 멱등 키는 스캔·날짜라 하루에 한 번이다. 러너는 수동 실행과 같은 작업을 `rescan_of`와 함께 돌린다(API-01). 재빌드는 없고, L2용 jar는 같은 digest 이미지에서 꺼낸다
 - L2 분석은 앱 1개에 1분 이내가 기준이다(NFR-03, PoC 약 40초). PR마다 돌릴 수 있다.
@@ -2134,14 +2135,14 @@ sequenceDiagram
   G->>G: exitCode로 단계 성공·실패
 ```
 
-### 6-2. 게이트 정책(제안)
+### 6-2. 게이트 정책
 
-처음부터 빌드를 깨면 오탐으로 모든 PR이 막힌다. 그래서 두 단계로 들인다(제안서 3절). 처음에는 리포트 전용이다. 대상·전환 기준·예외·되돌리기는 PRD FR-11 "게이트 전환"이 정하고, 조건은 이 절의 표를 따른다. 게이트 조건은 ARD Q-07에서 정한다. 아래 조건 표는 그 결정 전의 제안이다.
+처음부터 빌드를 깨면 오탐으로 모든 PR이 막힌다. 그래서 두 단계로 들인다(제안서 3절). 리포트 전용으로 시작했고, 11/23부터 service-backend는 게이트다. 서비스 레포 변수 `REACH_POLICY=GATE`이고 PR 검사 `pr`이 `develop`의 필수 검사라, `FAIL`이면 PR을 머지할 수 없다. 게이트를 거는 것은 PR 검사뿐이고 이미지 검사·재대조·수동 검사는 `REPORT_ONLY`다. 대상·예외·되돌리기는 PRD FR-11 "게이트 전환"이 정하고, 조건은 이 절의 표를 따른다(ARD Q-07).
 
 | 단계 | `policy` | 동작 |
 |---|---|---|
-| 1. 리포트 전용 | `REPORT_ONLY` | 결과만 남긴다. 항상 `PASS`, `exitCode` 0. 걸린 조건(`reasons`)은 그대로 준다. 전환 기준의 "경고에 걸린 Finding"을 보려는 것이다 |
-| 2. 게이트 | `GATE` | 아래 조건을 적용한다. PRD FR-11의 전환 기준(제안: 리포트 전용으로 4주 이상 운영, 그 기간 `REACHABLE` 오탐 0건, 경고에 걸린 Finding 모두 검토)을 만족하면 팀이 전환한다 |
+| 1. 리포트 전용 | `REPORT_ONLY` | 결과만 남긴다. 항상 `PASS`, `exitCode` 0. 걸린 조건(`reasons`)은 그대로 준다. 경고에 걸린 Finding을 보고 게이트로 바꿀지 판단하려는 것이다 |
+| 2. 게이트 | `GATE` | 아래 조건을 적용한다. service-backend는 11/23부터 이 단계다(PRD FR-11 "게이트 전환") |
 
 | 조건(`reasons[].condition`) | 대상 | 결과 | 이유 |
 |---|---|---|---|
@@ -2162,7 +2163,7 @@ sequenceDiagram
 ### 6-3. 결과 전달
 
 - CI는 `scanStatus`가 `SUCCEEDED`나 `FAILED`가 될 때까지 결과를 조회한다. 웹후크 `ci.check.completed`(7절)를 받아도 된다.
-- 스캔이 `FAILED`면 `gate`가 없다. 1단계에서는 경고로 다루고 배포를 막지 않는다(제안).
+- 스캔이 `FAILED`면 `gate`가 없다. 1단계에서는 경고로 다루고 배포를 막지 않는다. 2단계(`GATE`)의 PR 검사는 러너가 실패로 끝나 머지를 막는다. Re-run하면 새 검사로 다시 스캔한다(2-7).
 - PR에 결과를 남기는 방법(체크, 코멘트, SARIF 업로드)은 정하지 않았다. Security 탭의 Code scanning(SARIF 업로드)을 쓸 수 있는지는 확인 필요다.
 
 ## 7. 이벤트·웹훅 [계획] (선택)
