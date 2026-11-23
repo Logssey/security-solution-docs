@@ -320,7 +320,7 @@ GitHub Actions의 `pull_request`(PR마다 빠른 대조), `schedule`(하루 1번
 
 처음부터 막으면 오탐 하나가 개발을 멈추므로 리포트 전용(`REPORT_ONLY`)으로 시작해 아래 기준을 만족하면 게이트(`GATE`)로 바꾼다.
 
-- 대상: PR에서 새로 생긴 Finding(기준 스캔에 없던 purl × CVE)만 본다. 이미 있던 Finding 때문에 PR을 막지 않는다.
+- 대상: PR에서 새로 생겼거나 판정이 나빠진 Finding만 본다. 기준 스캔에 없던 purl × CVE, 또는 기준 스캔에서는 판정이 더 낮던 것이다(예: 라이브러리는 그대로인데 코드가 바뀌어 `UNREACHABLE` → `REACHABLE`). 이미 같거나 더 나쁜 판정으로 있던 Finding 때문에 PR을 막지 않는다.
 - 조건: API 명세서 6-2를 따른다. `REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고, 나머지는 통과다. `UNREACHABLE`은 막지 않는다(보류 원칙).
 - 전환 기준(제안): 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `REACHABLE` 오탐 0건, 경고 Finding 모두 검토.
 - 예외: 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과시킬 수 있다. PR 작성자 본인은 승인할 수 없다(ARD SR-10). 예외는 검토 기록에 남고 만료되면 다시 게이트 대상이다.
