@@ -351,12 +351,12 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 
 | 파일 | 내용 | 만드는 법 | 관련 |
 |---|---|---|---|
-| `data/vuln-functions.json` | CVE별 취약 함수(클래스, 메서드, 시그니처). 처음 CVE 10개·취약 메서드 36개, 지금 CVE 14개 | `scripts/make_spec.py`가 조사 파일에서 만든다. 직접 고치지 않는다(AD-15) | FR-09, API-10, SCR-06 |
-| `data/research/` | CVE별 조사 원본(취약 함수 데이터의 원본) | 사람이 쓴다. AI는 후보만 낸다 | FR-09 |
-| `data/rules.json` | 수집할 사실과 CVE별 판정 규칙. 10/10 오후 기준 사실 40개, CVE 규칙 10개 | 사람이 쓴다. 저녁·밤에 CVE 4개를 더한 뒤의 개수는 확인 필요(Q-13) | FR-06, API-09, SCR-06 |
+| `src/main/resources/reach/vuln-functions.json` | CVE별 취약 함수(클래스, 메서드, 시그니처). 처음 CVE 10개·취약 메서드 36개, 지금 CVE 14개 | `scripts/make_spec.py`가 조사 파일에서 만든다. 직접 고치지 않는다(AD-15) | FR-09, API-10, SCR-06 |
+| `reach-analyzer/research/` | CVE별 조사 원본(취약 함수 데이터의 원본) | 사람이 쓴다. AI는 후보만 낸다 | FR-09 |
+| `src/main/resources/reach/rules.json` | 수집할 사실과 CVE별 판정 규칙. 10/10 오후 기준 사실 40개, CVE 규칙 10개 | 사람이 쓴다. 저녁·밤에 CVE 4개를 더한 뒤의 개수는 확인 필요(Q-13) | FR-06, API-09, SCR-06 |
 | `docs/answer-key.md` | 정답지(사람 판정)와 도구 비교 | 사람이 쓴다 | FR-08, API-06 |
 
-상태: [완료] v0. 데이터 파일은 `reach-poc/data/`에 있다.
+상태: [완료] v0. 데이터 파일은 dashboard-backend `src/main/resources/reach/`(조사 원본은 `reach-analyzer/research/`)에 있다. 분석기와 API-09·10이 같은 파일을 읽는다.
 
 #### C-07 보고서 생성
 
@@ -406,8 +406,8 @@ FR-13(업그레이드 제안)은 지금 수동 실험(`upgrade-proposal.md`, `up
 | 항목 | 내용 |
 |---|---|
 | 실행 시점 | PR마다 빠른 대조, 이미지 빌드(ECR push 전) 때 이미지 스캔과 L3 능동 관측, 하루 1번 저장된 SBOM 재대조·L1·재판정, 필요할 때 수동 실행. 시점별로 하는 일은 5-3 |
-| 트리거(제안) | `pull_request`(+`push`), `schedule`, `workflow_dispatch`, 배포 파이프라인의 이미지 빌드 단계. 재사용 워크플로(`workflow_call`)로 한 번 정의하고 `service-backend`·`service-frontend`에서 같이 쓴다 |
-| 도입 순서(제안) | 리포트 전용(빌드를 깨지 않음) → 전환 기준을 만족하면 게이트. PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고)다. 전환 기준·예외·되돌리기는 Q-07 |
+| 트리거(제안) | `pull_request`(+`push`), `workflow_dispatch`(수동, 그리고 대시보드가 하루 1번 띄우는 재대조. GitHub `schedule`은 쓰지 않는다), 배포 파이프라인의 이미지 빌드 단계. 재사용 워크플로(`workflow_call`)로 한 번 정의하고 `service-backend`·`service-frontend`에서 같이 쓴다 |
+| 도입 순서 | 리포트 전용(빌드를 깨지 않음)으로 시작해 11/23 게이트로 바꿨다. PR에서 새로 생겼거나 판정이 나빠진 Finding만 본다. 조건은 API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고)다. 예외·되돌리기는 Q-07 |
 | 원칙(제안) | ECR push 전에 로컬 이미지를 스캔한다. 이미지 검사에서 그 이미지를 커버리지 에이전트와 띄워 시나리오를 보내고 L3 근거를 남긴다(C-12). L3가 실패해도 검사는 계속된다. PR에서는 L3를 돌리지 않는다. 재대조는 저장된 SBOM으로 재빌드 없이 한다. PR 작업에는 자격 증명을 주지 않는다(SR-09) |
 | 엔드포인트 | API-12 `POST /api/v1/reach/ci/checks`(실행), `GET /api/v1/reach/ci/checks/{checkId}`(결과). 목록 조회는 없다 |
 | 메모 | 기존 CI는 새 러너에서 bootJar 하나만 만든다(plain jar를 끔). 이미지에 붙는 revision 라벨을 L1 연결에 그대로 쓸 수 있다 |
@@ -733,7 +733,7 @@ flowchart LR
 | AD-14 | 사실은 앱 코드에서만 수집 | [완료] v0 |
 | AD-15 | 취약 함수는 수정 전후 diff에서 뽑고, 조사 파일에서 생성 | [완료] v0 |
 | AD-16 | L3는 능동 관측을 MVP로, 상시 관측은 하지 않음 | [구현: Java] |
-| AD-17 | CI는 리포트 전용으로 시작해 게이트로 넘어간다 | [계획] |
+| AD-17 | CI는 리포트 전용으로 시작해 게이트로 넘어간다 | [구현] 11/23 게이트 전환 |
 | AD-18 | API는 dashboard-backend의 `reach` 모듈, 결과는 `reach_` 테이블, 분석은 GitHub Actions 러너 | [계획] 결정(팀 확인 필요) |
 
 ### 9-2. 결정 상세
@@ -898,14 +898,14 @@ flowchart LR
 | 결과 | L3는 L2가 놓친 것(예: 타입 변수로 받는 요청 본문)을 실제 실행으로 드러내고, L2가 찾은 후보 경로가 실제로 어디까지 실행되는지 보인다. 실행되지 않았다는 것만으로는 판정하지 않는다. 러너의 설정이 운영과 다르면 결과가 달라질 수 있어, 빌드(이미지 digest), 설정 키와 켜짐 여부(값은 기록하지 않음), 보낸 요청 목록, 확인 방법, 관측 시각, 시나리오 버전을 근거에 함께 남긴다. 관측 결과는 Finding의 `l3`로 따로 저장하고, 판정을 올릴 때만 근거에 바뀌지 않는 값(실행 여부, 도달 수준, 올리기 전 L2 판정)으로 한 줄을 더한다. 그래서 앱을 띄우지 않는 재대조가 사람 검토를 되돌리지 않는다(API 명세 3-5, 3-12) |
 | 관련 | FR-14, C-12 |
 
-#### AD-17 CI는 리포트 전용으로 시작해 게이트로 넘어간다 [계획]
+#### AD-17 CI는 리포트 전용으로 시작해 게이트로 넘어간다 [구현]
 
 | 항목 | 내용 |
 |---|---|
 | 맥락 | 처음부터 CRITICAL에 빌드를 깨면 오탐으로 모든 PR이 막힌다 |
-| 결정 | 처음에는 리포트 전용(빌드를 깨지 않음)으로 결과만 쌓는다. 전환 기준을 만족하면 게이트를 건다(Q-07). 게이트는 PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고)다. ECR push 전에 로컬 이미지를 스캔하고, 재대조는 저장된 SBOM으로 한다 |
+| 결정 | 처음에는 리포트 전용(빌드를 깨지 않음)으로 결과만 쌓는다. 그 뒤 게이트를 건다(Q-07). 게이트는 PR에서 새로 생긴 Finding만 본다. 조건은 API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·CRITICAL·HIGH인 `NOT_ANALYZED`는 경고)다. ECR push 전에 로컬 이미지를 스캔하고, 재대조는 저장된 SBOM으로 한다 |
 | 이유 | 도입 비용을 낮추고, 취약한 이미지가 레지스트리에 올라가기 전에 막는다 |
-| 결과 | 게이트 조건은 API 명세서 6-2, 대상·전환 기준·예외·되돌리기는 Q-07에 제안으로 구체화했다. 팀이 확정하기 전까지 CI는 리포트 전용이다 |
+| 결과 | 게이트 조건은 API 명세서 6-2, 대상·예외·되돌리기는 Q-07에 구체화했다. 11/23 Reach 담당이 게이트로 전환했다. service-backend는 `REACH_POLICY=GATE`이고 PR 검사 `pr`이 `develop` 필수 검사라, 게이트가 실패하면 머지할 수 없다. 게이트는 PR 검사에만 걸고 이미지 검사·재대조·수동 검사는 리포트 전용이다 |
 | 관련 | FR-11, C-11 |
 
 #### AD-18 API는 dashboard-backend의 `reach` 모듈, 분석은 GitHub Actions 러너 [계획]
@@ -1038,7 +1038,7 @@ Reach는 Trivy 같은 오픈 소스 스캐너에 기대고, 운영 클러스터�
 | Q-04 | ~~API 서버, 결과 저장소, 작업 실행기의 위치~~ 닫음(10/18): AD-18. 운영 DB 서버 위치만 대시보드 ADR-D005에 남는다 | - | C-08, C-13, AD-18 |
 | Q-05 | Finding의 스캔 간 이력 관리(같은 Finding 갱신 / 스캔마다 새로)의 저장 방식. 사람 검토를 잇는 키(서비스·purl·CVE)와 되돌리는 조건(도구 판정·근거 변경)은 FR-08과 API 명세서 3-10으로 정했다 | API 명세서와 함께 정한다 | 6-2, 6-4 |
 | Q-06 | ~~매일 재판정에 쓸 bootJar 또는 reach 결과의 보관 방식(결과 저장소에 함께 보관 / 실행 중 digest의 이미지를 ECR에서 받아 꺼냄)~~ 닫음(11/17): SBOM은 결과 저장소(`reach_sboms`, 스캔마다 gzip), jar는 실행 중 digest의 이미지를 ECR에서 받아 꺼낸다 | - | 5-3, C-13 |
-| Q-07 | PR 게이트 조건과 전환. 처음에는 리포트 전용이다(AD-17). 제안(PRD FR-11 "게이트 전환"):<br>① 대상: PR에서 새로 생긴 Finding만. 기존 Finding으로 PR을 막지 않는다<br>② 조건: API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·`NOT_ANALYZED` CRITICAL·HIGH는 경고, 나머지 통과)<br>③ 전환 기준: 리포트 전용 4주 이상, 그 기간 사람 검토로 확인된 `REACHABLE` 오탐 0건, 경고 Finding 모두 검토됨<br>④ 예외: 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과. PR 작성자 본인은 승인할 수 없다(SR-10). 기록은 Finding 검토 이력에 남고 만료되면 다시 게이트 대상<br>⑤ 되돌리기: 전환 뒤 오탐으로 막히면 그 조건만 경고로 내리고 검증 세트(C-14)에 추가 | 팀. 전환 기준을 만족하면 확정한다. 예외 기록을 받는 API(API-06 또는 API-12)는 설계 필요 | C-11, AD-17 |
+| Q-07 | PR 게이트 조건과 전환. 리포트 전용으로 시작했다(AD-17). 정한 것(PRD FR-11 "게이트 전환"):<br>① 대상: PR에서 새로 생겼거나 판정이 나빠진 Finding만. 이미 같거나 더 나쁜 판정으로 있던 Finding으로 PR을 막지 않는다<br>② 조건: API 명세서 6-2(`REACHABLE` CRITICAL·HIGH는 실패, `REACHABLE` MEDIUM 이하·`UNKNOWN`·`NOT_ANALYZED` CRITICAL·HIGH는 경고, 나머지 통과)<br>③ 전환: 11/23 게이트로 바꿨다. service-backend는 `REACH_POLICY=GATE`이고 `pr`이 `develop` 필수 검사다.<br>④ 예외: 보안 담당자(MVP는 `ADMIN`)가 사유와 만료일을 남기면 통과. PR 작성자 본인은 승인할 수 없다(SR-10). 기록은 Finding 검토 이력에 남고 만료되면 다시 게이트 대상<br>⑤ 되돌리기: 전환 뒤 오탐으로 막히면 그 조건만 경고로 내리고 검증 세트(C-14)에 추가 | 조건과 전환은 닫음(11/23, Reach 담당). 예외 기록을 받는 API(API-06 또는 API-12)는 설계 필요 | C-11, AD-17 |
 | Q-08 | purl 기준 자동 병합의 구현 여부, Trivy와 Grype 결과가 다를 때의 병합 규칙 | 확인 필요 | C-02, AD-03 |
 | Q-09 | 업그레이드 적용 여부 | 팀 결정. 적용한다면 `marketplaceE2E`와 실제 기동 확인이 먼저다 | FR-13, CON-09 |
 | Q-10 | npm(web, chat) 분석기 설계 | 확장 단계 | QA-07, CON-10 |
