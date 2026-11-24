@@ -7,5 +7,6 @@ CNAPP을 구성하는 보안 기능의 요구사항·화면·업무 규칙·아�
 | 시크릿 탐지·검증·대응 | [secret-management](secret-management/README.md) |
 | IaC 보안 | [iac-security](iac-security/README.md) |
 | 취약점 도달 가능성 분석 | [reachability-analysis](reachability-analysis/README.md) |
+| 코드 취약점(SAST) | [code-security](code-security/README.md) |
 
 공통 인증·레이아웃·통합 대시보드 규약은 [대시보드 설계 문서](https://github.com/Logssey/dashboard-design-docs)를 따른다.
