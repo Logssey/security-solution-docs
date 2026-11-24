@@ -627,7 +627,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 - `NONE`은 시나리오가 그 코드를 지나가지 않았다는 뜻일 뿐 `UNREACHABLE`의 근거가 아니다(FR-14 수용 기준 2).
 - 값은 그 대상(이미지 digest)의 **마지막 성공한 L3 결과**다. 같은 이미지를 다시 띄워 보거나, 재대조가 보관한 실행 기록을 다시 대조하면(`run.rematch`) 새 결과가 대신한다. `l3`가 없는 스캔(`PR`, 보관한 기록이 없는 재대조, 대시보드 요청 스캔)과 L3가 실패한 스캔은 이 값을 바꾸지 않는다.
 - **실행 기록 보관**: 앱을 띄운 관측의 실행 기록(구간별 실행 데이터와 `run`)을 이미지마다 보관한다(API-13 `l3Record`). 하루 1번 재대조는 앱을 다시 띄우지 않고 이 기록을 그날의 취약 함수 데이터·취약점 목록과 다시 대조한다. 그래서 이미지는 그대로인데 새 CVE가 나오거나 취약 함수 데이터가 늘어도 그 Finding에 `l3`가 붙는다. 앱마다 최근 이미지 5개와 실행 중인 이미지(L1)의 기록만 남긴다.
-- CVE와 패키지 좌표(group:artifact)로 Finding에 잇는다. 취약 함수 데이터가 없는 CVE, 다른 좌표의 사본(`UNANALYZED_COPY`), OS 패키지는 `l3`가 null이다.
+- CVE와 패키지 좌표(group:artifact)로 Finding에 잇는다. 좌표가 다르면, 결과 묶음이 데이터 좌표의 판정을 준 Finding(스캐너가 CVE를 같은 groupId·버전의 다른 jar에 붙인 경우, 아래 "결과 묶음 만들기")에만 같은 CVE·같은 groupId의 결과 하나를 붙인다. 이때 `l3`의 `installedVersions`·`regionVersion`은 데이터 jar의 값이다. 취약 함수 데이터가 없는 CVE, 판정하지 않은 사본(`UNANALYZED_COPY`), OS 패키지는 `l3`가 null이다.
 - **판정 올리기**: 서버가 결과(API-13)를 받을 때, PR 검사가 아니면 Finding마다 L3 결과(이번 묶음의 `l3`, 없으면 그 이미지에 남은 마지막 결과)로 도구 판정을 올린다. 그래서 앱을 띄우지 않는 재대조도 같은 판정이 된다.
 
   | L2 판정 | L3 | 저장하는 판정 |
@@ -1926,7 +1926,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 - **`l3`는 스캔을 실패시키지 않는다.** `error`가 있거나 모양이 틀리면(`reached`가 허용 밖, `run` 없음, 같은 CVE·좌표가 두 번) 400이 아니라 그 스캔의 L3를 `FAILED`로 남기고(3-12 "스캔의 L3") 나머지는 그대로 저장한다.
 - 판정·근거·사람 검토·게이트에는 쓰지 않는다. 근거 해시에도 들어가지 않아 검토를 되돌리지 않는다.
-- CVE와 `coordinates`가 같은 Finding에 붙인다(같은 좌표의 여러 버전은 같은 결과). 이번 묶음에 없는 CVE의 예전 결과는 지운다. `l3`가 없거나 `FAILED`면 그 대상의 예전 결과를 그대로 둔다.
+- CVE와 `coordinates`가 같은 Finding에 붙인다(같은 좌표의 여러 버전은 같은 결과). 좌표가 다른 Finding도 묶음 항목의 판정이 `NOT_ANALYZED`가 아니고 groupId가 같으면 같은 결과를 붙인다(맞는 결과가 둘이면 붙이지 않는다). 이번 묶음에 없는 CVE의 예전 결과는 지운다. `l3`가 없거나 `FAILED`면 그 대상의 예전 결과를 그대로 둔다.
 - `PR` 검사의 `l3`는 받지 않는다(ARD SR-09).
 - 서버가 아는 필드만 저장한다. Finding 하나의 근거가 256KB를 넘으면 `paths`를 빼고 저장한다.
 - `l3Record`는 `l3`가 성공한 새 관측일 때만 보관한다(16MB 이하의 tar.xz. 안에는 `run.json`과 `segments/<구간 id>.exec`). `run.rematch`가 true인 결과(보관한 기록을 다시 대조한 것), `PR` 검사, 모양이 틀린 기록은 보관하지 않고 `l3` 결과는 그대로 저장한다. 보관한 뒤 그 앱의 기록을 정리한다: 이미지마다 가장 새 기록 하나, 그중 최근 5개와 실행 중인 이미지(L1 조회에 있는 digest)의 것만 남긴다.
@@ -1938,9 +1938,9 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 - 스캐너가 찾은 매칭(purl × 취약점 ID) 하나가 `verdicts` 한 항목이다. Trivy와 Grype가 같은 purl × 취약점 ID를 찾으면 한 항목이고 `sources`에 둘 다 남는다. Grype가 GitHub 권고 ID(`GHSA-…`)로 준 것은 연결된 CVE가 있으면 CVE로 맞춘다. 심각도가 다르면 Trivy 값을 쓰고 `severityNote`에 둘 다 적는다(예: `Trivy HIGH, Grype MEDIUM`). 같은 패키지가 이미지 안 두 경로에 있어도 한 항목이다(`path`는 처음 것).
 - 스캐너가 같은 취약점을 다른 ID로 따로 보고하면(예: Trivy의 `NSWG-ECO-17`과 `CVE-2015-9235`) 항목도 둘이다. 별칭은 합치지 않는다.
-- 판정한 CVE·패키지(`verdicts.json`에 판정이 있는 것)는 그 판정을 옮긴다. 근거 순서는 사실(`FACT`) → 메모(`NOTE`) → 적용 규칙(`RULE`, `matchedCondition`) → 호출 경로(`PATH`)다. 규칙으로 판정했어도 호출 그래프가 취약 함수에 닿으면 후보 경로(`pathTarget` = `VULN_FUNCTION`, 최대 3개)와 판정에 쓰지 않은 이유(`NOTE`)를 남긴다. 확인했지만 없던 사실은 `value: false`로, 확인한 대상 수를 아는 사실(`F-dto.floating`, `F-dto.floating.tokens`)은 `checkedCount`를 함께 준다.
+- 판정한 CVE·패키지(`verdicts.json`에 판정이 있는 것)는 그 판정을 옮긴다. 스캐너가 판정한 CVE를 데이터 좌표와 **groupId가 같고 버전이 같은 다른 jar**에 붙였으면(예: CVE-2026-73180의 데이터는 `tomcat-embed-websocket`인데 Grype는 `tomcat-embed-core`에 붙인다) 그 매칭도 데이터 좌표의 판정과 근거를 받고, 근거 맨 앞에 그 사실을 적은 `NOTE`가 하나 더 붙는다. 분석기는 취약 함수를 클래스 이름으로 앱의 모든 jar에서 찾고 규칙은 앱 코드·설정을 보므로, 스캐너가 어느 jar에 붙였는지와 판정은 상관없다. 버전은 분석기가 읽은 데이터 jar(`reach-result.json`의 `package.jars`)의 것과 비교한다. 근거 순서는 사실(`FACT`) → 메모(`NOTE`) → 적용 규칙(`RULE`, `matchedCondition`) → 호출 경로(`PATH`)다. 규칙으로 판정했어도 호출 그래프가 취약 함수에 닿으면 후보 경로(`pathTarget` = `VULN_FUNCTION`, 최대 3개)와 판정에 쓰지 않은 이유(`NOTE`)를 남긴다. 확인했지만 없던 사실은 `value: false`로, 확인한 대상 수를 아는 사실(`F-dto.floating`, `F-dto.floating.tokens`)은 `checkedCount`를 함께 준다.
 - `vulnFunctionIds`는 API-10의 id(`vuln-functions.json` 함수 순서), `engine`의 `rulesVersion`·`vulnFunctionsVersion`은 API-09·10의 `version`과 같다.
-- 판정하지 않은 매칭은 `NOT_ANALYZED`와 사유다: OS 패키지(purl 타입 `apk`, `deb`, `rpm` 등) → `OS_PACKAGE`, maven이 아닌 생태계(`npm` 등) → `UNSUPPORTED_ECOSYSTEM`, 취약 함수 데이터에 있는 CVE지만 다른 패키지 좌표 → `UNANALYZED_COPY`, 취약 함수 데이터에 없는 CVE → `NO_VULN_FUNCTION_DATA`.
+- 판정하지 않은 매칭은 `NOT_ANALYZED`와 사유다: OS 패키지(purl 타입 `apk`, `deb`, `rpm` 등) → `OS_PACKAGE`, maven이 아닌 생태계(`npm` 등) → `UNSUPPORTED_ECOSYSTEM`, 취약 함수 데이터에 있는 CVE지만 groupId가 다르거나(데이터는 Jackson 3 `tools.jackson.core`, 매칭은 Jackson 2 `com.fasterxml.jackson.core`) 버전이 다른 패키지 좌표 → `UNANALYZED_COPY`, 취약 함수 데이터에 없는 CVE → `NO_VULN_FUNCTION_DATA`.
 - Java 코드가 없는 대상(npm만, OS 패키지만)은 L2를 돌리지 않는다. 이때 `reachResult`는 빈 객체이고 모든 항목이 `NOT_ANALYZED`다. maven 패키지가 있는데 L2 결과가 없거나, 데이터에 있는 CVE·패키지인데 판정이 없으면 묶음을 만들지 않고 실패한다(러너가 단계를 빠뜨린 것이다).
 - 단계(`stages`)는 러너가 잰 값을 넘긴다. 넘기지 않으면 `SBOM`·`MATCH`·`L2`·`REPORT`(L2를 안 돌렸으면 `L2` 빼고)를 `SUCCEEDED`로 둔다. 분석 전에 실패했으면 `tools`·`stages`·`failure`만 있는 실패 묶음을 만든다.
 

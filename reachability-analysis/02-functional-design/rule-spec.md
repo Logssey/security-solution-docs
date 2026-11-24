@@ -113,7 +113,7 @@
 
 | ID | 원칙 | 이유 | 출처 | 상태 |
 |---|---|---|---|---|
-| GR-12 | 같은 CVE라도 패키지 사본이 다르면 행을 나눈다. 판정 행에는 판정한 패키지의 설치·수정 버전을 쓴다. 판정하지 않은 사본은 `NOT_ANALYZED` 행으로 드러낸다 | CVE당 한 줄이던 보고서에서는 판정하지 않은 사본(Jackson 2.21.5)이 보이지 않았고, 다른 패키지의 버전이 표시될 수 있었다 | 기록 14-2절 | [완료] |
+| GR-12 | 같은 CVE라도 패키지 사본이 다르면 행을 나눈다. 판정 행에는 판정한 패키지의 설치·수정 버전을 쓴다. 판정하지 않은 사본은 `NOT_ANALYZED` 행으로 드러낸다. 스캐너가 CVE를 데이터 좌표와 groupId·버전이 같은 다른 jar에 붙인 행은 사본이 아니고 데이터 좌표의 판정을 받는다(근거 맨 앞에 그 사실을 적은 메모). groupId가 다르면(Jackson 2 `com.fasterxml.*` ↔ 데이터 Jackson 3 `tools.jackson.*`) 다른 코드라, 버전이 다르면 분석기가 읽은 jar가 아니라 사본이다 | CVE당 한 줄이던 보고서에서는 판정하지 않은 사본(Jackson 2.21.5)이 보이지 않았고, 다른 패키지의 버전이 표시될 수 있었다. 스캐너마다 CVE를 붙이는 jar가 다르다(Grype는 Anchore의 CVE별 보정을 따라 73180을 `tomcat-embed-core`에, GitHub 권고는 42498을 core에). 취약 함수는 클래스 이름으로 모든 jar에서 찾으므로 판정은 어느 jar인지와 상관없다 | 기록 14-2절, 73180 조사(11/24) | [완료] |
 | GR-13 | OS 패키지는 Java 호출 그래프로 판정하지 않는다(`NOT_ANALYZED`) | Java 호출 그래프의 대상이 아니다 | 기록 11-2절 | [완료] |
 | GR-14 | 취약 함수 데이터가 없는 CVE는 `NOT_ANALYZED`로 둔다. `UNREACHABLE`로 쓰지 않는다 | 취약 함수가 호출 그래프 판정의 목표 지점이다. 공지 중 취약 함수를 적은 것은 2%뿐이라(Endor Labs 2024, 회사 자체 조사 기준) 데이터를 직접 만들어야 한다 | 기록 11-2절, 종합 3-3. 종합 7절 위험 표는 "못 찾으면 unknown"으로 적었지만, 도구 출력(기록 11-2)은 `NOT_ANALYZED`다 | [완료] |
 | GR-15 | 판정 대상(bootJar, 이미지 digest)을 보고서에 적는다. 이미지를 직접 만들면 이미지 안 jar의 sha256을 분석한 bootJar와 비교한다 | 로컬 이미지에 오래된 jar가 들어가 라이브러리가 102개(이미지) 대 185개(레포 bootJar)로 달랐다(10/10 `verify-laptop.sh` 확인). 실제 앱 분석의 라이브러리 jar 184개(5-4)와 1개 차이가 나는 원인은 확인 필요 | 종합 7절, 기록 11-1·14-1절 | [부분] 수동 비교. 보고서 표기 형식은 원본(`verdict.py`) 확인 필요 |
@@ -179,6 +179,8 @@ def judge(finding):
     if finding.is_os_package:                                   # GR-13
         return Verdict("not_analyzed", reason="OS 패키지")
     if finding.package not in judged_packages(finding.cve):     # GR-12
+        if same_group_and_version(finding.package, judged_packages(finding.cve)):
+            return judge(finding.as_data_coordinate())          # 스캐너가 같은 그룹의 다른 jar에 붙임
         return Verdict("not_analyzed", reason="판정하지 않은 패키지 사본")
     if finding.cve not in vuln_functions:                       # GR-14
         return Verdict("not_analyzed", reason="취약 함수 데이터 없음")
@@ -461,7 +463,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 - 11/23에 더한 6개(76183~103119)는 모두 `RULE`이고 모양이 같다. 기능을 켜는 사실이 있거나, 호출 그래프가 취약 함수에 닿거나(`sink`, `sink_weak`), Spring Boot 4가 아니면 `UNKNOWN`이다. 아니면 `UNREACHABLE`이다. 도달 가능 조건은 없다. 두 번째 조건(논블로킹 출력, SASL 방식, 잘못된 헤더 입력 등)은 정적으로 볼 수 없어서다. 86248만 Spring Boot 조건이 없다(jar 유무로 판정한다).
 - 6개의 심각도는 CVE 기록의 CVSS 값이다. Tomcat 보안 페이지의 등급은 각 소절 첫 줄에 적었다.
 - 11/23에 더 더한 18개(65183~93446)도 모두 `RULE`이고 앞 6개와 모양이 같다. 다른 것은 둘이다. 79677은 `sink` 조건이 없고, 비동기 전송 사실 둘이 함께 있거나 Spring Boot 4가 아니면 `UNKNOWN`이다. 77756은 조건이 없어 늘 `UNKNOWN`이다.
-- WebSocket 4개(73180, 77791, 79677, 87022)는 tomcat-embed-websocket 좌표다. 73180·77791·87022는 Spring WebSocket(`@EnableWebSocket`, STOMP, `WebSocketConfigurer`)을 써도 해당으로 본다. Spring WebSocket도 Tomcat에서는 `ServerContainer.upgradeHttpToWebSocket`으로 업그레이드해(spring-websocket 7.0.9 `StandardWebSocketUpgradeStrategy` 138행) `WsSession`·`WsRemoteEndpointImplServer`·`PerMessageDeflate`를 지나기 때문이다. 76183은 이와 다르다. 76183의 취약 함수는 엔드포인트 매핑(`findMapping`)이고 Spring WebSocket은 그 경로를 쓰지 않아 뺐다. 79677은 Spring이 블로킹 전송만 써서 뺐다(11/23 결정).
+- WebSocket 4개(73180, 77791, 79677, 87022)는 tomcat-embed-websocket 좌표다. Grype는 73180을 `tomcat-embed-core`에 붙이는데, 같은 groupId·버전이라 이 판정을 그대로 받는다(GR-12). 73180·77791·87022는 Spring WebSocket(`@EnableWebSocket`, STOMP, `WebSocketConfigurer`)을 써도 해당으로 본다. Spring WebSocket도 Tomcat에서는 `ServerContainer.upgradeHttpToWebSocket`으로 업그레이드해(spring-websocket 7.0.9 `StandardWebSocketUpgradeStrategy` 138행) `WsSession`·`WsRemoteEndpointImplServer`·`PerMessageDeflate`를 지나기 때문이다. 76183은 이와 다르다. 76183의 취약 함수는 엔드포인트 매핑(`findMapping`)이고 Spring WebSocket은 그 경로를 쓰지 않아 뺐다. 79677은 Spring이 블로킹 전송만 써서 뺐다(11/23 결정).
 - 18개의 심각도도 CVE 기록의 CVSS 값이다. Tomcat 보안 페이지 등급(Low·Moderate·Important)과 다른 것이 많다. 보안 페이지 등급은 각 소절 첫 줄에 적었다.
 
 #### RULE-CVE-2026-65182
@@ -754,7 +756,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 
 | 항목 | 내용 |
 |---|---|
-| 패키지·버전 | tomcat-embed-websocket 11.0.24 → 11.0.25 · MEDIUM |
+| 패키지·버전 | tomcat-embed-websocket 11.0.24 → 11.0.25 · MEDIUM (Grype는 tomcat-embed-core에 붙인다. 그 행도 이 판정을 받는다, GR-12) |
 | 취약 기능 | 로그인한 HTTP 세션에서 연 WebSocket이 그 HTTP 세션이 끝나도 닫히지 않는다. 연결 당시의 세션 ID로만 기억해서, 뒤에 세션 ID가 바뀌면 로그아웃·만료 뒤에도 연결이 남는다 |
 | 취약 함수 | `org.apache.tomcat.websocket.server.WsServerContainer.registerAuthenticatedSession` |
 | 발동 조건 | 앱이 Tomcat 위에서 WebSocket 서버를 쓰고(JSR-356 엔드포인트 또는 Spring WebSocket·STOMP), 핸드셰이크 요청에 사용자 principal과 HTTP 세션이 함께 있고(세션을 만들지 않는 토큰 인증이면 해당 없다), 연결 뒤 세션 ID가 바뀐 다음(`changeSessionId`, 세션 고정 방지 등) HTTP 세션이 끝난다. 호출 주체는 컨테이너 |
