@@ -22,7 +22,7 @@
 | L1 배포 여부 | 실행 중 파드의 imageID와 스캔 digest 조인 (10절) | [구현] 클러스터 수집기(CronJob)가 6시간마다 조회 |
 | OS 패키지(apk) | Java 호출 그래프로 판정하지 않고 `NOT_ANALYZED`로 표시 (9절) | [완료] 표시만 |
 | 다른 생태계 | web(정적 프론트, npm), chat(Node). 분석기 플러그인으로 더한다(NFR-07) | [계획] |
-| L3 실제 호출 | 능동 관측: CI 러너에서 스캔한 이미지를 띄우고 시나리오를 보내, 커버리지 에이전트로 취약 구간(`vuln-functions.json`의 `l3`)이 실행됐는지 본다. L2 판정 옆에 놓는 근거이고, 취약 구간이 실행됐으면 판정 상태(2-1)를 `REACHABLE`로, 취약 함수는 실행됐는데 구간을 확인하지 못했으면 `UNREACHABLE`을 `UNKNOWN`으로 올린다(서버가 결과를 받을 때, API 명세 3-12). 실행되지 않았다는 것만으로 `UNREACHABLE`을 만들지 않는다(FR-14, API 명세 3-12). 네이티브(maps·uprobe)는 [계획], 운영 상시 관측(Tetragon 등)은 비목표다 | [구현] Java |
+| L3 실제 호출 | 능동 관측: CI 러너에서 스캔한 이미지를 띄우고 시나리오를 보내, 커버리지 에이전트로 취약 구간(`vuln-functions.json`의 `l3`)이 실행됐는지 본다. L2 판정 옆에 놓는 근거이고, 판정 상태(2-1)를 어디까지 올릴지는 CVE마다 규칙의 L3 한도(`rules.json` 판정 항목의 `l3`, 4절)가 정한다. 구간 실행은 `REACHABLE`까지, `UNKNOWN`까지(`UNREACHABLE`만 올림), 올리지 않음 중 하나이고, 취약 함수만 실행되고 구간을 확인하지 못한 경우는 `UNKNOWN`까지나 올리지 않음이다(서버가 결과를 받을 때, API 명세 3-12). `l3`를 적지 않은 호출 그래프 판정과 규칙이 없는 CVE는 구간 실행 → `REACHABLE`, 함수만 실행 → `UNKNOWN`이다. 실행되지 않았다는 것만으로 `UNREACHABLE`을 만들지 않는다(FR-14, API 명세 3-12). 네이티브(maps·uprobe)는 [계획], 운영 상시 관측(Tetragon 등)은 비목표다 | [구현] Java |
 
 - 관련 요구사항: FR-05(호출 그래프 판정), FR-06(규칙 판정), FR-07(판정·근거 출력), FR-08(사람 검토), FR-09(취약 함수 데이터), FR-04(L1).
 - 규칙 조회는 API-09, 취약 함수 조회는 API-10, 규칙 화면은 SCR-06이다. 모두 운영 중이고, 분석기와 같은 데이터 파일을 읽는다.
@@ -158,6 +158,21 @@ CVE 규칙은 "도달 가능 조건 → 도달 불가 조건 → 미확인 조�
 - **규칙이 없는 CVE의 기본 규칙**: 강한 경로로 취약 함수 도달 → `REACHABLE`, 취약 함수가 jar에 없거나(`sinks_missing`) **약한 경로로만 닿으면**(`sink_weak`) → `UNKNOWN`, 그 밖 → `UNREACHABLE`. 약한 경로(Object 메서드 호출, JDK 콜백)는 닿는다고도 안 닿는다고도 할 수 없어서다. 지금 판정 데이터의 40개는 모두 자기 규칙이 있어 이 기본 규칙을 쓰지 않는다
 - Jackson 타입 규칙(89407·68497·91776·91777·19032·83557)은 도달 불가 조건(앱에 그 타입·설정이 없음)이 미확인 조건(`sink`)보다 앞선다. JSON을 받는 앱이면 호출 그래프는 거의 늘 Jackson 내부의 취약 함수에 닿기 때문에(샘플 앱 `app-like`에서도 강한 경로가 있다) 경로만으로는 가를 수 없고, 역직렬화되는 타입으로 가른다. 타입은 요청 본문·리스너·클라이언트 응답 같은 출발점(6-1)과, 앱 코드 어디에든 나오는 클래스 리터럴·TypeReference(tokens)로 넓게 모은다. 그래서 `readValue(json, clazz)`처럼 타입을 변수로 받아도, 그 변수에 넘기는 `Foo.class`가 앱 코드에 있으면 tokens에 잡혀 미확인이 된다
 - `RULE` 방식에서는 규칙의 사실 조건이 판정을 정하고, 호출 그래프 결과는 보고서에 참고로 보인다(기록 11-2절). 규칙이 그래프 결과를 조건에 함께 쓰는지는 원본(`rules.json`) 확인 필요.
+- **L3 한도 (`l3`)**: 판정 항목마다 L3 결과(1절)가 판정을 어디까지 올릴 수 있는지 적는다. `method`가 `rule`이면 꼭 적는다(없으면 서버가 뜨지 않는다). 앱이 아니라 CVE와 규칙의 성질이라 앱마다 바뀌지 않는다. 11/24에 더했다. 그 전에는 구간이 실행되면 늘 `REACHABLE`로 올렸고, 103119(AJP 커넥터가 있을 때만 해당)가 모든 응답 쓰기에서 실행되는 구간 때문에 `REACHABLE`이 됐다.
+
+  | 항목 | 값 | 뜻 |
+  |---|---|---|
+  | `region` (구간 실행) | `reachable` | `UNREACHABLE`·`UNKNOWN` → `REACHABLE` |
+  | | `unknown` | `UNREACHABLE` → `UNKNOWN`만 |
+  | | `none` | 올리지 않는다 |
+  | `function` (함수만 실행, 구간 확인 못 함) | `unknown` | `UNREACHABLE` → `UNKNOWN` |
+  | | `none` | 올리지 않는다 |
+  | `why_ko` | 글 | 그렇게 정한 이유 |
+
+  - 정하는 기준은 "규칙의 조건을 갖추지 않은 앱에서도 이 줄(함수)이 실행되나?"다. 그렇다면 `none`이다. 그 기능을 쓸 때만 실행되지만 취약 조건까지는 보여 주지 않으면 `unknown`, 취약 조건 자체를 보여 주면 `reachable`이다.
+  - `l3`를 적지 않은 호출 그래프 판정(지금 6개 모두)과 규칙이 없는 CVE는 `region` `reachable`, `function` `unknown`이다. 취약 함수를 부르는지가 곧 판정이라서다.
+  - 실행 없음(`NONE`), 기록 없음(`NOT_RECORDED`), 함수는 실행됐지만 구간은 실행되지 않음(구간을 확인한 `FUNCTION`)은 올리지도 내리지도 않는다. 올리지 않으면 근거에 실행 기록(`RUNTIME`)을 더하지 않지만, L3 결과 자체는 저장되고 화면에 보인다. 다음 스캔·재대조부터 적용돼 예전에 잘못 올린 판정이 바로잡힌다.
+  - 지금 규칙 34개: `reachable`/`unknown` 6개, `reachable`/`none` 1개(91777), `unknown`/`unknown` 18개, `unknown`/`none` 2개(65182, 65183), `none`/`unknown` 2개(65637, 83557), `none`/`none` 5개(73581, 77756, 86248, 101356, 103119). CVE별 값은 8절 각 표의 L3 줄에 적었다.
 
 ```mermaid
 flowchart TD
@@ -481,6 +496,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. 컨테이너 보안 설정이 없고, Spring Boot는 제약을 만들지 않는다(verify 6절) |
 | 대조군 | 실험 A(직접 주입) → `UNKNOWN`(설계상 최대). app-boot2(Spring Boot 2) → `UNKNOWN` |
+| L3 | `RealmBase.findSecurityConstraints` 639행(`/x/*` 패턴 비교). 컨테이너 보안 제약이 있을 때만 실행되지만, 긴 패턴이 먼저 오는지는 보여 주지 않는다. 함수는 제약이 없어도 요청마다 불린다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → 올리지 않음 |
 
 #### RULE-CVE-2026-65905
 
@@ -497,6 +513,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. `DigestAuthenticator` 사용 없음(verify 6절) |
 | 대조군 | app-positive(Tomcat DIGEST 인증), 실험 A → `REACHABLE`. app-boot2(Spring Boot 2) → `UNKNOWN` |
+| L3 | `DigestAuthenticator$NonceInfo.nonceCountValid` 806~808행(재전송 창 갱신). DIGEST 인증기가 nonce count를 받을 때만 실행돼 도달 가능 조건과 같다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → `UNKNOWN`까지 |
 
 #### RULE-CVE-2026-68525
 
@@ -513,6 +530,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. `FormAuthenticator` 사용 없음(verify 6절) |
 | 대조군 | app-positive(Tomcat FORM 인증), 실험 A → `REACHABLE`. app-boot2(Spring Boot 2) → `UNKNOWN` |
+| L3 | `FormAuthenticator.restoreRequest` 641행(저장한 메서드 복원). FORM 로그인 뒤에만 실행되지만 메서드별 제약이 있는지는 보여 주지 않는다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지 |
 
 실험 B에서 Tomcat 3개는 Authenticator 하위 클래스, `@ServletSecurity`, `HttpMethodConstraintElement`로 우회해 넣었고 모두 기대대로 나왔다. CVE별 대응은 원본(`rules.json`) 확인 필요.
 
@@ -533,7 +551,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포와 배포 설정(gitops)에 없다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | app-positive(코드로 `Http2Protocol` 등록) → `UNKNOWN`. app-indirect(설정 파일로 HTTP/2 + TLS) → `REACHABLE`. app-boot2 → `UNKNOWN` |
-| L3 | 취약 구간 없음. 수정이 필수 헤더 조건식에 항 하나를 더한 것이라 그 줄은 정상 HTTP/2 요청에서도 실행된다. 실행 기록으로는 구분할 수 없어 함수 실행까지만 근거로 남긴다 |
+| L3 | 취약 구간 없음. 수정이 필수 헤더 조건식에 항 하나를 더한 것이라 그 줄은 정상 HTTP/2 요청에서도 실행된다. 실행 기록으로는 구분할 수 없어 함수 실행까지만 근거로 남긴다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → `UNKNOWN`까지(구간이 없다. `receivedEndOfHeaders`는 HTTP/2 요청마다 실행돼 HTTP/2를 켰다는 것만 보여 준다) |
 
 한계: 배포할 때만 넣는 환경 변수(`SERVER_HTTP2_ENABLED`)는 레포에 없으면 보이지 않는다(7-3과 같은 종류). SSLHostConfig가 하나뿐이면 검사를 건너뛰어도 결과가 같을 수 있는데 이 규칙은 그것을 보지 않는다.
 
@@ -554,7 +572,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. 엔드포인트 등록이 없고, 호출 그래프도 `findMapping`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `WsServerContainer.findMapping` 290행(요청 경로를 템플릿으로 읽는 줄). 정확히 맞는 엔드포인트가 없는 업그레이드 요청마다 실행되므로, 실행돼도 중괄호 경로나 우회를 보여주지는 않는다 |
+| L3 | `WsServerContainer.findMapping` 290행(요청 경로를 템플릿으로 읽는 줄). 정확히 맞는 엔드포인트가 없는 업그레이드 요청마다 실행되므로, 실행돼도 중괄호 경로나 우회를 보여주지는 않는다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(`findMapping`은 엔드포인트를 등록했을 때만 불린다) |
 
 #### RULE-CVE-2026-86248
 
@@ -575,7 +593,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. tomcat-coyote-ffm jar가 없고, 호출 그래프도 `getOcspSoftFail`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | 취약 구간 없음. 고쳐진 코드가 이 jar에 없어, tomcat-embed-core의 실행 기록으로는 보여줄 것이 없다 |
+| L3 | 취약 구간 없음. 고쳐진 코드가 이 jar에 없어, tomcat-embed-core의 실행 기록으로는 보여줄 것이 없다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → 올리지 않음(구간이 없고, 대표 함수는 FFM jar 없이 JSSE로 OCSP를 켠 앱에서도 실행된다) |
 
 #### RULE-CVE-2026-86350
 
@@ -594,7 +612,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 `decode`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `HPackHuffman.decode`의 433~434, 439~440, 445~446, 472~473, 478~479, 484~485행(헤더 이름·값의 잘못된 문자에서 예외를 던지는 줄). 그런 입력에서만 실행돼 공격에 가깝지만, 헤더가 섞였다는 것까지 보여주지는 않는다 |
+| L3 | `HPackHuffman.decode`의 433~434, 439~440, 445~446, 472~473, 478~479, 484~485행(헤더 이름·값의 잘못된 문자에서 예외를 던지는 줄). 그런 입력에서만 실행돼 공격에 가깝지만, 헤더가 섞였다는 것까지 보여주지는 않는다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(구간은 그런 입력이 왔다는 것만 보여 주고, 규칙이 사람에게 맡긴 앞단 프록시 확인을 대신하지 못한다. `decode`는 HTTP/2 허프만 헤더마다 실행된다) |
 
 한계: 65637과 같다. 배포할 때만 넣는 환경 변수(`SERVER_HTTP2_ENABLED`)는 레포에 없으면 보이지 않는다.
 
@@ -615,7 +633,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. JNDIRealm 사용이 앱 코드와 레포에 없고, 호출 그래프도 `bindAsUser`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `JNDIRealm.bindAsUser` 1981~1982행(bind 전에 GSSAPI만 지우는 검사). bind 모드 로그인마다 실행되므로, 실행돼도 GSSAPI가 아닌 SASL 방식을 설정했다는 뜻은 아니다 |
+| L3 | `JNDIRealm.bindAsUser` 1981~1982행(bind 전에 GSSAPI만 지우는 검사). bind 모드 로그인마다 실행되므로, 실행돼도 GSSAPI가 아닌 SASL 방식을 설정했다는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(`bindAsUser`는 JNDIRealm을 쓸 때만 실행된다) |
 
 #### RULE-CVE-2026-101356
 
@@ -634,7 +652,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 `isAsyncError`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `AsyncStateMachine.isAsyncError` 220행. HTTP/1.1이든 HTTP/2든 비동기 요청에서 오류 여부를 물을 때마다 실행되므로, 실행돼도 HTTP/2나 오류를 보여주지는 않는다 |
+| L3 | `AsyncStateMachine.isAsyncError` 220행. HTTP/1.1이든 HTTP/2든 비동기 요청에서 오류 여부를 물을 때마다 실행되므로, 실행돼도 HTTP/2나 오류를 보여주지는 않는다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → 올리지 않음(구간과 함수 모두 HTTP/1.1 비동기 요청에서도 실행돼 HTTP/2를 켰다는 것도 보여 주지 않는다) |
 
 #### RULE-CVE-2026-103119
 
@@ -653,7 +671,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. AJP 커넥터가 없고, 호출 그래프도 `updateBytesWritten`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `OutputBuffer.updateBytesWritten` 447~448행(수정이 바꾼 조건과 `close()`). Content-Length가 있는 모든 응답 쓰기에서 실행되므로, 실행돼도 논블로킹 출력을 보여주지는 않는다 |
+| L3 | `OutputBuffer.updateBytesWritten` 447~448행(수정이 바꾼 조건과 `close()`). Content-Length가 있는 모든 응답 쓰기에서 실행되므로, 실행돼도 논블로킹 출력을 보여주지는 않는다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → 올리지 않음(구간과 함수 모두 모든 응답 쓰기에서 실행돼 AJP 커넥터를 보여 주지 않는다) |
 
 #### RULE-CVE-2026-65183
 
@@ -672,7 +690,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. Unix 도메인 소켓 설정이 앱 코드와 레포에 없고, 호출 그래프도 `initServerSocket`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `NioEndpoint.initServerSocket` 317~321행(소켓 파일을 만드는 bind와, 그 뒤 권한을 바꾸는 분기의 시작). Unix 도메인 소켓 커넥터면 실행되므로, 실행돼도 다른 로컬 사용자가 그 틈에 접속했다는 뜻은 아니다 |
+| L3 | `NioEndpoint.initServerSocket` 317~321행(소켓 파일을 만드는 bind와, 그 뒤 권한을 바꾸는 분기의 시작). Unix 도메인 소켓 커넥터면 실행되므로, 실행돼도 다른 로컬 사용자가 그 틈에 접속했다는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → 올리지 않음(구간은 Unix 도메인 소켓 커넥터에서만 실행된다. `initServerSocket`은 TCP 커넥터를 포함한 모든 NIO 커넥터 시작 때 실행된다) |
 
 #### RULE-CVE-2026-65927
 
@@ -691,7 +709,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. RewriteValve 사용이 앱 코드와 레포에 없고, 호출 그래프도 `invoke`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `RewriteValve.invoke` 555행(`i = 0`, 규칙을 다시 도는 줄). `[N]` 규칙이 맞았을 때만 실행돼 공격에 가깝지만, 건너뛴 첫 규칙이 접근 제한이었다는 것까지 보여주지는 않는다 |
+| L3 | `RewriteValve.invoke` 555행(`i = 0`, 규칙을 다시 도는 줄). `[N]` 규칙이 맞았을 때만 실행돼 공격에 가깝지만, 건너뛴 첫 규칙이 접근 제한이었다는 것까지 보여주지는 않는다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(`invoke`는 RewriteValve를 설정한 앱에서만 실행된다) |
 
 #### RULE-CVE-2026-66422
 
@@ -710,7 +728,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. 컨테이너 보안 제약이 앱 코드와 레포에 없고, 호출 그래프도 `hasRole`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `RealmBase.hasRole` 907행(`role = realRole`, 별칭을 적용하는 줄). 별칭이 있을 때만 실행되지만 `isUserInRole`에서도 실행되므로, 실행돼도 별칭이 보안 제약에 적용됐다는 뜻은 아니다 |
+| L3 | `RealmBase.hasRole` 907행(`role = realRole`, 별칭을 적용하는 줄). 11.0.24에서는 Context 아래 서블릿이면 역할 매핑이 없어도(`findRoleMapping`이 역할 이름을 그대로 돌려준다) 모든 역할 확인(제약 확인과 `isUserInRole`)에서 실행돼, 실행돼도 별칭이 보안 제약에 적용됐다는 뜻은 아니고 함수 실행과 같은 근거다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(`hasRole`은 Tomcat 인증 주체가 있을 때만 실행된다) |
 
 #### RULE-CVE-2026-68569
 
@@ -729,7 +747,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. DataSourceRealm 사용이 앱 코드와 레포에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `DataSourceRealm.getPrincipal` 454행(DB 연결이 없을 때 사용자를 만드는 줄), 457행(사용자가 있는지 보지 않고 만드는 줄). 457행은 이름으로 찾는 모든 로그인에서 실행되므로, 실행돼도 DB에 없는 사용자라는 뜻은 아니다. 비밀번호 경로(`authenticate` 333행)는 넣지 않았다 |
+| L3 | `DataSourceRealm.getPrincipal` 454행(DB 연결이 없을 때 사용자를 만드는 줄), 457행(사용자가 있는지 보지 않고 만드는 줄). 457행은 이름으로 찾는 모든 로그인에서 실행되므로, 실행돼도 DB에 없는 사용자라는 뜻은 아니다. 비밀번호 경로(`authenticate` 333행)는 넣지 않았다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 DataSourceRealm을 쓸 때만 실행된다) |
 
 #### RULE-CVE-2026-68763
 
@@ -748,7 +766,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 세 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `Http2UpgradeHandler.reserveWindowSize` 1088~1090, 1098~1103행(스트림을 대기열에 넣는 두 분기). 연결 창이 바닥났을 때만 실행되지만 느린 클라이언트에 큰 응답을 보낼 때도 그렇다. 실행돼도 대기열의 스트림이 리셋됐다는 뜻은 아니다. `replaceStream`(1974행)은 끝난 모든 스트림에서 실행돼 넣지 않았다 |
+| L3 | `Http2UpgradeHandler.reserveWindowSize` 1088~1090, 1098~1103행(스트림을 대기열에 넣는 두 분기). 연결 창이 바닥났을 때만 실행되지만 느린 클라이언트에 큰 응답을 보낼 때도 그렇다. 실행돼도 대기열의 스트림이 리셋됐다는 뜻은 아니다. `replaceStream`(1974행)은 끝난 모든 스트림에서 실행돼 넣지 않았다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 HTTP/2에서만 실행된다) |
 
 #### RULE-CVE-2026-73180
 
@@ -767,7 +785,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. WebSocket 서버 코드가 없고, 호출 그래프도 `registerAuthenticatedSession`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `WsServerContainer.registerAuthenticatedSession` 370행(핸드셰이크 때의 세션 ID로 WebSocket 세션 묶음을 찾는 줄). HTTP 세션이 있는 인증된 핸드셰이크마다 실행되므로, 실행돼도 세션 ID가 바뀌었거나 연결이 남았다는 뜻은 아니다 |
+| L3 | `WsServerContainer.registerAuthenticatedSession` 370행(핸드셰이크 때의 세션 ID로 WebSocket 세션 묶음을 찾는 줄). HTTP 세션이 있는 인증된 핸드셰이크마다 실행되므로, 실행돼도 세션 ID가 바뀌었거나 연결이 남았다는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 WebSocket 서버에서만 실행된다) |
 
 #### RULE-CVE-2026-73581
 
@@ -786,7 +804,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. CRL 설정이 앱 코드와 레포에 없고, 호출 그래프도 `addCertificate`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `OpenSSLContext.addCertificate` 545~546행(키스토어 분기의 시작. CRL을 넣지 않고 끝나는 쪽). tomcat-native OpenSSL에서 키스토어 인증서마다 CRL 유무와 상관없이 실행된다. FFM 경로는 이 jar에 없어 보지 않는다 |
+| L3 | `OpenSSLContext.addCertificate` 545~546행(키스토어 분기의 시작. CRL을 넣지 않고 끝나는 쪽). tomcat-native OpenSSL에서 키스토어 인증서마다 CRL 유무와 상관없이 실행된다. FFM 경로는 이 jar에 없어 보지 않는다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → 올리지 않음(구간과 함수 모두 CRL 설정과 상관없이 키스토어 인증서마다 실행된다) |
 
 #### RULE-CVE-2026-74048
 
@@ -805,7 +823,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. OpenSSLLifecycleListener 사용이 앱 코드와 레포에 없고, 호출 그래프도 `lifecycleEvent`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `OpenSSLLifecycleListener.lifecycleEvent` 143~147행. FIPS 모드를 정했는데 활성화되지 않았을 때만 실행된다(고친 버전은 여기서 예외를 던진다). 실행되면 FIPS 실패 뒤에도 시작했다는 뜻이다 |
+| L3 | `OpenSSLLifecycleListener.lifecycleEvent` 143~147행. FIPS 모드를 정했는데 활성화되지 않았을 때만 실행된다(고친 버전은 여기서 예외를 던진다). 실행되면 FIPS 실패 뒤에도 시작했다는 뜻이다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → `UNKNOWN`까지(구간이 실행되면 FIPS 실패 뒤에도 시작한 취약 상태 자체다) |
 
 #### RULE-CVE-2026-75973
 
@@ -824,7 +842,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. SimpleAuthConfigProvider 사용이 앱 코드와 레포에 없고, 호출 그래프도 `getServerAuthConfig`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `SimpleAuthConfigProvider.getServerAuthConfig` 73~74행(캐시한 설정을 읽는 줄). 웹앱이 하나여도 이 공급자로 인증할 때마다 실행되므로, 실행돼도 다른 웹앱의 설정을 받았다는 뜻은 아니다 |
+| L3 | `SimpleAuthConfigProvider.getServerAuthConfig` 73~74행(캐시한 설정을 읽는 줄). 웹앱이 하나여도 이 공급자로 인증할 때마다 실행되므로, 실행돼도 다른 웹앱의 설정을 받았다는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 SimpleAuthConfigProvider를 쓸 때만 실행된다) |
 
 #### RULE-CVE-2026-77756
 
@@ -843,7 +861,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNKNOWN`. 규칙에 조건이 없어 늘 이렇다. 호출 그래프는 `prepareInputFilters`에 닿지 않았지만 판정에 쓰지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `Http11Processor.prepareInputFilters` 827~831행(Transfer-Encoding 값을 읽고 입력 필터를 붙이는 줄). 보통의 HTTP/1.1 chunked 업로드에서도 실행되므로, 실행돼도 HTTP/1.0 요청이라는 뜻은 아니다 |
+| L3 | `Http11Processor.prepareInputFilters` 827~831행(Transfer-Encoding 값을 읽고 입력 필터를 붙이는 줄). 보통의 HTTP/1.1 chunked 업로드에서도 실행되므로, 실행돼도 HTTP/1.0 요청이라는 뜻은 아니다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → 올리지 않음(구간과 함수 모두 보통의 HTTP/1.x 요청에서도 실행돼 앞단 프록시 조건을 보여 주지 않는다) |
 
 #### RULE-CVE-2026-77762
 
@@ -862,7 +880,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `Stream.emitHeader` 508행(트레일러를 요청 객체에 넣는 줄). 고친 줄이 아니라 영향이 나타나는 줄이다. 정상 트레일러에서도 실행되므로, 실행돼도 스트림이 재사용됐다는 뜻은 아니다. 고친 줄(`replaceStream` 1974행, `HpackDecoder.emitHeader` 461행)은 모든 스트림·헤더에서 실행돼 넣지 않았다 |
+| L3 | `Stream.emitHeader` 508행(트레일러를 요청 객체에 넣는 줄). 고친 줄이 아니라 영향이 나타나는 줄이다. 정상 트레일러에서도 실행되므로, 실행돼도 스트림이 재사용됐다는 뜻은 아니다. 고친 줄(`replaceStream` 1974행, `HpackDecoder.emitHeader` 461행)은 모든 스트림·헤더에서 실행돼 넣지 않았다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 HTTP/2에서만 실행된다) |
 
 #### RULE-CVE-2026-77791
 
@@ -881,7 +899,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. WebSocket 서버 코드가 없고, 호출 그래프도 `acquireMessagePartInProgressSemaphore`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `WsRemoteEndpointImplServer.acquireMessagePartInProgressSemaphore` 138행(대기 루프 안의 `Thread.yield()`. 수정은 이 줄을 `Thread.sleep(50)`으로 바꿨다). close가 다른 전송을 기다릴 때만 실행되지만 공격 없이도 잠깐 생길 수 있고, 루프가 얼마나 돌았는지는 보여주지 않는다 |
+| L3 | `WsRemoteEndpointImplServer.acquireMessagePartInProgressSemaphore` 138행(대기 루프 안의 `Thread.yield()`. 수정은 이 줄을 `Thread.sleep(50)`으로 바꿨다). close가 다른 전송을 기다릴 때만 실행되지만 공격 없이도 잠깐 생길 수 있고, 루프가 얼마나 돌았는지는 보여주지 않는다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → `UNKNOWN`까지(138행은 close가 전송 중인 메시지와 겹칠 때만 도는 대기 루프 안이라, 규칙이 사람에게 맡긴 조건이 실제로 생긴 것이다. 함수는 WebSocket 서버가 보내는 모든 메시지에서 실행된다) |
 
 #### RULE-CVE-2026-78383
 
@@ -900,7 +918,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. AJP 커넥터가 없고, 호출 그래프도 `finishResponse`에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `AjpProcessor.finishResponse` 1019행(읽지 않은 본문 패킷을 기다리는 줄). 앱이 본문을 읽지 않은 보통 AJP 요청에서도 실행되므로, 실행돼도 오류 응답이나 본문을 보내지 않는 클라이언트라는 뜻은 아니다 |
+| L3 | `AjpProcessor.finishResponse` 1019행(읽지 않은 본문 패킷을 기다리는 줄). 앱이 본문을 읽지 않은 보통 AJP 요청에서도 실행되므로, 실행돼도 오류 응답이나 본문을 보내지 않는 클라이언트라는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 AJP 요청에서만 실행된다) |
 
 #### RULE-CVE-2026-78437
 
@@ -919,7 +937,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `Stream.parseAuthority` 535행, `Stream.compareAuthority` 563행(잘못된 헤더에 표시를 남기는 줄. 고친 줄은 아니다). 그런 입력에서만 실행돼 공격에 가깝지만, 스트림이 검사 전에 끝났거나 다른 요청이 실패했다는 것까지 보여주지는 않는다 |
+| L3 | `Stream.parseAuthority` 535행, `Stream.compareAuthority` 563행(잘못된 헤더에 표시를 남기는 줄. 고친 줄은 아니다). 그런 입력에서만 실행돼 공격에 가깝지만, 스트림이 검사 전에 끝났거나 다른 요청이 실패했다는 것까지 보여주지는 않는다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 HTTP/2 요청마다 실행된다) |
 
 #### RULE-CVE-2026-79677
 
@@ -938,7 +956,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. 비동기 전송과 시간 제한 사용이 앱 코드에 없다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `WsWriteTimeout.register` 95행(만료 시각 순 집합에 넣는 줄). 시간 제한이 있는 비동기 전송마다 실행되므로, 실행되면 시간 제한을 쓴다는 뜻이지 시간 제한이 사라졌다는 뜻은 아니다. `backgroundProcess`는 `register` 뒤에만 실행돼 넣지 않았다 |
+| L3 | `WsWriteTimeout.register` 95행(만료 시각 순 집합에 넣는 줄). 시간 제한이 있는 비동기 전송마다 실행되므로, 실행되면 시간 제한을 쓴다는 뜻이지 시간 제한이 사라졌다는 뜻은 아니다. `backgroundProcess`는 `register` 뒤에만 실행돼 넣지 않았다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(구간·함수 모두 시간 제한이 있는 비동기 전송에서만 실행된다) |
 
 #### RULE-CVE-2026-87022
 
@@ -957,7 +975,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. WebSocket 서버 코드가 없고, 호출 그래프도 두 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `PerMessageDeflate.getMoreData` 270행(입력이 남았는데 프레임을 끝내는 줄. 수정이 복구 코드를 더한 곳). 압축 메시지의 정상 끝에서도 실행되므로, 실행돼도 메시지 중간의 BFINAL 블록이라는 뜻은 아니다 |
+| L3 | `PerMessageDeflate.getMoreData` 270행(입력이 남았는데 프레임을 끝내는 줄. 수정이 복구 코드를 더한 곳). 압축 메시지의 정상 끝에서도 실행되므로, 실행돼도 메시지 중간의 BFINAL 블록이라는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 압축을 협상한 WebSocket 연결에서만 실행된다) |
 
 #### RULE-CVE-2026-88041
 
@@ -976,7 +994,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. HTTP/2 설정이 레포에 없고, 호출 그래프도 세 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `Stream.emitHeader` 508행(77762와 같은 줄). 정상 트레일러에서도 실행되므로, 실행돼도 경쟁이 일어났다는 뜻은 아니다. 고친 줄(`HpackDecoder.emitHeader` 461행, `headersStart`, `replaceStream` 1974행)은 모든 헤더·스트림에서 실행돼 넣지 않았다 |
+| L3 | `Stream.emitHeader` 508행(77762와 같은 줄). 정상 트레일러에서도 실행되므로, 실행돼도 경쟁이 일어났다는 뜻은 아니다. 고친 줄(`HpackDecoder.emitHeader` 461행, `headersStart`, `replaceStream` 1974행)은 모든 헤더·스트림에서 실행돼 넣지 않았다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 HTTP/2에서만 실행된다) |
 
 #### RULE-CVE-2026-93446
 
@@ -995,7 +1013,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE`. TLS 설정이 레포와 앱 코드에 없고, 호출 그래프도 두 함수에 닿지 않는다 |
 | 사람 판정 | 아직 없음 |
 | 대조군 | 아직 없음 |
-| L3 | `SecureNioChannel.reset` 114행, `SecureNioChannel.write` 911행(수정이 표시를 지우는 곳). NIO 커넥터의 보통 TLS 통신에서도 실행되므로, 실행되면 Tomcat이 TLS를 직접 받는다는 뜻이지 표시가 남았거나 연결이 끊겼다는 뜻은 아니다 |
+| L3 | `SecureNioChannel.reset` 114행, `SecureNioChannel.write` 911행(수정이 표시를 지우는 곳). NIO 커넥터의 보통 TLS 통신에서도 실행되므로, 실행되면 Tomcat이 TLS를 직접 받는다는 뜻이지 표시가 남았거나 연결이 끊겼다는 뜻은 아니다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지(함수는 TLS를 켠 NIO 커넥터에서만 실행된다) |
 
 ### 8-2. BouncyCastle (`org.bouncycastle:bcprov-jdk18on` 1.81)
 
@@ -1107,6 +1125,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 사람 판정 | `UNREACHABLE` 확정. 실수형 필드는 응답 record 2개뿐이고 JDBC 행으로 만들어 반환만 한다. `@RequestBody` 타입 31개에는 실수형 필드가 없다. 외부 입력을 `readTree`하는 `CursorCodec`은 `numberValue()`만 써서 문자열→숫자 변환을 타지 않는다(verify 7절 + 소스 확인) |
 | 대조군 | app-positive(`double` 필드), 실험 A·B → `REACHABLE`. `app-tokens`(helper 경유 `BigDecimal`) → `UNKNOWN`. 실험 C(`readValue(json, Class.forName(name))`) → 놓침, `app-blindspots`에 고정 |
 | 확인 필요 | 공지는 `BigInteger`도 대상으로 적는다. 규칙의 "실수형"에 `BigInteger`가 들어가는지 원본(`Facts.java`) 확인 필요<br>Jackson 3 `StringNode`의 숫자 접근자(`asInt`·`asLong`·`asDouble`·`asDecimal`·`asBigInteger` 등과 `*Opt`)도 `looksLikeValidNumber`에 닿는다(10/11 확인, 기록 15-7절). 앱의 Jackson 3 숫자 접근자 호출은 `CursorCodec`의 `numberValue` 하나라 판정은 같다. 발동 조건에 넣을지 검토한다 |
+| L3 | `NumberInput.looksLikeValidNumber` 626~627행(정규식). 문자열 값을 실수형으로 바꿀 때만 실행돼 도달 가능 조건과 같다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → `UNKNOWN`까지 |
 
 #### RULE-CVE-2026-89425
 
@@ -1144,6 +1163,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. `javax.xml.datatype` 사용 없음(verify 7절) |
 | 대조군 | app-positive(`Duration` 필드), 실험 A·B → `REACHABLE` |
+| L3 | `CoreXMLDeserializers$Std._deserialize` 137·141행. `Duration`·`XMLGregorianCalendar`를 문자열에서 만들 때만 실행돼 도달 가능 조건과 같다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → `UNKNOWN`까지 |
 
 #### RULE-CVE-2026-91776
 
@@ -1160,6 +1180,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정. `@JsonTypeInfo`, default typing, 문제 처리기 사용 없음(verify 7절) |
 | 대조군 | app-positive(`@JsonTypeInfo(defaultImpl)`), 실험 A·B → `REACHABLE` |
+| L3 | `TypeDeserializerBase._findDeserializer` 166·198행. 다형성 타입 처리를 쓸 때만 실행되지만, 198행은 알려진 정상 타입 ID에서도 실행돼 모르는 ID의 대체를 보여 주지 않는다. L3 한도: 구간 실행 → `UNKNOWN`까지, 함수만 실행 → `UNKNOWN`까지 |
 
 #### RULE-CVE-2026-91777
 
@@ -1177,6 +1198,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 사람 판정 | `UNREACHABLE` 확정. `@JsonIdentityInfo` 사용 없음(verify 7절) |
 | 대조군 | app-positive(`@JsonIdentityInfo`), 실험 A·B → `REACHABLE`. 실험 C(mix-in) → `UNKNOWN`, `app-blindspots` 오탐 회귀 테스트 |
 | 수정 이력 | 처음에는 `readValue(json, Node.class)`가 있는 메서드의 class 리터럴(mix-in 포함)이 모두 루트가 됐고, 루트 타입 자체의 `@JsonIdentityInfo`도 셌다. 실험 C에서 `REACHABLE`(오탐)이 나왔다. Node 하나만 읽으면 참조 누적기를 타지 않으므로, 지금은 위 (1)(2)만 센다. 고치기 전 jar로는 회귀 테스트가 실패한다 |
+| L3 | `resolveForwardReference` 647~656·969~978행(전방 참조 선형 탐색). `@JsonIdentityInfo` 원소의 전방 참조를 풀 때만 실행돼 도달 가능 조건과 같다. 함수 중 `MapDeserializer._readAndBind`는 문자열이 아닌 키의 모든 Map에서 실행돼 함수만으로는 올리지 않는다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → 올리지 않음 |
 
 #### RULE-CVE-2026-19032
 
@@ -1193,6 +1215,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정 |
 | 대조군 | 샘플 앱과 실험 E → `REACHABLE` |
+| L3 | `NioPathHelper.deserialize` 375~396행. `:`가 든 URI 형식 문자열을 `Path`로 만들 때만 실행돼 도달 가능 조건과 같다. L3 한도: 구간 실행 → `REACHABLE`까지, 함수만 실행 → `UNKNOWN`까지 |
 
 #### RULE-CVE-2026-83557
 
@@ -1209,6 +1232,7 @@ Jackson CVE 대부분은 데이터 타입이 결정한다. 앱이 어떤 타입�
 | 현재 판정(api) | `UNREACHABLE` |
 | 사람 판정 | `UNREACHABLE` 확정 |
 | 대조군 | 샘플 앱과 실험 E → `REACHABLE` |
+| L3 | 취약 구간 없음(수정이 거부 목록 데이터만 바꿨다). 함수는 클래스 이름 기반 `@JsonTypeInfo`를 기본 검증기로 처리할 때만 실행된다. L3 한도: 구간 실행 → 올리지 않음, 함수만 실행 → `UNKNOWN`까지 |
 
 ## 9. 다른 Finding 처리
 
@@ -1394,11 +1418,12 @@ dashboard-backend가 계산하는 방법(구현, API 명세 3-3):
 | 4. 데이터 생성 | `scripts/make_spec.py`로 `data/vuln-functions.json`을 만든다. 다시 만든 뒤 기존 항목이 바뀌지 않았는지 본다 | `vuln-functions.json` | 생성 파일을 직접 고치지 않는다(GR-23) |
 | 5. 방식 결정 | 앱 코드가 부르면 `CALLGRAPH`, 컨테이너·프레임워크가 스스로 실행하면 `RULE` (5-1) | - | - |
 | 6. 규칙 작성 | `data/rules.json`에 조건을 평가 순서(4절)대로 쓴다. 새 사실이 필요하면 `Facts.java`에 더한다 | `rules.json` | 사실은 앱 코드에서만(GR-07). 확신이 없으면 `UNKNOWN`(GR-01) |
-| 7. 대조군 확인 | 샘플 앱(`test/`)과 앱 사본(로컬 clone)에 취약 조건을 넣어 `REACHABLE`(또는 설계상 최대)이 나오는지 본다. 규칙 모양 그대로와 우회한 모양을 함께 넣는다. 근거가 넣은 줄을 가리키는지 본다 | 대조군 결과 | 기대값을 먼저 적는다(GR-20). 원래 레포는 건드리지 않는다 |
-| 8. 회귀 테스트 | `test/expected.json`에 기대값을 넣고 `test/run-tests.sh`를 돌린다. 알려진 놓침도 기대값으로 넣는다 | 테스트 통과(지금 44/44) | GR-21 |
-| 9. 실제 앱 판정 | `scripts/run-reach.sh`로 실제 bootJar를 판정하고 정답지와 비교한다. 기존 판정이 바뀌지 않았는지 본다 | `verdicts.md`, `verdicts.json` | 예: 13506을 더한 뒤 다른 BC CVE 2개는 그대로 `UNREACHABLE`이었다 |
-| 10. 검토와 반영 | 바뀐 `rules.json`·`vuln-functions.json`(조사 파일, `Facts.java` 포함)을 PR로 올린다. CODEOWNERS 검토를 받고 검증 세트(ARD C-14: 샘플 앱, 대조군, 회귀 테스트)가 모두 통과해야 반영한다 | 반영된 규칙·데이터 | ARD SR-10. 반영 뒤 판정 근거(적용 규칙, 사실)가 바뀐 Finding은 이어받은 검토가 `UNREVIEWED`로 돌아간다(11-4). 정답지 일치율(M-03)을 다시 잰다 |
-| 11. 문서 갱신 | README(한계), `docs/WORKLOG.md`, `docs/answer-key.md`, 이 문서의 RULE·F 항목 | - | - |
+| 7. L3 한도 | 규칙을 쓸 때 판정 항목에 `l3`(`region`, `function`, `why_ko`)를 정한다(4절). 기준은 "규칙의 조건을 갖추지 않은 앱에서도 이 줄(함수)이 실행되나?"다. 그렇다면 `none`, 그 기능을 쓸 때만 실행되지만 취약 조건까지는 보여 주지 않으면 `unknown`, 취약 조건 자체를 보여 주면 `reachable`(구간만) | `rules.json`의 `l3` | `rule` 방식은 빠뜨리면 서버가 뜨지 않는다 |
+| 8. 대조군 확인 | 샘플 앱(`test/`)과 앱 사본(로컬 clone)에 취약 조건을 넣어 `REACHABLE`(또는 설계상 최대)이 나오는지 본다. 규칙 모양 그대로와 우회한 모양을 함께 넣는다. 근거가 넣은 줄을 가리키는지 본다 | 대조군 결과 | 기대값을 먼저 적는다(GR-20). 원래 레포는 건드리지 않는다 |
+| 9. 회귀 테스트 | `test/expected.json`에 기대값을 넣고 `test/run-tests.sh`를 돌린다. 알려진 놓침도 기대값으로 넣는다 | 테스트 통과(지금 44/44) | GR-21 |
+| 10. 실제 앱 판정 | `scripts/run-reach.sh`로 실제 bootJar를 판정하고 정답지와 비교한다. 기존 판정이 바뀌지 않았는지 본다 | `verdicts.md`, `verdicts.json` | 예: 13506을 더한 뒤 다른 BC CVE 2개는 그대로 `UNREACHABLE`이었다 |
+| 11. 검토와 반영 | 바뀐 `rules.json`·`vuln-functions.json`(조사 파일, `Facts.java` 포함)을 PR로 올린다. CODEOWNERS 검토를 받고 검증 세트(ARD C-14: 샘플 앱, 대조군, 회귀 테스트)가 모두 통과해야 반영한다 | 반영된 규칙·데이터 | ARD SR-10. 반영 뒤 판정 근거(적용 규칙, 사실)가 바뀐 Finding은 이어받은 검토가 `UNREVIEWED`로 돌아간다(11-4). 정답지 일치율(M-03)을 다시 잰다 |
+| 12. 문서 갱신 | README(한계), `docs/WORKLOG.md`, `docs/answer-key.md`, 이 문서의 RULE·F 항목 | - | - |
 
 ## 13. 알려진 한계와 사각지대
 

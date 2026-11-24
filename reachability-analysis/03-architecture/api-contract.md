@@ -342,7 +342,7 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
 | `component` | object | 예 | `purl`(키), `name`, `version`, `ecosystem`(purl 타입 그대로: `maven` / `npm` / `apk` 등), `path`(이미지 안 위치) |
 | `vulnerability` | object | 예 | `id`(CVE), `severity`, `severityNote`(출처마다 심각도가 다를 때 남긴 메모, FR-03), `title`(스캐너 값), `description`(스캐너 설명 원문), `affectedFeature`(취약 기능 설명), `fixedVersions`(스캐너 값), `cwe`, `references` |
 | `deployment` | enum | 예 | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
-| `l3` | L3 | 아니요 | L3 능동 관측이 닿은 곳(3-12). 판정 옆에 놓는 근거다. 실제 실행을 확인했으면 서버가 판정(`verdict`)을 올린다(3-12 "판정 올리기"). 이 대상(이미지)을 띄워 본 결과가 없으면 null이다 |
+| `l3` | L3 | 아니요 | L3 능동 관측이 닿은 곳(3-12). 판정 옆에 놓는 근거다. 실제 실행이 그 CVE의 조건을 보여 주면 서버가 판정(`verdict`)을 `l3.raiseLimit`까지 올린다(3-12 "판정 올리기"). 이 대상(이미지)을 띄워 본 결과가 없으면 null이다 |
 | `verdict` | Verdict | 예 | Reach 판정(3-4) |
 | `review` | Review | 예 | 사람 검토(3-10) |
 | `sameCveFindings` | integer 배열 | 아니요 | 같은 CVE의 다른 패키지 사본 Finding ID |
@@ -415,11 +415,11 @@ API가 지키는 판정 원칙이다. 자세한 원칙은 규칙명세서(GR-)�
 | `candidate` | boolean | `kind=PATH`일 때 | 항상 true. 가장 짧은 후보 경로이며 실제 경로와 다를 수 있다 |
 | `entryStage` | integer | 아니요 | 경로가 시작한 진입점 단계. 1(Spring 진입점) / 2(모든 앱 메서드) |
 | `weak` | boolean | 아니요 | 경로에 약한 간선(Object 메서드 호출, JDK 콜백)이 있나 |
-| `executed` | boolean | `kind=RUNTIME`일 때 | 취약 구간 실행이 관측됐나. true면 `REACHABLE`로 올린 근거, false면 구간을 확인 못 한 함수 실행으로 `UNREACHABLE`을 `UNKNOWN`으로 올린 근거다. 실행되지 않았다는 것은 근거로 쓰지 않는다 |
+| `executed` | boolean | `kind=RUNTIME`일 때 | 취약 구간 실행이 관측됐나. true면 구간 실행으로 올린 근거다(그 CVE의 한도에 따라 `REACHABLE`로, 또는 `UNREACHABLE`을 `UNKNOWN`으로). false면 구간을 확인 못 한 함수 실행으로 `UNREACHABLE`을 `UNKNOWN`으로 올린 근거다. 실행되지 않았다는 것은 근거로 쓰지 않는다 |
 | `reached`, `regionsChecked`, `startupOnly` | enum, boolean, boolean | `kind=RUNTIME`일 때 | 올릴 때 본 L3 결과(3-12와 같은 뜻) |
 | `l2Status` | enum | `kind=RUNTIME`일 때 | 올리기 전 L2 판정: `UNREACHABLE` / `UNKNOWN` |
 
-- [구현] `kind=RUNTIME`은 서버가 L3로 판정을 올릴 때만 근거 끝에 한 줄 더한다(3-12 "판정 올리기"). 러너는 보내지 않는다. 관측 근거 항목(빌드, 설정 키, 보낸 요청, 확인 방법, 관측 시각, 시나리오)은 근거에 넣지 않고 Finding의 `l3.run`으로 준다. 근거 해시가 근거 전체로 만들어져서, 다시 대조할 때마다 바뀌는 값(스캔 번호, `rematch`)이나 같은 이미지를 다시 띄우면 바뀌는 값(관측 시각)을 넣으면 같은 결과인데도 사람 검토가 `EVIDENCE_CHANGED`로 되돌아가기 때문이다.
+- [구현] `kind=RUNTIME`은 서버가 L3로 판정을 올릴 때만 근거 끝에 한 줄 더한다(3-12 "판정 올리기"). 구간이나 함수가 실행됐어도 한도 때문에 올리지 않으면(`raiseLimit` = `NONE`이거나, 한도가 `UNKNOWN`인데 L2가 이미 `UNKNOWN`) 더하지 않는다. 러너는 보내지 않는다. 관측 근거 항목(빌드, 설정 키, 보낸 요청, 확인 방법, 관측 시각, 시나리오)은 근거에 넣지 않고 Finding의 `l3.run`으로 준다. 근거 해시가 근거 전체로 만들어져서, 다시 대조할 때마다 바뀌는 값(스캔 번호, `rematch`)이나 같은 이미지를 다시 띄우면 바뀌는 값(관측 시각)을 넣으면 같은 결과인데도 사람 검토가 `EVIDENCE_CHANGED`로 되돌아가기 때문이다.
 
 예: CVE-2026-89407(jackson-core 3.1.5)의 사실 근거. 원자료에 줄 번호가 없어 `symbol`만 적었다.
 
@@ -495,7 +495,7 @@ CVE별 판정 조건이다. 사실과 호출 그래프 결과를 입력으로 �
 | `reasons` | object | 예 | 상태(`REACHABLE` / `UNREACHABLE` / `UNKNOWN`)별 판정 이유(한국어). `rules.json`의 `why_ko`. 데이터에 없는 상태는 키가 없다 |
 | `vulnFunctionIds` | integer 배열 | 예 | 같은 CVE의 취약 함수 `id`(3-8). 같은 데이터 버전 안에서만 같다 |
 | `regressionApps` | string 배열 | 아니요 [계획] | 이 규칙을 검사하는 샘플 앱. 지금 데이터에 없어 주지 않는다 |
-| `definition` | object | 아니요 | `include=definition`일 때. `verdict`(조건식 원문)와 `facts`(그 조건과 `infoFacts`에 나오는 사실의 정의 원문). 원문이라 사실 이름에 `F-`가 없다 |
+| `definition` | object | 아니요 | `include=definition`일 때. `verdict`(조건식 원문. 규칙 판정이면 L3 한도 `l3`도 있다, 3-12 "판정 올리기")와 `facts`(그 조건과 `infoFacts`에 나오는 사실의 정의 원문). 원문이라 사실 이름에 `F-`가 없다 |
 | `version` | string | 예 | 규칙 데이터 버전(스키마 `reach-rules/v0`의 `v0`) |
 | `updatedAt` | date-time | 아니요 [계획] | 마지막 변경 시각. 지금 데이터에 없어 주지 않는다 |
 
@@ -594,6 +594,7 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 | Evidence `matchedCondition` | `REACHABLE` / `UNREACHABLE` / `UNKNOWN` / `DEFAULT` |
 | Evidence `observationMethod` | `COVERAGE` / `MAPS` / `UPROBE` |
 | L3 `reached` | `REGION` / `FUNCTION` / `NONE` / `NOT_RECORDED` (3-12) |
+| L3 `raiseLimit` | `REACHABLE` / `UNKNOWN` / `NONE` (3-12) |
 | L3 `runStatus` | `SUCCEEDED` / `FAILED` |
 | L3 구간의 `unchecked` | `OTHER_VERSION` / `OUT_OF_SCOPE` / `NO_CLASS_FILE` / `NO_METHOD` / `NO_LINE_NUMBERS` |
 | Workload `source` | `MANUAL` / `CLUSTER_READER` |
@@ -608,15 +609,16 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 
 ### 3-12. L3 (능동 관측 결과)
 
-러너가 스캔한 이미지를 실제로 띄워 요청 시나리오를 보냈을 때, 취약 코드 쪽으로 **어디까지 실행됐는지**다(PRD FR-14). L2 판정(`verdict`) 옆에 놓는 근거다(US-12 "L2 판정과 나란히 본다"). 취약 구간이 실행됐으면 서버가 결과를 받을 때 판정을 올리고, 실행되지 않았다는 것만으로 L2 판정을 낮추지 않는다(아래 "판정 올리기"). L2가 무엇이라고 했든 취약 함수 데이터가 있는 모든 CVE를 본다. 판정 근거(3-5)와 따로 저장한다. 마이그레이션 V55의 주석("상태·근거 해시·게이트를 바꾸지 않는다")은 판정 올리기 규칙 전의 설명이다. 머지된 마이그레이션은 고칠 수 없어 그대로 둔다.
+러너가 스캔한 이미지를 실제로 띄워 요청 시나리오를 보냈을 때, 취약 코드 쪽으로 **어디까지 실행됐는지**다(PRD FR-14). L2 판정(`verdict`) 옆에 놓는 근거다(US-12 "L2 판정과 나란히 본다"). 취약 코드가 실행됐으면 서버가 결과를 받을 때, 그 실행이 CVE의 조건을 보여 주는 만큼만 판정을 올린다(`raiseLimit`). 실행되지 않았다는 것만으로 L2 판정을 낮추지 않는다(아래 "판정 올리기"). L2가 무엇이라고 했든 취약 함수 데이터가 있는 모든 CVE를 본다. 판정 근거(3-5)와 따로 저장한다. 마이그레이션 V55의 주석("상태·근거 해시·게이트를 바꾸지 않는다")은 판정 올리기 규칙 전의 설명이다. 머지된 마이그레이션은 고칠 수 없어 그대로 둔다.
 
-**Finding의 L3** (API-04는 앞의 세 필드만, API-05는 전부)
+**Finding의 L3** (API-04는 앞의 네 필드만, API-05는 전부)
 
 | 이름 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `reached` | enum | 예 | 도달 수준. `REGION`: 취약 구간(취약한 줄)이 실행됨 / `FUNCTION`: 취약 함수는 실행됐지만 구간은 아님 / `NONE`: 모두 확인할 수 있었고 실행된 것이 없음 / `NOT_RECORDED`: 실행된 것이 없고 확인하지 못한 것이 있음(기록 범위 밖, 클래스 파일 없음) |
 | `regionsChecked` | boolean | 예 | 구간을 확인했나. `FUNCTION`일 때 true면 "구간을 봤고 실행되지 않음", false면 "구간을 확인하지 못함"(라이브러리 버전이 구간 데이터와 다름, 구간 데이터 없음, 줄 번호 없는 클래스) |
 | `startupOnly` | boolean | 예 | 앱이 뜨는 동안에만 실행됐나. 요청으로 실행된 것과 구분한다 |
+| `raiseLimit` | enum | 예 | 이 L3 결과가 판정을 어디까지 올릴 수 있나. `REACHABLE`: 도달 불가·확인 못 함 → 도달 가능 / `UNKNOWN`: 도달 불가 → 확인 못 함만 / `NONE`: 올리지 않음. CVE와 `reached`·`regionsChecked`로 정해진다(아래 "판정 올리기"). 서버가 판정을 올릴 때와 같은 계산이다 |
 | `during` | string 배열 | 상세만 | 그 수준에 닿은 구간 id. `startup`(앱이 준비될 때까지, 준비 확인 요청 포함) 또는 시나리오 단계(`001`, `002`, …). `run.invocations[].segment`와 잇는다 |
 | `functions` | object 배열 | 상세만 | 실행된 취약 함수. `function`(`클래스#메서드(desc)`), `during` |
 | `regions` | object 배열 | 상세만 | 취약 구간마다 `class`, `method`, `lines`(줄 범위 배열, 없으면 `wholeMethod`), `executedLines`, `executed`, `during`. 확인하지 못했으면 `unchecked`(이유) |
@@ -628,18 +630,42 @@ PRD 1절 "용어와 공통 열거값"과 같다. API 필드와 화면이 이 값
 - 값은 그 대상(이미지 digest)의 **마지막 성공한 L3 결과**다. 같은 이미지를 다시 띄워 보거나, 재대조가 보관한 실행 기록을 다시 대조하면(`run.rematch`) 새 결과가 대신한다. `l3`가 없는 스캔(`PR`, 보관한 기록이 없는 재대조, 대시보드 요청 스캔)과 L3가 실패한 스캔은 이 값을 바꾸지 않는다.
 - **실행 기록 보관**: 앱을 띄운 관측의 실행 기록(구간별 실행 데이터와 `run`)을 이미지마다 보관한다(API-13 `l3Record`). 하루 1번 재대조는 앱을 다시 띄우지 않고 이 기록을 그날의 취약 함수 데이터·취약점 목록과 다시 대조한다. 그래서 이미지는 그대로인데 새 CVE가 나오거나 취약 함수 데이터가 늘어도 그 Finding에 `l3`가 붙는다. 앱마다 최근 이미지 5개와 실행 중인 이미지(L1)의 기록만 남긴다.
 - CVE와 패키지 좌표(group:artifact)로 Finding에 잇는다. 좌표가 다르면, 결과 묶음이 데이터 좌표의 판정을 준 Finding(스캐너가 CVE를 같은 groupId·버전의 다른 jar에 붙인 경우, 아래 "결과 묶음 만들기")에만 같은 CVE·같은 groupId의 결과 하나를 붙인다. 이때 `l3`의 `installedVersions`·`regionVersion`은 데이터 jar의 값이다. 취약 함수 데이터가 없는 CVE, 판정하지 않은 사본(`UNANALYZED_COPY`), OS 패키지는 `l3`가 null이다.
-- **판정 올리기**: 서버가 결과(API-13)를 받을 때, PR 검사가 아니면 Finding마다 L3 결과(이번 묶음의 `l3`, 없으면 그 이미지에 남은 마지막 결과)로 도구 판정을 올린다. 그래서 앱을 띄우지 않는 재대조도 같은 판정이 된다.
+- **판정 올리기**: 서버가 결과(API-13)를 받을 때, PR 검사가 아니면 Finding마다 L3 결과(이번 묶음의 `l3`, 없으면 그 이미지에 남은 마지막 결과)로 도구 판정을 올린다. 그래서 앱을 띄우지 않는 재대조도 같은 판정이 된다. 어디까지 올리는지는 그 L3 결과의 `raiseLimit`이 정한다.
 
-  | L2 판정 | L3 | 저장하는 판정 |
+  | L2 판정 | `raiseLimit` | 저장하는 판정 |
   |---|---|---|
-  | `UNREACHABLE`, `UNKNOWN` | `REGION`(앱이 뜨는 동안만인 `startupOnly`도) | `REACHABLE` |
-  | `UNREACHABLE` | `FUNCTION`이고 `regionsChecked=false` | `UNKNOWN` |
-  | 그 밖 | `NONE`, `NOT_RECORDED`, 구간을 봤고 실행 안 된 `FUNCTION`, 결과 없음 | L2 그대로 |
+  | `UNREACHABLE`, `UNKNOWN` | `REACHABLE` | `REACHABLE` |
+  | `UNREACHABLE` | `UNKNOWN` | `UNKNOWN` |
+  | 그 밖 | `NONE`, 결과 없음, 위 두 줄에 없는 조합(`UNKNOWN` 판정에 한도 `UNKNOWN` 등) | L2 그대로 |
 
-  - `method`는 L2의 것(`CALLGRAPH`/`RULE`) 그대로, `summary`는 L3 문장 뒤에 L2 판정과 L2 요약을 붙인다(500자). 근거 끝에 `kind=RUNTIME` 한 줄(3-5)을 더하고 근거 해시를 다시 만든다.
+  `raiseLimit`은 L3 결과와 CVE마다 정한 한도로 정한다.
+
+  | L3 | `raiseLimit` |
+  |---|---|
+  | `REGION`(앱이 뜨는 동안만인 `startupOnly`도) | 그 CVE의 `region` 한도(`REACHABLE` / `UNKNOWN` / `NONE`) |
+  | `FUNCTION`이고 `regionsChecked=false` | 그 CVE의 `function` 한도(`UNKNOWN` / `NONE`) |
+  | `NONE`, `NOT_RECORDED`, 구간을 봤고 실행 안 된 `FUNCTION` | `NONE`(올리지도 내리지도 않는다) |
+
+  - 한도는 CVE와 그 규칙의 성질이고 앱과는 상관없다. 규칙 데이터(`rules.json`)의 판정 항목 `l3`(`region`, `function`, `why_ko`)에 있고, API-09 `definition.verdict.l3`로 볼 수 있다. 규칙 판정(`method` = `RULE`)에는 반드시 있다(없으면 서버가 뜨지 않는다). 호출 그래프 판정과 규칙이 없는 CVE는 `region` = `REACHABLE`, `function` = `UNKNOWN`이다. 취약 함수를 부르는지가 곧 판정이라 실행되면 그대로 반증이기 때문이다.
+  - 한도를 정하는 기준은 "규칙의 조건을 갖추지 않은 앱에서도 이 줄(함수)이 실행되나"다. 실행되면 `NONE`이다. 그 기능을 쓸 때만 실행되지만 취약 조건까지 보여 주지는 않으면 `UNKNOWN`이다. 취약 조건을 보여 주면 `REACHABLE`이다.
+  - 예: CVE-2026-103119는 AJP 커넥터가 있을 때만 해당한다(규칙). 그런데 취약 구간 `OutputBuffer.updateBytesWritten` 447-448행은 Content-Length가 정해진 모든 응답 쓰기에서 실행된다. 그래서 `region` = `NONE`이고, 구간이 실행돼도 판정은 L2 그대로다.
+  - 지금 데이터의 규칙 판정 34개의 한도(호출 그래프 판정 6개는 위 기본값):
+
+    | `region` | `function` | CVE(CVE-2026-) |
+    |---|---|---|
+    | `REACHABLE` | `UNKNOWN` | 19032, 65905, 68497, 74048, 77791, 89407 |
+    | `REACHABLE` | `NONE` | 91777 |
+    | `UNKNOWN` | `UNKNOWN` | 65927, 66422, 68525, 68569, 68763, 73180, 75973, 76183, 77762, 78383, 78437, 79677, 86350, 87022, 88041, 91776, 93446, 101296 |
+    | `UNKNOWN` | `NONE` | 65182, 65183 |
+    | `NONE` | `UNKNOWN` | 65637, 83557 |
+    | `NONE` | `NONE` | 73581, 77756, 86248, 101356, 103119 |
+
+  - 올렸을 때 `method`는 L2의 것(`CALLGRAPH`/`RULE`) 그대로, `summary`는 L3 문장 뒤에 L2 판정과 L2 요약을 붙인다(500자). 근거 끝에 `kind=RUNTIME` 한 줄(3-5)을 더하고 근거 해시를 다시 만든다. `REGION`인데 한도가 `UNKNOWN`이라 확인 못 함으로 올렸으면 L3 문장은 "L3: 이미지를 띄워 보낸 요청에서 취약 구간이 실행됐다. 이 구간은 그 기능을 쓸 때 실행되지만 취약 조건까지 보여 주지는 않아, 도달 불가를 확인 못 함으로 올렸다."다(`startupOnly`면 앞 문장이 "L3: 이미지를 띄웠을 때 앱이 뜨는 동안 취약 구간이 실행됐다.").
+  - 올리지 않으면 `RUNTIME` 근거를 더하지 않는다. 근거와 근거 해시는 L2 그대로다. L3 결과 자체는 그대로 저장하고 Finding의 `l3`로 보여 준다.
   - 판정이 바뀌므로 사람 검토는 한 번 `VERDICT_CHANGED`로 되돌아간다. 같은 이미지를 다시 띄워 실행되지 않으면(`NONE`) L2 판정으로 돌아가고 역시 되돌아간다.
   - PR 검사(`PR`)는 앱을 띄우지 않아 L2 판정 그대로다. 게이트는 PR 스캔 판정과 기준 스캔 판정을 비교하므로, 운영 이미지에서 L3로 올라간 Finding은 PR에서 "새로 닿게 된 것"이 되지 않는다.
-  - 이 규칙 전에 저장된 판정(도달 불가 + `REGION`)은 그 이미지의 다음 스캔(매일 재대조 포함)에서 올라간다. 그 전까지 화면은 "≠ 판정"으로 표시한다(SCR-02, SCR-03).
+  - 저장된 판정은 그 이미지의 다음 스캔(매일 재대조 포함)에서 다시 계산한다. 보관한 L3 결과를 다시 쓰는 재대조도 같다. 그래서 한도가 생기기 전에 올렸지만 지금 한도로는 올리지 않는 Finding(예: CVE-2026-103119)은 L2 판정으로 돌아가고, 사람 검토가 한 번 `VERDICT_CHANGED`로 되돌아간다.
+  - 화면의 "≠ 판정"은 판정이 `UNREACHABLE`이고 `raiseLimit`이 `NONE`이 아닐 때 붙는다(다음 스캔 전이라 아직 올리지 않은 것, SCR-02, SCR-03). 상세(SCR-03-05)는 L3로 올린 판정(근거 RUNTIME의 `l2Status`)이 지금 `raiseLimit`으로는 다른 판정일 때도 붙인다(한도가 생기기 전에 올린 판정, 예: 103119). 판정이 `UNREACHABLE`이고 `raiseLimit`이 `NONE`이면 서버가 일부러 올리지 않은 것이라 붙이지 않는다.
 
 **스캔의 L3** (API-02·API-03 `l3`)
 
@@ -979,12 +1005,12 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `cve` | string 목록 | 아니요 | CVE ID 완전 일치. [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
 | `cveContains` | string | 아니요 | CVE ID 부분 일치(대소문자 무시). 예: `89407` |
 | `disagreesWithTool` | boolean | 아니요 | true면 사람 판정이 도구 판정과 다른 Finding만 준다(FR-08). [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
-| `l3` | enum 목록 | 아니요 | L3 도달 수준(3-12 `reached`). 주면 `l3`가 없는 Finding은 빠진다. 예: `status=UNREACHABLE&l3=REGION`은 L2가 놓친 것 |
+| `l3` | enum 목록 | 아니요 | L3 도달 수준(3-12 `reached`). 주면 `l3`가 없는 Finding은 빠진다. 예: `status=UNREACHABLE&l3=REGION`은 구간이 실행됐지만 그 CVE의 조건을 보여 주지 않아 판정을 올리지 않은 것(`l3.raiseLimit` = `NONE`)이거나 아직 다음 스캔 전인 것이다(3-12 "판정 올리기") |
 | `firstSeenAfter` | date-time | 아니요 | `firstSeenAt`이 이 시각보다 뒤인 Finding만 준다. 직전 성공 스캔의 `finishedAt`을 넣으면 그 뒤에 새로 생긴 Finding이다(US-10). [계획] 지금 구현은 받지 않는다(무시한다, 2-5) |
 | `sort` | string | 아니요 | 기본 `-deployment,-status,-severity,cve`(2-5의 Finding 기본 정렬, 실행 중 이미지 먼저). 허용: `deployment`, `status`, `severity`, `cve`, `package`, `firstSeenAt`, `lastSeenAt`. [계획] 지금 구현은 `sort`를 받지 않고 늘 기본 정렬로 준다 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
-목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`. `l3`는 `reached`·`regionsChecked`·`startupOnly`만 준다(없으면 null).
+목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`. `l3`는 `reached`·`regionsChecked`·`startupOnly`·`raiseLimit`만 준다(없으면 null).
 
 요청 예시: `GET /api/v1/reach/findings?target=1&cve=CVE-2025-14813,CVE-2026-68525,CVE-2026-89407&sort=-severity,cve`
 
@@ -1925,7 +1951,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | `error` | - | L3 실행이나 대조가 실패했을 때는 `{ "error": "…" }`만 넣는다 |
 
 - **`l3`는 스캔을 실패시키지 않는다.** `error`가 있거나 모양이 틀리면(`reached`가 허용 밖, `run` 없음, 같은 CVE·좌표가 두 번) 400이 아니라 그 스캔의 L3를 `FAILED`로 남기고(3-12 "스캔의 L3") 나머지는 그대로 저장한다.
-- 판정·근거·사람 검토·게이트에는 쓰지 않는다. 근거 해시에도 들어가지 않아 검토를 되돌리지 않는다.
+- 러너가 보낸 `l3`가 판정을 정하지는 않는다. 서버가 3-12 "판정 올리기"대로 CVE의 한도(`raiseLimit`)까지만 올리고, 올렸을 때만 근거에 `RUNTIME` 한 줄을 더한다. 올리지 않으면 근거와 근거 해시는 L2 그대로다(예전에 올렸던 Finding이면 판정이 L2로 돌아가 검토가 한 번 되돌아간다, 3-12). 게이트(PR 검사)에는 쓰지 않는다.
 - CVE와 `coordinates`가 같은 Finding에 붙인다(같은 좌표의 여러 버전은 같은 결과). 좌표가 다른 Finding도 묶음 항목의 판정이 `NOT_ANALYZED`가 아니고 groupId가 같으면 같은 결과를 붙인다(맞는 결과가 둘이면 붙이지 않는다). 이번 묶음에 없는 CVE의 예전 결과는 지운다. `l3`가 없거나 `FAILED`면 그 대상의 예전 결과를 그대로 둔다.
 - `PR` 검사의 `l3`는 받지 않는다(ARD SR-09).
 - 서버가 아는 필드만 저장한다. Finding 하나의 근거가 256KB를 넘으면 `paths`를 빼고 저장한다.
