@@ -340,7 +340,7 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
 | `scanId` | integer | 예 | 이 Finding을 마지막으로 갱신한 스캔 |
 | `targetId` | integer | 예 | 대상 ID |
 | `component` | object | 예 | `purl`(키), `name`, `version`, `ecosystem`(purl 타입 그대로: `maven` / `npm` / `apk` 등), `path`(이미지 안 위치) |
-| `vulnerability` | object | 예 | `id`(CVE), `severity`, `severityNote`(출처마다 심각도가 다를 때 남긴 메모, FR-03), `title`(스캐너 값), `description`(스캐너 설명 원문), `affectedFeature`(취약 기능 설명), `fixedVersions`(스캐너 값), `cwe`, `references` |
+| `vulnerability` | object | 예 | `id`(CVE), `severity`, `severityNote`(출처마다 심각도가 다를 때 남긴 메모, FR-03), `title`(스캐너 값), `description`(스캐너 설명 원문), `affectedFeature`(취약 기능 설명), `fixedVersions`(스캐너 값), `cwe`, `references`, `cvss`(`score`: CVSS v3 기본 점수 0~10, `source`: `nvd`·`ghsa` 등. 없으면 null) |
 | `deployment` | enum | 예 | `RUNNING` / `NOT_RUNNING` / `UNKNOWN` |
 | `l3` | L3 | 아니요 | L3 능동 관측이 닿은 곳(3-12). 판정 옆에 놓는 근거다. 실제 실행이 그 CVE의 조건을 보여 주면 서버가 판정(`verdict`)을 `l3.raiseLimit`까지 올린다(3-12 "판정 올리기"). 이 대상(이미지)을 띄워 본 결과가 없으면 null이다 |
 | `verdict` | Verdict | 예 | Reach 판정(3-4) |
@@ -349,6 +349,7 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
 | `sources` | enum 배열 | 예 | 이 Finding을 보고한 스캐너: `TRIVY`, `GRYPE` |
 | `upgrade` | object | 아니요 | `suggestedVersion`(같은 패키지의 CVE를 모두 없애는 최소 버전), `change`(버전을 정하는 위치와 바꿀 내용. 예: Spring Boot 관리 버전 덮어쓰기), `note`. 제안일 뿐이며 적용 여부는 팀이 정한다(FR-13) |
 | `firstSeenAt`, `lastSeenAt` | date-time | 예 | 처음·마지막으로 보인 시각 |
+| `risk` | object | 예 | 통합 현황 보안 점수용 이미지 등급(아래). `grade`, `likelihood`, `deduction` |
 
 - 예: CVE-2026-89407은 `tools.jackson.core:jackson-core` 3.1.5와 `com.fasterxml.jackson.core:jackson-core` 2.21.5에서 각각 한 건이다(FR-07).
 - `deployment`: image 대상은 digest가 실행 중 파드의 imageID에 있으면 `RUNNING`, 조회했는데 없으면 `NOT_RUNNING`, 조회하지 못하면 `UNKNOWN`이다. repo 대상은 실행 중 이미지의 revision 라벨이 이 커밋이거나 소스 트리 해시가 같으면 `RUNNING`이다(FR-04).
@@ -356,6 +357,12 @@ Re:Used 설치의 설정은 아래와 같다(로컬은 `dashboard-backend`의 `r
   - 다시 계산하는 때: L1 수집 결과를 올릴 때, 6시간마다(UTC 00:05·06:05·12:05·18:05), 분석 결과 업로드(API-13) 끝(그 대상만). 그래서 수집이 끊기면 늦어도 마지막 조회 48시간 + 6시간 뒤에 `UNKNOWN`이 된다.
   - repo 대상은 지금 다시 계산하지 않는다 [계획].
 - 결과는 지우지 않는다. 다음 스캔에서 보이지 않으면 `lastSeenAt`이 그대로 남는다.
+- `vulnerability.cvss`: 스캐너 심각도를 정한 출처의 CVSS v3 기본 점수다. Trivy가 찾은 매칭이면 Trivy의 `SeveritySource` 출처 점수, 없으면 NVD → GHSA → 다른 출처 순이다. Trivy에 점수가 없을 때만 Grype의 점수를 쓴다. Grype는 매칭한 기록 → 연결된 기록(NVD 먼저) 순이고, 한 기록 안에서는 Primary 점수가 먼저다. Grype가 출처를 주지 않으면(GHSA 기록) 그 기록의 출처(`ghsa`, `nvd`)로, CNA UUID면 `cna`로 적는다. 이 칸이 생기기 전에 올린 Finding은 null이다.
+- `risk`: 통합 현황 보안 점수(dashboard-design-docs ADR-D012 "이미지 등급")에 쓰는 등급이다. Reach 판정·검토는 바꾸지 않는다.
+  - `likelihood`(가능성): 닿음(`REACHABLE`) + `RUNNING`이면 `HIGH`, 닿음 + 실행 미확인 또는 도달 미확인 + `RUNNING`이면 `MEDIUM`, 도달 미확인 + 실행 미확인이면 `LOW`. 도달 미확인은 `UNKNOWN`과 `NOT_ANALYZED`다(분석하지 않은 것을 닿지 않는다고 보지 않는다). 판정은 지금 판정(사람 판정 포함)이다.
+  - `grade`: 가능성 × 영향(스캐너 심각도: `CRITICAL`·`HIGH` → HIGH, `MEDIUM` → MEDIUM, `LOW` → LOW)의 3×3이다. HIGH×HIGH = `CRITICAL`, HIGH×MEDIUM·MEDIUM×HIGH = `HIGH`, HIGH×LOW·MEDIUM×MEDIUM·LOW×HIGH = `MEDIUM`, 나머지 `LOW`. `UNREACHABLE`은 심각도와 관계없이 `LOW`(이때 `likelihood`는 null), 스캐너 심각도 `UNKNOWN`은 `UNASSESSED`(미평가)다.
+  - `deduction`(감점): `CRITICAL` 74~99, `HIGH` 48~73, `MEDIUM` 22~47 구간 안에서 CVSS 비율로 정한다. 구간 아래 + (CVSS − 범위 아래) ÷ 범위 폭 × 25를 반올림한다. 범위는 영향 단계의 CVSS v3 범위(HIGH 7.0~10.0, MEDIUM 4.0~6.9, LOW 0.1~3.9)이고, 벗어나면 구간 끝으로 자른다. CVSS가 없으면 구간 맨 위(99/73/47)다. `LOW`·`UNASSESSED`는 null이다.
+  - 예: `REACHABLE` + `RUNNING` + `CRITICAL` + CVSS 9.8 → `CRITICAL`, 97. `UNKNOWN` + `RUNNING` + `HIGH` + CVSS 9.8 → `HIGH`, 71.
 
 ### 3-4. Verdict
 
@@ -1010,7 +1017,7 @@ Idempotency-Key: 5f0c2a9e-3c1b-4f7e-9a51-0d6b2e8c7a10
 | `sort` | string | 아니요 | 기본 `-deployment,-status,-severity,cve`(2-5의 Finding 기본 정렬, 실행 중 이미지 먼저). 허용: `deployment`, `status`, `severity`, `cve`, `package`, `firstSeenAt`, `lastSeenAt`. [계획] 지금 구현은 `sort`를 받지 않고 늘 기본 정렬로 준다 |
 | `size`, `cursor`, `include` | - | 아니요 | 2-4. `include`는 `total`만 받는다 |
 
-목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`. `l3`는 `reached`·`regionsChecked`·`startupOnly`·`raiseLimit`만 준다(없으면 null).
+목록 항목은 Finding(3-3)의 요약 모양이다. 들어가는 필드: `id`, `scanId`, `targetId`, `component`(`purl`, `name`, `version`), `vulnerability`(`id`, `severity`, `fixedVersions`), `deployment`, `verdict`(`status`, `method`, `summary`, `notAnalyzedReason`), `review`(`reviewState`, `disagreesWithTool`, `proposal`), `firstSeenAt`, `risk`(3-3). `l3`는 `reached`·`regionsChecked`·`startupOnly`·`raiseLimit`만 준다(없으면 null).
 
 요청 예시: `GET /api/v1/reach/findings?target=1&cve=CVE-2025-14813,CVE-2026-68525,CVE-2026-89407&sort=-severity,cve`
 
@@ -1923,7 +1930,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 | 필드 | 필수 | 설명 |
 |---|---|---|
 | `component` | 예 | `purl`, `name`, `version`, `ecosystem`(없으면 purl 타입), `path` |
-| `vulnerability` | 예 | `id`, `severity`, `severityNote`, `title`, `description`, `affectedFeature`, `fixedVersions`, `cwe`, `references` |
+| `vulnerability` | 예 | `id`, `severity`, `severityNote`, `title`, `description`, `affectedFeature`, `fixedVersions`, `cwe`, `references`, `cvss`(없어도 된다. 있으면 `score`가 0~10, 소수 한 자리까지이고 `source`는 40자까지. 아니면 400 `INVALID_INPUT`) |
 | `sources` | 예 | `TRIVY`, `GRYPE` 중 하나 이상 |
 | `deployment` | 아니요 | 새 Finding을 만들 때만 쓰고, 없으면 `UNKNOWN`이다. 이미 있는 Finding의 값은 바꾸지 않는다. image 대상은 업로드 끝에서 L1 조회로 다시 계산하므로(3-3) 이 값이 남지 않는다 |
 | `upgrade` | 아니요 | 3-3 `upgrade` |
@@ -1962,7 +1969,7 @@ Idempotency-Key: service-backend-pr-123-bb4639b
 
 러너가 스캐너와 L2 판정을 돌린 뒤 결과 묶음을 만든다. 입력은 CycloneDX SBOM, Trivy JSON, Grype JSON(교차 확인을 했으면), 분석 결과(`reach-result.json`), 판정(`verdicts.json`), 취약 함수 데이터(`vuln-functions.json`)와 규칙(`rules.json`)이다.
 
-- 스캐너가 찾은 매칭(purl × 취약점 ID) 하나가 `verdicts` 한 항목이다. Trivy와 Grype가 같은 purl × 취약점 ID를 찾으면 한 항목이고 `sources`에 둘 다 남는다. Grype가 GitHub 권고 ID(`GHSA-…`)로 준 것은 연결된 CVE가 있으면 CVE로 맞춘다. 심각도가 다르면 Trivy 값을 쓰고 `severityNote`에 둘 다 적는다(예: `Trivy HIGH, Grype MEDIUM`). 같은 패키지가 이미지 안 두 경로에 있어도 한 항목이다(`path`는 처음 것).
+- 스캐너가 찾은 매칭(purl × 취약점 ID) 하나가 `verdicts` 한 항목이다. Trivy와 Grype가 같은 purl × 취약점 ID를 찾으면 한 항목이고 `sources`에 둘 다 남는다. Grype가 GitHub 권고 ID(`GHSA-…`)로 준 것은 연결된 CVE가 있으면 CVE로 맞춘다. 심각도가 다르면 Trivy 값을 쓰고 `severityNote`에 둘 다 적는다(예: `Trivy HIGH, Grype MEDIUM`). 같은 패키지가 이미지 안 두 경로에 있어도 한 항목이다(`path`는 처음 것). `cvss`도 심각도를 따라 Trivy 값을 먼저 쓴다(3-3 `vulnerability.cvss`).
 - 스캐너가 같은 취약점을 다른 ID로 따로 보고하면(예: Trivy의 `NSWG-ECO-17`과 `CVE-2015-9235`) 항목도 둘이다. 별칭은 합치지 않는다.
 - 판정한 CVE·패키지(`verdicts.json`에 판정이 있는 것)는 그 판정을 옮긴다. 스캐너가 판정한 CVE를 데이터 좌표와 **groupId가 같고 버전이 같은 다른 jar**에 붙였으면(예: CVE-2026-73180의 데이터는 `tomcat-embed-websocket`인데 Grype는 `tomcat-embed-core`에 붙인다) 그 매칭도 데이터 좌표의 판정과 근거를 받고, 근거 맨 앞에 그 사실을 적은 `NOTE`가 하나 더 붙는다. 분석기는 취약 함수를 클래스 이름으로 앱의 모든 jar에서 찾고 규칙은 앱 코드·설정을 보므로, 스캐너가 어느 jar에 붙였는지와 판정은 상관없다. 버전은 분석기가 읽은 데이터 jar(`reach-result.json`의 `package.jars`)의 것과 비교한다. 근거 순서는 사실(`FACT`) → 메모(`NOTE`) → 적용 규칙(`RULE`, `matchedCondition`) → 호출 경로(`PATH`)다. 규칙으로 판정했어도 호출 그래프가 취약 함수에 닿으면 후보 경로(`pathTarget` = `VULN_FUNCTION`, 최대 3개)와 판정에 쓰지 않은 이유(`NOTE`)를 남긴다. 확인했지만 없던 사실은 `value: false`로, 확인한 대상 수를 아는 사실(`F-dto.floating`, `F-dto.floating.tokens`)은 `checkedCount`를 함께 준다.
 - `vulnFunctionIds`는 API-10의 id(`vuln-functions.json` 함수 순서), `engine`의 `rulesVersion`·`vulnFunctionsVersion`은 API-09·10의 `version`과 같다.
